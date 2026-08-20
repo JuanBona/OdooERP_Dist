@@ -1,0 +1,14 @@
+# Claude Code local settings (puede contener API keys / permisos locales)
+.claude/
+
+# Python
+__pycache__/
+*.pyc
+
+# Backups de base de datos (compartir aparte, no versionar)
+*.sql
+*.dump
+
+# OS
+.DS_Store
+Thumbs.db
