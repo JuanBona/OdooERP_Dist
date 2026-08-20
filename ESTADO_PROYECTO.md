@@ -74,15 +74,35 @@ Decisión tomada: por ahora, factura **local de Odoo sin timbrar** (Factura A/B/
 
 Conexión real a ARCA (testing u homologación) queda pendiente para más adelante si hace falta, requiere CUIT real, certificado digital y punto de venta habilitado en ARCA — no se puede simular en este entorno local sin esos datos.
 
-## 7. Acceso MCP (para asistentes de IA)
+## 7. Test de funcionamiento offline — "Punto de Venta Reparto"
+
+Probado el 2026-08-20: qué pasa si el vendedor pierde señal a mitad de un pedido.
+
+**Método**: se simuló la caída de conexión parando el container `odoo` (no la wifi real) mientras se armaba un pedido en el navegador — el POS deja de poder hablar con el backend, que es lo que importa para este test.
+
+**Pasos y resultado**:
+1. Cargar 1 producto (Agua Villa del Sur) con conexión normal → OK.
+2. Cortar conexión al backend (`docker compose stop odoo`).
+3. Seguir cargando productos sin señal (Coca-Cola, Fernet Branca) → la interfaz **sigue funcionando** (POS es offline-first, guarda en IndexedDB local del navegador).
+4. Cobrar en efectivo y **validar sin conexión** → funcionó. Odoo mostró su propio aviso "Conexión perdida — la funcionalidad estará limitada hasta que se restablezca la conexión", pero cerró la venta igual y generó el ticket local (261-1-000004, $10.527).
+5. Reconectar backend (`docker compose start odoo`).
+6. **La orden NO sincronizó sola** — quedó en cola local. En la consola del navegador quedó registrado el error original: `ConnectionLostError: Connection to "/web/dataset/call_kw/pos.order/sync_from_ui" couldn't be established`, y no hubo reintento automático en background.
+7. Al **recargar/reingresar a la sesión de POS**, ahí sí sincronizó: la orden apareció en Odoo real (verificado por API/MCP, no solo en pantalla) como `pos.order` id 4, `state=done`, $10.527, con las 3 líneas correctas.
+
+**Conclusión**: no se pierde el pedido ni la plata — pero la sincronización al recuperar señal **no es 100% automática**. El vendedor tiene que volver a abrir (o recargar) la sesión de POS para que la orden pendiente efectivamente llegue a Odoo. Mientras tanto, esa venta no existe en el servidor (no impacta stock real, no es visible para nadie más) aunque el ticket ya se haya impreso/cobrado.
+
+**Pendiente a investigar**: si hay forma de forzar el reintento de sync automático al detectar reconexión, para sacar el paso manual.
+
+## 8. Acceso MCP (para asistentes de IA)
 
 Configurado servidor MCP `odoo` en Claude Code (`claude mcp add odoo ...`), modo YOLO read-only (no requiere el addon `mcp_server`, autentica con usuario `admin` + API key nativa de Odoo). **La API key está en la config local de Claude Code, no en este repo** — cada persona que quiera este acceso debe generar su propia key en Settings → Users → API Keys y configurarla en su propia máquina.
 
-## 8. Pendiente / próximos pasos
+## 9. Pendiente / próximos pasos
 
 - Parte 2 del diseño de "venta por camión": flujo completo de facturación opcional al cerrar la venta (todavía no se armó, quedó frenado para escribir este reporte).
 - Probar el circuito completo en el navegador (vos o tu compañero) desde POS Camión 1.
 - Definir si se necesitan más camiones/ubicaciones (el patrón ya es repetible: ubicación + picking type + pos.config).
+- Investigar cómo forzar el reintento automático de sync de POS al reconectar (ver sección 7).
 
 ---
 
