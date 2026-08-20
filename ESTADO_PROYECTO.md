@@ -74,24 +74,34 @@ Decisión tomada: por ahora, factura **local de Odoo sin timbrar** (Factura A/B/
 
 Conexión real a ARCA (testing u homologación) queda pendiente para más adelante si hace falta, requiere CUIT real, certificado digital y punto de venta habilitado en ARCA — no se puede simular en este entorno local sin esos datos.
 
-## 7. Test de funcionamiento offline — "Punto de Venta Reparto"
+## 7. Test de funcionamiento offline — "Punto de Venta Reparto" y "POS Camión 1"
 
-Probado el 2026-08-20: qué pasa si el vendedor pierde señal a mitad de un pedido.
+Probado el 2026-08-20: qué pasa si el vendedor pierde señal a mitad de un pedido. Se corrió el mismo test en **ambos** puntos de venta para determinar si el problema era puntual del circuito de entrega diferida o general de Odoo.
 
 **Método**: se simuló la caída de conexión parando el container `odoo` (no la wifi real) mientras se armaba un pedido en el navegador — el POS deja de poder hablar con el backend, que es lo que importa para este test.
 
-**Pasos y resultado**:
-1. Cargar 1 producto (Agua Villa del Sur) con conexión normal → OK.
+**Pasos (idénticos en los dos POS)**:
+1. Cargar 1 producto con conexión normal → OK.
 2. Cortar conexión al backend (`docker compose stop odoo`).
-3. Seguir cargando productos sin señal (Coca-Cola, Fernet Branca) → la interfaz **sigue funcionando** (POS es offline-first, guarda en IndexedDB local del navegador).
-4. Cobrar en efectivo y **validar sin conexión** → funcionó. Odoo mostró su propio aviso "Conexión perdida — la funcionalidad estará limitada hasta que se restablezca la conexión", pero cerró la venta igual y generó el ticket local (261-1-000004, $10.527).
+3. Seguir cargando productos sin señal → la interfaz **sigue funcionando** (POS es offline-first, guarda en IndexedDB local del navegador).
+4. Cobrar y **validar sin conexión** → funcionó en los dos casos. Odoo mostró su propio aviso "Conexión perdida — la funcionalidad estará limitada hasta que se restablezca la conexión", pero cerró la venta igual y generó el ticket local.
 5. Reconectar backend (`docker compose start odoo`).
-6. **La orden NO sincronizó sola** — quedó en cola local. En la consola del navegador quedó registrado el error original: `ConnectionLostError: Connection to "/web/dataset/call_kw/pos.order/sync_from_ui" couldn't be established`, y no hubo reintento automático en background.
-7. Al **recargar/reingresar a la sesión de POS**, ahí sí sincronizó: la orden apareció en Odoo real (verificado por API/MCP, no solo en pantalla) como `pos.order` id 4, `state=done`, $10.527, con las 3 líneas correctas.
+6. Esperar sin tocar nada en el navegador (8 seg) → **la orden NO sincronizó sola en ninguno de los dos POS**. Consola del navegador registra el mismo error en ambos casos: `ConnectionLostError: Connection to "/web/dataset/call_kw/pos.order/sync_from_ui" couldn't be established`, sin reintento automático en background.
+7. Al **recargar/reingresar a la sesión de POS**, ahí sí sincronizó en los dos casos, sin pérdida de datos.
 
-**Conclusión**: no se pierde el pedido ni la plata — pero la sincronización al recuperar señal **no es 100% automática**. El vendedor tiene que volver a abrir (o recargar) la sesión de POS para que la orden pendiente efectivamente llegue a Odoo. Mientras tanto, esa venta no existe en el servidor (no impacta stock real, no es visible para nadie más) aunque el ticket ya se haya impreso/cobrado.
+**Resultado**:
 
-**Pendiente a investigar**: si hay forma de forzar el reintento de sync automático al detectar reconexión, para sacar el paso manual.
+| | Punto de Venta Reparto | POS Camión 1 |
+|---|---|---|
+| Ticket local generado offline | 261-1-000004, $10.527 | 261-2-000001, $9.740,50 |
+| Sync automático al reconectar | ❌ No | ❌ No |
+| Sync al reabrir sesión | ✅ Sí (`pos.order` id 4, verificado por API) | ✅ Sí (`pos.order` id 5, verificado por API) |
+
+**Conclusión: es un comportamiento general de esta versión/config de Odoo, no algo puntual del circuito de entrega diferida.** Afecta por igual a Ship Later y a cobro inmediato — el POS base de Odoo no reintenta `sync_from_ui` solo al detectar reconexión, necesita que alguien vuelva a entrar a la sesión. No se pierde el pedido ni la plata en ningún caso, pero mientras la sesión no se reabre, esa venta no existe en el servidor (no impacta stock real, no es visible para nadie más) aunque el ticket ya se haya impreso/cobrado.
+
+**Mitigaciones evaluadas** (aplican igual a los dos POS, no hace falta separar el arreglo por circuito):
+- **De proceso (gratis, ya aplicable)**: capacitar al vendedor con la regla "al llegar a cada nuevo comercio, si perdiste señal en el anterior, refrescá la pantalla antes de arrancar" — mismo hábito que "revisar que hay señal".
+- **Técnica chica (estimado: una tarde de desarrollo)**: agregar un listener del evento `online` del navegador que dispare el reintento de sync automáticamente, sin esperar que el vendedor reabra nada. Pendiente de implementar.
 
 ## 8. Acceso MCP (para asistentes de IA)
 
