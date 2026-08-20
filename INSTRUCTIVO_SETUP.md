@@ -24,9 +24,21 @@ docker compose ps
 
 Ambos servicios (`odoo`, `db`) deben decir `running`.
 
-## 3. Inicializar la base de datos (SOLO la primera vez que alguien la levanta desde cero)
+## 3. Inicializar la base de datos
 
-Si es tu primera vez y nadie te pasó un dump de base de datos (ver sección 5), la base arranca vacía. Hay que instalar el módulo `base`:
+El repo incluye **`backup.sql`** en la raíz — es un dump real de la base con todo lo ya armado (localización AR, productos de prueba, POS, proyecto de tareas). Es lo que hay que usar, no arrancar de cero.
+
+```bash
+docker compose up -d
+docker compose stop odoo
+docker compose exec -T db psql -U odoo -d odoo -c "DROP SCHEMA public CASCADE; CREATE SCHEMA public;"
+docker compose exec -T db psql -U odoo odoo < backup.sql
+docker compose up -d odoo
+```
+
+Después entrá a `http://localhost:8069` — login `admin` / `admin`. Deberías ver exactamente lo mismo que el resto del equipo: productos, POS Reparto y Camión 1, plan de cuentas AR, el proyecto "Reparto — Spike Odoo" con sus tareas.
+
+**Solo si por algún motivo no tenés `backup.sql`** (versión vieja del repo, se borró, etc.), la alternativa es arrancar en blanco e instalar `base` a mano:
 
 ```bash
 docker compose stop odoo
@@ -34,9 +46,9 @@ docker compose run --rm odoo odoo -d odoo -i base --stop-after-init
 docker compose up -d odoo
 ```
 
-Después entrá a `http://localhost:8069` — deberías ver la pantalla de login. Usuario/clave por defecto: `admin` / `admin`.
+Esto da una base vacía de Odoo — sin nada de lo de arriba. Reconstruir todo a mano siguiendo `ESTADO_PROYECTO.md` es mucho más laburo, evitalo si podés.
 
-**Importante:** esto te da una base "en blanco" de Odoo — sin la localización Argentina, sin los productos de prueba, sin los puntos de venta configurados. Para tener el mismo estado de negocio que el resto del equipo, pedile a alguien un dump (sección 5) en vez de arrancar de cero, o seguí los pasos del `ESTADO_PROYECTO.md` para reconstruir la config a mano.
+⚠️ El `import` de `backup.sql` (paso de arriba) **reemplaza toda tu base local**. Si ya veías cargando algo propio sin commitear/dumpear, hacé tu propio `pg_dump` antes de pisarlo.
 
 ## 4. Módulos custom
 
@@ -50,24 +62,28 @@ Después, desde Odoo (developer mode activado — `?debug=1` en la URL), andá a
 
 ## 5. Sincronizar la base de datos con el equipo
 
-**Por ahora no hay automatización para esto** (es una base chica, dos personas). Mientras tanto:
+**Por ahora no hay automatización para esto** (es una base chica, dos personas) — pero el punto de sincronización es `backup.sql`, que vive versionado en el repo (excepción puntual en `.gitignore`, ver ahí el porqué).
 
-**Para compartir tu estado actual:**
+**Cuando vos cambiaste algo importante y querés que el equipo lo tenga:**
 ```bash
 docker compose exec db pg_dump -U odoo odoo > backup.sql
+git add backup.sql
+git commit -m "Actualizar dump de base de datos"
+git push
 ```
-Mandale ese archivo a tu compañero (Drive, WhatsApp, lo que sea — **no lo subas a git**, está en `.gitignore` a propósito).
 
-**Para importar un dump que te pasaron:**
+**Cuando alguien más actualizó `backup.sql` y lo querés importar vos:**
 ```bash
-# Con Odoo apagado y la base limpia
+git pull
 docker compose stop odoo
 docker compose exec -T db psql -U odoo -d odoo -c "DROP SCHEMA public CASCADE; CREATE SCHEMA public;"
 docker compose exec -T db psql -U odoo odoo < backup.sql
 docker compose up -d odoo
 ```
 
-⚠️ Esto reemplaza TODO lo que tengas cargado en tu base local. Avisale a tu compañero antes de hacerlo si tenés algo propio sin respaldar.
+⚠️ Esto reemplaza TODO lo que tengas cargado en tu base local. Avisale a tu compañero antes de hacerlo si tenés algo propio sin respaldar, y avisá vos también antes de pushear un `backup.sql` nuevo — si los dos cambiaron cosas distintas en paralelo, uno pisa al otro (git no puede mergear dos dumps SQL).
+
+Nota técnica: `backup.sql` está marcado como binario en `.gitattributes` a propósito — si no, git normaliza saltos de línea al hacer checkout en Windows y el dump queda corrupto al importarlo.
 
 ## 6. Cómo trabajar de forma colaborativa (sin pisarse)
 

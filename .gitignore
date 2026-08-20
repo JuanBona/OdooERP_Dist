@@ -5,9 +5,10 @@
 __pycache__/
 *.pyc
 
-# Backups de base de datos (compartir aparte, no versionar)
+# Backups de base de datos (no versionar, salvo excepcion explicita abajo)
 *.sql
 *.dump
+!backup.sql
 
 # OS
 .DS_Store
