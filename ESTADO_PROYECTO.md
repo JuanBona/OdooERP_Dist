@@ -112,7 +112,7 @@ Configurado servidor MCP `odoo` en Claude Code (`claude mcp add odoo ...`), modo
 - Parte 2 del diseño de "venta por camión": flujo completo de facturación opcional al cerrar la venta (todavía no se armó, quedó frenado para escribir este reporte).
 - Probar el circuito completo en el navegador (vos o tu compañero) desde POS Camión 1.
 - Definir si se necesitan más camiones/ubicaciones (el patrón ya es repetible: ubicación + picking type + pos.config).
-- Investigar cómo forzar el reintento automático de sync de POS al reconectar (ver sección 7).
+- Implementar banner con listener del evento `online` del navegador para reintento automático de sync en POS (ver sección 7 — estimado una tarde, no bloqueante, hay mitigación de proceso mientras tanto).
 
 ---
 
