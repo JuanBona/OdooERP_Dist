@@ -51,7 +51,7 @@ Una `ir.rule` sobre `res.partner`:
 
 - **Domain:** `[('user_id', '=', user.id)]`
 - **Grupos:** solo `group_reparto_vendedor`
-- **Permisos:** read + write habilitados; create y unlink deshabilitados (un vendedor no debería poder borrar ni crear clientes desde este filtro — la creación/baja de clientes queda para Admin Operativa/Gerencia, que no tienen esta regla y por lo tanto no están limitados).
+- **Permisos:** solo read habilitado (la ficha del cliente no es editable por el vendedor — ningún requerimiento lo pide, y así queda alineado con el ACL base de Odoo, que ya deniega `write` en `res.partner` a usuarios internos comunes). Además de esta regla hay una segunda `ir.rule` (`rule_reparto_partner_vendedor_no_create_no_delete`) con domain imposible (`id = False`) que bloquea creación y borrado de forma explícita — no se depende de que `perm_create=0`/`perm_unlink=0` por sí solos impidan la operación (esos flags solo excluyen la regla del set considerado para esa operación, no bloquean nada si otra regla o el ACL de otro grupo lo permite).
 
 ### 3. Regla sobre pedidos POS (`security/reparto_pos_order_rules.xml`)
 

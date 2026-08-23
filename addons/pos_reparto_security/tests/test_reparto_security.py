@@ -1,3 +1,4 @@
+from odoo.exceptions import AccessError
 from odoo.tests.common import TransactionCase, tagged
 
 
@@ -60,3 +61,17 @@ class TestRepartoSecurity(TransactionCase):
             ('id', 'in', [partner_1.id, partner_2.id]),
         ])
         self.assertEqual(found, partner_1 | partner_2)
+
+    def test_vendedor_no_puede_crear_clientes(self):
+        with self.assertRaises(AccessError):
+            self.env['res.partner'].with_user(self.vendedor_1).create({
+                'name': 'Cliente Nuevo Intentado Por Vendedor',
+            })
+
+    def test_vendedor_no_puede_editar_ni_su_propio_cliente(self):
+        partner_1 = self.env['res.partner'].create({
+            'name': 'Cliente de Vendedor 1',
+            'user_id': self.vendedor_1.id,
+        })
+        with self.assertRaises(AccessError):
+            partner_1.with_user(self.vendedor_1).write({'phone': '123456'})
