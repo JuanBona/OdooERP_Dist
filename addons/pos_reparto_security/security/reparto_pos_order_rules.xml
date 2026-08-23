@@ -1,0 +1,12 @@
+<odoo>
+    <record id="rule_reparto_pos_order_vendedor" model="ir.rule">
+        <field name="name">Vendedor Reparto: solo sus propios pedidos POS</field>
+        <field name="model_id" ref="point_of_sale.model_pos_order"/>
+        <field name="domain_force">[('user_id', '=', user.id)]</field>
+        <field name="groups" eval="[(4, ref('group_reparto_vendedor'))]"/>
+        <field name="perm_read">1</field>
+        <field name="perm_write">1</field>
+        <field name="perm_create">1</field>
+        <field name="perm_unlink">0</field>
+    </record>
+</odoo>

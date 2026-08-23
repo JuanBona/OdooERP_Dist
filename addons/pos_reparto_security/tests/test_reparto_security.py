@@ -10,16 +10,17 @@ class TestRepartoSecurity(TransactionCase):
         super().setUpClass()
         cls.group_vendedor = cls.env.ref('pos_reparto_security.group_reparto_vendedor')
         cls.group_internal = cls.env.ref('base.group_user')
+        cls.group_pos_user = cls.env.ref('point_of_sale.group_pos_user')
 
         cls.vendedor_1 = cls.env['res.users'].create({
             'name': 'Vendedor Uno',
             'login': 'vendedor_uno_test',
-            'group_ids': [(6, 0, [cls.group_internal.id, cls.group_vendedor.id])],
+            'group_ids': [(6, 0, [cls.group_internal.id, cls.group_vendedor.id, cls.group_pos_user.id])],
         })
         cls.vendedor_2 = cls.env['res.users'].create({
             'name': 'Vendedor Dos',
             'login': 'vendedor_dos_test',
-            'group_ids': [(6, 0, [cls.group_internal.id, cls.group_vendedor.id])],
+            'group_ids': [(6, 0, [cls.group_internal.id, cls.group_vendedor.id, cls.group_pos_user.id])],
         })
         cls.usuario_sin_rol = cls.env['res.users'].create({
             'name': 'Usuario Sin Rol',
@@ -75,3 +76,30 @@ class TestRepartoSecurity(TransactionCase):
         })
         with self.assertRaises(AccessError):
             partner_1.with_user(self.vendedor_1).write({'phone': '123456'})
+
+    def test_vendedor_ve_solo_sus_propios_pedidos_pos(self):
+        order_1 = self._create_minimal_pos_order(self.vendedor_1)
+        order_2 = self._create_minimal_pos_order(self.vendedor_2)
+
+        found_by_vendedor_1 = self.env['pos.order'].with_user(self.vendedor_1).search([
+            ('id', 'in', [order_1.id, order_2.id]),
+        ])
+        self.assertEqual(found_by_vendedor_1, order_1)
+
+    def _create_minimal_pos_order(self, user):
+        # pos.order.create() exige vals['session_id'] de una sesion abierta
+        # (ver PosOrder._complete_values_from_session en point_of_sale) --
+        # armar una sesion completa es innecesario para un test de regla de
+        # acceso, asi que se inserta la fila directo por SQL con las
+        # columnas NOT NULL reales de la tabla (company_id, name,
+        # amount_tax, amount_total, amount_paid, amount_return).
+        self.env.cr.execute(
+            """
+            INSERT INTO pos_order (company_id, name, amount_tax, amount_total, amount_paid, amount_return, user_id)
+            VALUES (%s, %s, 0, 0, 0, 0, %s)
+            RETURNING id
+            """,
+            (self.env.company.id, 'Test Order', user.id),
+        )
+        order_id = self.env.cr.fetchone()[0]
+        return self.env['pos.order'].browse(order_id)
