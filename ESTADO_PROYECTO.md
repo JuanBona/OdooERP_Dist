@@ -1,6 +1,6 @@
 # Estado del proyecto — Odoo 19 CE local (Reparto)
 
-Última actualización: 2026-08-20
+Última actualización: 2026-08-23
 
 ## 1. Infraestructura
 
@@ -68,6 +68,23 @@ Probado: pedir 999 Coca-Colas contra Camión 1 (40 disponibles) → bloqueado co
 
 Limitación conocida (a propósito, YAGNI): valida al cobrar/cerrar la orden, no en tiempo real mientras se arma el carrito en pantalla.
 
+## 5bis. Módulo custom: `pos_reparto_security`
+
+Ubicación: `addons/pos_reparto_security/`. Instalado.
+
+Qué hace: da de alta los 4 roles del proyecto (RNF-04 del relevamiento v2.0) como grupos de seguridad en categoría "Reparto" — Vendedor, Depósito, Administración Operativa, Administración Privada/Gerencia (agrupados bajo un `res.groups.privilege` común, para que sean mutuamente excluyentes en la pantalla de usuarios — patrón nuevo de Odoo 19, `res.groups` ya no tiene `category_id` directo).
+
+Reglas de acceso reales, solo para el grupo Vendedor (los otros 3 grupos no tienen regla propia todavía — ven todo por comportamiento default de Odoo, a ajustar si el taller de detalle con el cliente revela una diferencia real de permisos entre ellos):
+
+- **`res.partner`**: un vendedor solo ve (y no puede editar) sus propios clientes, filtrando por el campo nativo `user_id` ("Salesperson"). Crear y borrar clientes está bloqueado de forma dura (regla con domain imposible `id = False`) — no depende de qué otros grupos tenga el usuario en el futuro.
+- **`pos.order`**: un vendedor solo ve, crea y edita sus propios pedidos (filtrando por `user_id`, campo nativo de "Empleado"/cajero de la orden). Borrar pedidos está bloqueado de forma dura, mismo patrón — importante porque el ACL base de POS le da permiso de borrado a cualquier usuario de `Point of Sale User`, así que sin esta regla extra el bloqueo simple (`perm_unlink=0`) no alcanzaba (esto se descubrió y corrigió durante la implementación, ver historial de commits del módulo).
+
+No se creó ningún campo nuevo — ambas reglas reutilizan el campo `user_id` que ya existía en cada modelo.
+
+Pendiente manual (fuera de este módulo): crear los usuarios reales de cada vendedor/depósito/administración y asignarles el grupo `Reparto` que corresponda + el/los grupo(s) estándar de Odoo de la app que vayan a usar (ej. Point of Sale User), y asignar el campo "Salesperson" (`user_id`) en cada cliente real al vendedor que le corresponde.
+
+Ver spec: `docs/superpowers/specs/2026-08-23-pos-reparto-security-design.md`.
+
 ## 6. Facturación (ARCA/AFIP)
 
 Decisión tomada: por ahora, factura **local de Odoo sin timbrar** (Factura A/B/C interna, sin conexión a los webservices de ARCA). El vendedor elige facturar o no, caso por caso, en cada venta — es el comportamiento nativo de POS, no requiere config extra.
@@ -113,6 +130,7 @@ Configurado servidor MCP `odoo` en Claude Code (`claude mcp add odoo ...`), modo
 - Probar el circuito completo en el navegador (vos o tu compañero) desde POS Camión 1.
 - Definir si se necesitan más camiones/ubicaciones (el patrón ya es repetible: ubicación + picking type + pos.config).
 - Implementar banner con listener del evento `online` del navegador para reintento automático de sync en POS (ver sección 7 — estimado una tarde, no bloqueante, hay mitigación de proceso mientras tanto).
+- Módulo de alerta de crédito (15 días/2 visitas sin pago) sobre `res.partner`, con dashboard filtrado por rol usando los grupos de `pos_reparto_security` recién armados — action item pendiente del ADR-001, bloque 2.
 
 ---
 
