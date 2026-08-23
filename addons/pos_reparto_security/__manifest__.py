@@ -6,6 +6,7 @@
     'depends': ['point_of_sale'],
     'data': [
         'security/reparto_groups.xml',
+        'security/reparto_partner_rules.xml',
     ],
     'installable': True,
     'application': False,
