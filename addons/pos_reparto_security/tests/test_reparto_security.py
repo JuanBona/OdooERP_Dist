@@ -86,20 +86,28 @@ class TestRepartoSecurity(TransactionCase):
         ])
         self.assertEqual(found_by_vendedor_1, order_1)
 
-    def _create_minimal_pos_order(self, user):
+    def test_vendedor_no_puede_borrar_pedido_de_otro_vendedor(self):
+        order_de_vendedor_2 = self._create_minimal_pos_order(self.vendedor_2, state='cancel')
+
+        with self.assertRaises(AccessError):
+            order_de_vendedor_2.with_user(self.vendedor_1).unlink()
+
+    def _create_minimal_pos_order(self, user, state='draft'):
         # pos.order.create() exige vals['session_id'] de una sesion abierta
         # (ver PosOrder._complete_values_from_session en point_of_sale) --
         # armar una sesion completa es innecesario para un test de regla de
         # acceso, asi que se inserta la fila directo por SQL con las
         # columnas NOT NULL reales de la tabla (company_id, name,
-        # amount_tax, amount_total, amount_paid, amount_return).
+        # amount_tax, amount_total, amount_paid, amount_return). state se
+        # fija explicito porque el default 'draft' lo aplica el ORM en
+        # create(), no el schema -- sin esto quedaria NULL.
         self.env.cr.execute(
             """
-            INSERT INTO pos_order (company_id, name, amount_tax, amount_total, amount_paid, amount_return, user_id)
-            VALUES (%s, %s, 0, 0, 0, 0, %s)
+            INSERT INTO pos_order (company_id, name, amount_tax, amount_total, amount_paid, amount_return, user_id, state)
+            VALUES (%s, %s, 0, 0, 0, 0, %s, %s)
             RETURNING id
             """,
-            (self.env.company.id, 'Test Order', user.id),
+            (self.env.company.id, 'Test Order', user.id, state),
         )
         order_id = self.env.cr.fetchone()[0]
         return self.env['pos.order'].browse(order_id)

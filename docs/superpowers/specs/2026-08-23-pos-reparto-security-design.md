@@ -59,7 +59,7 @@ Misma idea sobre `pos.order`:
 
 - **Domain:** `[('user_id', '=', user.id)]`
 - **Grupos:** solo `group_reparto_vendedor`
-- **Permisos:** read + write; create sí habilitado (el vendedor necesita poder crear sus propios pedidos); unlink deshabilitado (coherente con RNF-07, historial inmutable — no se borran pedidos).
+- **Permisos:** read + write + create habilitados (el vendedor necesita poder crear y ver/editar sus propios pedidos). Para unlink, igual que con `res.partner` (ver sección 2), `perm_unlink=0` en esta regla no alcanza por sí solo — el ACL base de `point_of_sale` (`group_pos_user`) ya da permiso de unlink a nivel modelo. Hay una segunda `ir.rule` (`rule_reparto_pos_order_vendedor_no_delete`) con domain imposible (`id = False`) que bloquea el borrado de forma real, coherente con RNF-07 (historial inmutable).
 
 ### Por qué no hacen falta reglas para los otros 3 grupos
 
