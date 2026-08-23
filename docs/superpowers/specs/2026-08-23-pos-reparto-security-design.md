@@ -51,7 +51,9 @@ Una `ir.rule` sobre `res.partner`:
 
 - **Domain:** `[('user_id', '=', user.id)]`
 - **Grupos:** solo `group_reparto_vendedor`
-- **Permisos:** solo read habilitado (la ficha del cliente no es editable por el vendedor — ningún requerimiento lo pide, y así queda alineado con el ACL base de Odoo, que ya deniega `write` en `res.partner` a usuarios internos comunes). Además de esta regla hay una segunda `ir.rule` (`rule_reparto_partner_vendedor_no_create_no_delete`) con domain imposible (`id = False`) que bloquea creación y borrado de forma explícita — no se depende de que `perm_create=0`/`perm_unlink=0` por sí solos impidan la operación (esos flags solo excluyen la regla del set considerado para esa operación, no bloquean nada si otra regla o el ACL de otro grupo lo permite).
+- **Permisos:** solo read habilitado (la ficha del cliente no es editable por el vendedor — ningún requerimiento lo pide). Hay dos reglas adicionales, ambas con domain imposible (`id = False`), que bloquean de forma explícita las otras tres operaciones — no se depende de que `perm_X=0` por sí solo impida nada (ese flag solo excluye la regla del set considerado para esa operación; si otra regla o el ACL de otro grupo la permite, igual pasa):
+  - `rule_reparto_partner_vendedor_no_create_no_delete` (`perm_create=1`, `perm_unlink=1`): bloquea creación y borrado.
+  - `rule_reparto_partner_vendedor_no_write` (`perm_write=1`): bloquea edición. Se agregó en una revisión final de todo el módulo, que encontró que confiar en que el ACL base de `group_user` deniegue `write` (como se hacía antes) era el mismo agujero ya tapado dos veces en este módulo — probado con un test que le suma a un vendedor el grupo `Contact Creation` (que sí da permiso de escritura) y confirma que la regla igual bloquea.
 
 ### 3. Regla sobre pedidos POS (`security/reparto_pos_order_rules.xml`)
 

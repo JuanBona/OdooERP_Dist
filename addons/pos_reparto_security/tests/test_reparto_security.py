@@ -77,6 +77,26 @@ class TestRepartoSecurity(TransactionCase):
         with self.assertRaises(AccessError):
             partner_1.with_user(self.vendedor_1).write({'phone': '123456'})
 
+    def test_vendedor_no_puede_editar_ni_con_otro_grupo_que_de_permiso_de_escritura(self):
+        # Prueba que el bloqueo de escritura es real (domain imposible en
+        # rule_reparto_partner_vendedor_no_write), no una casualidad de que
+        # el ACL base de group_user deniegue write -- si a un vendedor se le
+        # suma en el futuro un grupo que SI de permiso de escritura sobre
+        # res.partner (ej. Contact Creation), la regla de este modulo debe
+        # seguir bloqueando igual.
+        group_partner_manager = self.env.ref('base.group_partner_manager')
+        vendedor_con_permiso_extra = self.env['res.users'].create({
+            'name': 'Vendedor Con Permiso Extra',
+            'login': 'vendedor_permiso_extra_test',
+            'group_ids': [(6, 0, [self.group_internal.id, self.group_vendedor.id, group_partner_manager.id])],
+        })
+        partner_1 = self.env['res.partner'].create({
+            'name': 'Cliente de Vendedor Con Permiso Extra',
+            'user_id': vendedor_con_permiso_extra.id,
+        })
+        with self.assertRaises(AccessError):
+            partner_1.with_user(vendedor_con_permiso_extra).write({'phone': '123456'})
+
     def test_vendedor_ve_solo_sus_propios_pedidos_pos(self):
         order_1 = self._create_minimal_pos_order(self.vendedor_1)
         order_2 = self._create_minimal_pos_order(self.vendedor_2)
