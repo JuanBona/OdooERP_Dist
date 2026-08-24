@@ -7,7 +7,11 @@
     'data': [
         'views/res_partner_deudores_views.xml',
     ],
-    'assets': {},
+    'assets': {
+        'point_of_sale._assets_pos': [
+            'pos_reparto_credito/static/src/**/*',
+        ],
+    },
     'installable': True,
     'application': False,
     'license': 'LGPL-3',
