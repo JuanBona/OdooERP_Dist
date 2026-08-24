@@ -114,3 +114,40 @@ class TestRepartoCredito(TransactionCase):
 
         self.assertEqual(partner.credito_monto_adeudado, 0.0)
         self.assertEqual(partner.credito_dias_sin_pago, 0)
+
+    def test_accion_deudores_solo_lista_clientes_con_saldo(self):
+        deudor = self._crear_partner_credito('Cliente Con Saldo')
+        self._crear_linea_por_cobrar(deudor, 500.0, fields.Date.today() - timedelta(days=3))
+        al_dia = self._crear_partner_credito('Cliente Al Dia')
+
+        action = self.env.ref('pos_reparto_credito.action_reparto_deudores')
+        domain = safe_eval(action.domain)
+        encontrados = self.env['res.partner'].search(domain, order='credito_dias_sin_pago desc')
+        self.assertIn(deudor, encontrados)
+        self.assertNotIn(al_dia, encontrados)
+
+    def test_vendedor_en_pantalla_deudores_ve_solo_lo_suyo(self):
+        group_vendedor = self.env.ref('pos_reparto_security.group_reparto_vendedor')
+        group_internal = self.env.ref('base.group_user')
+        vendedor_1 = self.env['res.users'].create({
+            'name': 'Vendedor Deudores Uno',
+            'login': 'vendedor_deudores_uno_test',
+            'group_ids': [(6, 0, [group_internal.id, group_vendedor.id])],
+        })
+        vendedor_2 = self.env['res.users'].create({
+            'name': 'Vendedor Deudores Dos',
+            'login': 'vendedor_deudores_dos_test',
+            'group_ids': [(6, 0, [group_internal.id, group_vendedor.id])],
+        })
+        deudor_1 = self._crear_partner_credito('Deudor De Vendedor 1')
+        deudor_1.user_id = vendedor_1
+        self._crear_linea_por_cobrar(deudor_1, 100.0, fields.Date.today())
+        deudor_2 = self._crear_partner_credito('Deudor De Vendedor 2')
+        deudor_2.user_id = vendedor_2
+        self._crear_linea_por_cobrar(deudor_2, 100.0, fields.Date.today())
+
+        action = self.env.ref('pos_reparto_credito.action_reparto_deudores')
+        domain = safe_eval(action.domain)
+        encontrados = self.env['res.partner'].with_user(vendedor_1).search(domain)
+        self.assertIn(deudor_1, encontrados)
+        self.assertNotIn(deudor_2, encontrados)
