@@ -66,3 +66,11 @@ class ResPartner(models.Model):
             fecha_referencia = ultimo_pago_por_partner.get(partner.id) or fecha_vieja
             partner.credito_fecha_ultimo_pago = fecha_referencia
             partner.credito_dias_sin_pago = (today - fecha_referencia).days if fecha_referencia else 0
+
+    def _load_pos_data_fields(self, config):
+        fields_list = super()._load_pos_data_fields(config)
+        return fields_list + [
+            'credito_monto_adeudado',
+            'credito_fecha_ultimo_pago',
+            'credito_dias_sin_pago',
+        ]

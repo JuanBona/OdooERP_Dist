@@ -164,3 +164,8 @@ class TestRepartoCredito(TransactionCase):
 
         self.assertEqual(partner_original.credito_monto_adeudado, 0.0)
         self.assertEqual(partner_nuevo.credito_monto_adeudado, 1000.0)
+
+    def test_campos_de_credito_se_cargan_en_pos_offline(self):
+        campos = self.env['res.partner']._load_pos_data_fields(self.env['pos.config'])
+        self.assertIn('credito_monto_adeudado', campos)
+        self.assertIn('credito_dias_sin_pago', campos)
