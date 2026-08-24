@@ -13,11 +13,11 @@ class TestRepartoCredito(TransactionCase):
         super().setUpClass()
         cls.receivable_account = cls.env['account.account'].search([
             ('account_type', '=', 'asset_receivable'),
-            ('company_id', '=', cls.env.company.id),
+            ('company_ids', 'in', cls.env.company.id),
         ], limit=1)
         cls.income_account = cls.env['account.account'].search([
             ('account_type', '=', 'income'),
-            ('company_id', '=', cls.env.company.id),
+            ('company_ids', 'in', cls.env.company.id),
         ], limit=1)
         cls.bank_journal = cls.env['account.journal'].search([
             ('type', '=', 'bank'),
@@ -68,3 +68,13 @@ class TestRepartoCredito(TransactionCase):
         )
         (payment_line + receivable_line).reconcile()
         return payment
+
+    def test_monto_adeudado_suma_lineas_sin_conciliar(self):
+        partner = self._crear_partner_credito('Cliente Deudor')
+        self._crear_linea_por_cobrar(partner, 1000.0, fields.Date.today() - timedelta(days=20))
+        self._crear_linea_por_cobrar(partner, 500.0, fields.Date.today() - timedelta(days=5))
+        self.assertEqual(partner.credito_monto_adeudado, 1500.0)
+
+    def test_sin_deuda_monto_adeudado_es_cero(self):
+        partner = self._crear_partner_credito('Cliente Al Dia')
+        self.assertEqual(partner.credito_monto_adeudado, 0.0)
