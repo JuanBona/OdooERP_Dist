@@ -43,7 +43,7 @@ class ResPartner(models.Model):
                 [
                     ('partner_id', 'in', self.ids),
                     ('payment_type', '=', 'inbound'),
-                    ('move_id.state', '=', 'posted'),
+                    ('state', 'in', ('in_process', 'paid')),
                 ],
                 groupby=['partner_id'], aggregates=['date:max'],
             )

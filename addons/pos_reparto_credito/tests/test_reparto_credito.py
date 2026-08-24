@@ -100,6 +100,7 @@ class TestRepartoCredito(TransactionCase):
         self._crear_y_conciliar_pago(partner, linea, 200.0, fields.Date.today() - timedelta(days=1))
 
         self.assertEqual(partner.credito_dias_sin_pago, 1)
+        self.assertEqual(partner.credito_fecha_ultimo_pago, fields.Date.today() - timedelta(days=1))
         self.assertEqual(partner.credito_monto_adeudado, 800.0)
         self.assertEqual(
             partner.credito_fecha_pedido_mas_viejo,
