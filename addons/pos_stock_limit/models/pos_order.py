@@ -16,6 +16,13 @@ class PosOrder(models.Model):
     def _check_stock_availability(self, vals):
         config_id = vals.get('config_id')
         if not config_id:
+            # config_id is a computed field (from session_id) and is not present
+            # in the vals sent by the real POS sync flow (sync_from_ui -> create).
+            # Resolve it from session_id instead, or the check silently no-ops.
+            session_id = vals.get('session_id')
+            if session_id:
+                config_id = self.env['pos.session'].browse(session_id).config_id.id
+        if not config_id:
             return
 
         location = self.env['pos.config'].browse(config_id).picking_type_id.default_location_src_id
