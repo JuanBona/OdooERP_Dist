@@ -106,6 +106,7 @@ Cubierto por 10 tests automáticos (`tests/test_reparto_credito.py`), todos en v
 
 1. Las queries de `account.move.line`/`account.payment` en `_compute_credito_fields` no tienen scoping por `company_id`. Aceptable porque el proyecto es de una sola compañía; si algún día se agrega una segunda compañía hay que sumar ese filtro (el propio Odoo core lo hace en el campo análogo `res.partner.credit`/`debit`, ver `account/models/partner.py::_credit_debit_get`).
 2. El criterio de "2 visitas consecutivas sin cobro" de RF-PV-07 no está implementado — solo el criterio de días sin pago. Requiere trackear visitas/pedidos independientemente de si generaron deuda, que es una pieza de datos distinta a lo que hoy calculan estos campos.
+3. Si se concilian dos líneas de `account.move.line` ya existentes directamente entre sí (sin pasar por un `account.payment` nuevo — ej. contra una nota de crédito o un ajuste manual), el trigger de recálculo no se dispara, porque `create`/`write`/`unlink` de `account.move.line` no cubren ese camino (la reconciliación en sí no hace `write()` sobre las líneas que concilia). Aceptado porque el flujo real de este proyecto siempre cobra vía un `account.payment` nuevo (ver `ADR-001` y el spec del módulo) — si en algún momento aparece un caso real de conciliación directa sin pago, hay que sumar un trigger también sobre `account.partial.reconcile`/`account.full.reconcile`.
 
 ## 6. Facturación (ARCA/AFIP)
 

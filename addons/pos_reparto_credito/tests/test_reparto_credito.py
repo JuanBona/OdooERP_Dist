@@ -1,5 +1,7 @@
 from datetime import timedelta
 
+from lxml import etree
+
 from odoo import Command, fields
 from odoo.tests.common import TransactionCase, tagged
 from odoo.tools.safe_eval import safe_eval
@@ -169,3 +171,42 @@ class TestRepartoCredito(TransactionCase):
         campos = self.env['res.partner']._load_pos_data_fields(self.env['pos.config'])
         self.assertIn('credito_monto_adeudado', campos)
         self.assertIn('credito_dias_sin_pago', campos)
+
+    def test_vendedor_puede_leer_campos_de_credito_sin_access_error(self):
+        group_vendedor = self.env.ref('pos_reparto_security.group_reparto_vendedor')
+        group_internal = self.env.ref('base.group_user')
+        vendedor = self.env['res.users'].create({
+            'name': 'Vendedor Lee Credito',
+            'login': 'vendedor_lee_credito_test',
+            'group_ids': [(6, 0, [group_internal.id, group_vendedor.id])],
+        })
+        partner = self._crear_partner_credito('Cliente De Vendedor Lee Credito')
+        partner.user_id = vendedor
+        linea = self._crear_linea_por_cobrar(partner, 500.0, fields.Date.today() - timedelta(days=5))
+        self._crear_y_conciliar_pago(partner, linea, 200.0, fields.Date.today())
+
+        partner_como_vendedor = partner.with_user(vendedor)
+        # group_reparto_vendedor no tiene acceso a account.payment (ni a
+        # account.move.line via point_of_sale sin group_pos_user). Esto no
+        # rompe: un compute con store=True corre en modo superusuario por
+        # default (compute_sudo = store, ver odoo/orm/fields.py), asi que
+        # _compute_credito_fields nunca corre con los permisos del usuario
+        # que dispara la lectura. Este test fija ese comportamiento -- si
+        # alguien le agrega compute_sudo=False a algun campo de credito,
+        # este test explota con AccessError y avisa.
+        self.assertEqual(partner_como_vendedor.credito_monto_adeudado, 300.0)
+        self.assertEqual(partner_como_vendedor.credito_dias_sin_pago, 0)
+
+    def test_decoraciones_deudores_coinciden_con_umbrales_del_popup(self):
+        # Las mismas 2 franjas (10 y 15 dias) estan hardcodeadas en el
+        # popup de POS (static/src/app/services/pos_store.js). Este test
+        # no las sincroniza automaticamente, pero evita que alguien
+        # cambie un umbral en un solo lugar sin darse cuenta.
+        view = self.env.ref('pos_reparto_credito.view_reparto_deudores_list')
+        arch = etree.fromstring(view.arch)
+        list_node = arch if arch.tag == 'list' else arch.find('.//list')
+        self.assertEqual(list_node.get('decoration-danger'), 'credito_dias_sin_pago >= 15')
+        self.assertEqual(
+            list_node.get('decoration-warning'),
+            'credito_dias_sin_pago >= 10 and credito_dias_sin_pago < 15',
+        )
