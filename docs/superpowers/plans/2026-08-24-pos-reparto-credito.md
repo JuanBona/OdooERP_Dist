@@ -500,10 +500,151 @@ git commit -m "Cualquier pago (parcial o total) reinicia dias_sin_pago"
 
 ### Task 5: Pantalla "Deudores" (acción + vista + menú)
 
+**Bloqueado y corregido durante la ejecución (importante, leer antes de tocar este task):** el intento original de este task falló — Odoo no permite `default_order`/`ORDER BY` sobre un campo `compute` sin `store=True`, ni siquiera agregando un método `search=` (eso solo arregla el filtro del dominio, no el ordenamiento; verificado directo contra `odoo/orm/models.py::_order_field_to_sql`, que llama a `field.to_sql()` para cualquier campo no-relacional en el `ORDER BY`, y ese método explota si el campo no es `store`). Se confirmó el mismo patrón en el propio Odoo core (`res.partner.credit`/`debit`, en `account/models/partner.py`): son `compute` + `search=` pero **nunca** `store=True`, y por eso core nunca los usa en un `default_order` de ninguna vista — evitaron el problema en vez de resolverlo.
+
+Se decidió (con el usuario) resolverlo de verdad: los 4 campos de crédito pasan a `store=True`, y se agregan triggers explícitos de recálculo (`env.add_to_compute`, la misma API interna que usa `account/models/account_move.py` en el core para casos idénticos de "campo store que depende de otro modelo sin relación directa expresable en `@api.depends`") en `account.move.line` y `account.payment`, para que la pantalla Deudores nunca muestre datos viejos.
+
 **Files:**
 - Create: `addons/pos_reparto_credito/views/res_partner_deudores_views.xml`
+- Create: `addons/pos_reparto_credito/models/account_move_line.py`
+- Create: `addons/pos_reparto_credito/models/account_payment.py`
+- Modify: `addons/pos_reparto_credito/models/res_partner.py` (agregar `store=True` + `@api.depends()` vacío a los 4 campos)
+- Modify: `addons/pos_reparto_credito/models/__init__.py`
 - Modify: `addons/pos_reparto_credito/__manifest__.py`
 - Modify: `addons/pos_reparto_credito/tests/test_reparto_credito.py`
+
+- [ ] **Step 0 (nuevo): marcar los 4 campos como `store=True` y agregar los triggers de recálculo**
+
+En `models/res_partner.py`, agregar `store=True` a los 4 `fields.Monetary`/`fields.Date`/`fields.Integer` (sin tocar el cuerpo de `_compute_credito_fields`, que sigue igual), y agregar `@api.depends()` (vacío, sin argumentos) justo arriba de `def _compute_credito_fields(self):` — silencia la advertencia de Odoo por un compute `store=True` sin dependencias declaradas; las dependencias reales (otro modelo) se resuelven a mano con los triggers de abajo, no con `@api.depends`.
+
+```python
+from odoo import api, fields, models
+
+
+class ResPartner(models.Model):
+    _inherit = 'res.partner'
+
+    credito_monto_adeudado = fields.Monetary(
+        string='Monto adeudado',
+        compute='_compute_credito_fields',
+        currency_field='currency_id',
+        store=True,
+    )
+    credito_fecha_pedido_mas_viejo = fields.Date(
+        string='Pedido más viejo sin pagar',
+        compute='_compute_credito_fields',
+        store=True,
+    )
+    credito_fecha_ultimo_pago = fields.Date(
+        string='Último pago',
+        compute='_compute_credito_fields',
+        store=True,
+    )
+    credito_dias_sin_pago = fields.Integer(
+        string='Días sin pago',
+        compute='_compute_credito_fields',
+        store=True,
+    )
+
+    @api.depends()
+    def _compute_credito_fields(self):
+        # (cuerpo sin cambios respecto a la version actual del archivo)
+        ...
+```
+
+Crear `models/account_move_line.py`:
+
+```python
+from odoo import api, models
+
+CAMPOS_CREDITO_REPARTO = [
+    'credito_monto_adeudado',
+    'credito_fecha_pedido_mas_viejo',
+    'credito_fecha_ultimo_pago',
+    'credito_dias_sin_pago',
+]
+
+
+class AccountMoveLine(models.Model):
+    _inherit = 'account.move.line'
+
+    def _marcar_credito_reparto_a_recalcular(self):
+        partners = self.filtered(
+            lambda l: l.partner_id and l.account_type == 'asset_receivable'
+        ).partner_id
+        if not partners:
+            return
+        field = partners._fields[CAMPOS_CREDITO_REPARTO[0]]
+        self.env.add_to_compute(field, partners)
+
+    @api.model_create_multi
+    def create(self, vals_list):
+        lines = super().create(vals_list)
+        lines._marcar_credito_reparto_a_recalcular()
+        return lines
+
+    def write(self, vals):
+        res = super().write(vals)
+        self._marcar_credito_reparto_a_recalcular()
+        return res
+```
+
+Crear `models/account_payment.py`:
+
+```python
+from odoo import api, models
+
+
+class AccountPayment(models.Model):
+    _inherit = 'account.payment'
+
+    def _marcar_credito_reparto_a_recalcular(self):
+        partners = self.partner_id
+        if not partners:
+            return
+        field = partners._fields['credito_monto_adeudado']
+        self.env.add_to_compute(field, partners)
+
+    @api.model_create_multi
+    def create(self, vals_list):
+        payments = super().create(vals_list)
+        payments._marcar_credito_reparto_a_recalcular()
+        return payments
+
+    def write(self, vals):
+        res = super().write(vals)
+        self._marcar_credito_reparto_a_recalcular()
+        return res
+```
+
+Actualizar `models/__init__.py`:
+
+```python
+from . import res_partner
+from . import account_move_line
+from . import account_payment
+```
+
+Nota técnica: marcar un solo campo con `env.add_to_compute` alcanza para que Odoo recalcule los 4 — comparten el mismo método `compute=`, así que al ejecutarse una vez deja los 4 al día (verificado: es el mismo mecanismo que usa `modified()` internamente, que agrupa por método de cómputo).
+
+- [ ] **Step 0b: correr los tests existentes (Tasks 2-4), confirmar que siguen los 6 en verde con `store=True`**
+
+```bash
+docker compose stop odoo
+MSYS_NO_PATHCONV=1 docker compose run --rm odoo odoo server -d odoo --db_host=db --db_user=odoo --db_password=odoo -u pos_reparto_credito --test-enable --test-tags /pos_reparto_credito --stop-after-init
+docker compose up -d odoo
+```
+
+Expected: `0 failed, 0 error(s) of 6 tests` (los mismos de antes, ahora corriendo sobre campos `store=True` con los triggers activos — si alguno falla, es señal de que el trigger no está disparando el recálculo a tiempo dentro del test, no un problema de los tests en sí).
+
+- [ ] **Step 0c: Commit de este bloque, separado del resto del task**
+
+```bash
+git add addons/pos_reparto_credito
+git commit -m "Volver store=True los campos de credito, con triggers de recalculo"
+```
+
+**A partir de acá sigue el resto del Task 5 tal como estaba planeado (acción/vista/menú), sin cambios respecto al plan original:**
 
 - [ ] **Step 1: Agregar los tests**
 
