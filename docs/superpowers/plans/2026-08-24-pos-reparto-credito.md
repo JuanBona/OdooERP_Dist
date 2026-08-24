@@ -433,7 +433,9 @@ Expected: `test_pago_parcial_reinicia_contador_de_dias_pero_no_borra_la_deuda` f
 
 Reemplazar el método `_compute_credito_fields` en `models/res_partner.py` (el resto del archivo, los 4 campos declarados arriba, no cambia):
 
-Nota: el método de partida ya no es el de la versión original del plan — una review de Task 3 encontró que convenía unificar los dos `_read_group` sobre `account.move.line` en uno solo (mismo domain, dos aggregates) y hacer que las 4 columnas queden neutras juntas cuando `monto` es 0 (antes `credito_fecha_pedido_mas_viejo` podía quedar con una fecha vieja aunque el monto diera 0 en un caso borde de líneas que se cancelan entre sí sin estar conciliadas). Esa versión ya está commiteada en la rama — partir de ella, no de una versión anterior del plan.
+Notas sobre esta versión (ya reflejan 2 fixes de code review posteriores, no la version original del plan — partir de esta, ya commiteada en la rama):
+- Task 3: se unificaron los dos `_read_group` sobre `account.move.line` en uno solo (mismo domain, dos aggregates), y las 4 columnas quedan neutras juntas cuando `monto` es 0.
+- Task 4: el domain de pagos filtra por `state` (`in_process`/`paid`), no por `move_id.state = 'posted'` — `action_reject()` en `account.payment` no cancela el `move_id`, así que un pago rechazado/rebotado hubiera seguido teniendo `move_id.state = 'posted'` y reseteado el contador de crédito para un pago que en realidad nunca se cobró.
 
 ```python
     def _compute_credito_fields(self):
@@ -457,7 +459,7 @@ Nota: el método de partida ya no es el de la versión original del plan — una
                 [
                     ('partner_id', 'in', self.ids),
                     ('payment_type', '=', 'inbound'),
-                    ('move_id.state', '=', 'posted'),
+                    ('state', 'in', ('in_process', 'paid')),
                 ],
                 groupby=['partner_id'], aggregates=['date:max'],
             )
