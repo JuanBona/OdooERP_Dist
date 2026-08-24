@@ -1,4 +1,4 @@
-from odoo import fields, models
+from odoo import api, fields, models
 
 
 class ResPartner(models.Model):
@@ -8,20 +8,25 @@ class ResPartner(models.Model):
         string='Monto adeudado',
         compute='_compute_credito_fields',
         currency_field='currency_id',
+        store=True,
     )
     credito_fecha_pedido_mas_viejo = fields.Date(
         string='Pedido más viejo sin pagar',
         compute='_compute_credito_fields',
+        store=True,
     )
     credito_fecha_ultimo_pago = fields.Date(
         string='Último pago',
         compute='_compute_credito_fields',
+        store=True,
     )
     credito_dias_sin_pago = fields.Integer(
         string='Días sin pago',
         compute='_compute_credito_fields',
+        store=True,
     )
 
+    @api.depends()
     def _compute_credito_fields(self):
         today = fields.Date.context_today(self)
         deuda_domain = [
