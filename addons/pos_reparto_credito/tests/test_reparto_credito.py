@@ -93,3 +93,23 @@ class TestRepartoCredito(TransactionCase):
         self.assertEqual(partner.credito_dias_sin_pago, 0)
         self.assertFalse(partner.credito_fecha_ultimo_pago)
         self.assertFalse(partner.credito_fecha_pedido_mas_viejo)
+
+    def test_pago_parcial_reinicia_contador_de_dias_pero_no_borra_la_deuda(self):
+        partner = self._crear_partner_credito('Cliente Pago Parcial')
+        linea = self._crear_linea_por_cobrar(partner, 1000.0, fields.Date.today() - timedelta(days=20))
+        self._crear_y_conciliar_pago(partner, linea, 200.0, fields.Date.today() - timedelta(days=1))
+
+        self.assertEqual(partner.credito_dias_sin_pago, 1)
+        self.assertEqual(partner.credito_monto_adeudado, 800.0)
+        self.assertEqual(
+            partner.credito_fecha_pedido_mas_viejo,
+            fields.Date.today() - timedelta(days=20),
+        )
+
+    def test_pago_total_deja_al_cliente_sin_deuda(self):
+        partner = self._crear_partner_credito('Cliente Pago Total')
+        linea = self._crear_linea_por_cobrar(partner, 300.0, fields.Date.today() - timedelta(days=20))
+        self._crear_y_conciliar_pago(partner, linea, 300.0, fields.Date.today())
+
+        self.assertEqual(partner.credito_monto_adeudado, 0.0)
+        self.assertEqual(partner.credito_dias_sin_pago, 0)
