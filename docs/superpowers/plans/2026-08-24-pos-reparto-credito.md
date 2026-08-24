@@ -552,6 +552,11 @@ class ResPartner(models.Model):
         ...
 ```
 
+**Nota técnica (versión final, post 2 rondas de review):**
+- Marcar un solo campo con `env.add_to_compute` NO alcanza para recalcular los 4 — es estrictamente por campo (`self.transaction.tocompute[field]`), no agrupa por método `compute=` como sí hace `modified()`. Verificado leyendo `odoo/orm/environments.py::add_to_compute` y reproducido a mano (los 3 campos no marcados quedaban en su valor default para siempre). Hay que marcar los 4 campos explícitamente, uno por uno.
+- `write()`/`unlink()` tienen que capturar los partners **antes** de llamar a `super()`, no después — si no, reasignar `partner_id` (o sacar una línea de la cuenta `asset_receivable`) deja al partner viejo con el monto viejo para siempre (nada lo vuelve a tocar, `@api.depends()` está vacío a propósito). Reproducido a mano: sin este fix, reasignar una línea a otro cliente deja al cliente original con la deuda vieja en la base para siempre.
+- Falta `unlink()` en los dos modelos — borrar un asiento posteado (`button_draft()` + `unlink()`, corrección contable normal, el propio `account.payment.unlink()` del core hace exactamente esto y también llama a `add_to_compute` después) deja al partner con el monto congelado. Reproducido a mano: borrar el `account.move` completo no bajaba el monto adeudado.
+
 Crear `models/account_move_line.py`:
 
 ```python
@@ -568,24 +573,42 @@ CAMPOS_CREDITO_REPARTO = [
 class AccountMoveLine(models.Model):
     _inherit = 'account.move.line'
 
-    def _marcar_credito_reparto_a_recalcular(self):
-        partners = self.filtered(
+    def _partners_credito_reparto(self):
+        # No filtramos por parent_state/posted: cuando el asiento pasa de
+        # borrador a posteado, ese cambio de estado llega via el related
+        # field parent_state (compute del propio ORM, no un write() sobre
+        # esta linea), asi que este metodo nunca lo veria igual. Alcanza
+        # con marcar el partner en cualquier alta/baja/edicion de linea de
+        # cuenta por cobrar: el compute de res.partner ya filtra por
+        # parent_state='posted' al leer, asi que una linea todavia en
+        # borrador simplemente no suma deuda hasta que se postee de verdad.
+        return self.filtered(
             lambda l: l.partner_id and l.account_type == 'asset_receivable'
         ).partner_id
+
+    def _marcar_partners_credito_a_recalcular(self, partners):
         if not partners:
             return
-        field = partners._fields[CAMPOS_CREDITO_REPARTO[0]]
-        self.env.add_to_compute(field, partners)
+        for nombre in CAMPOS_CREDITO_REPARTO:
+            self.env.add_to_compute(partners._fields[nombre], partners)
 
     @api.model_create_multi
     def create(self, vals_list):
         lines = super().create(vals_list)
-        lines._marcar_credito_reparto_a_recalcular()
+        lines._marcar_partners_credito_a_recalcular(lines._partners_credito_reparto())
         return lines
 
     def write(self, vals):
+        partners_antes = self._partners_credito_reparto()
         res = super().write(vals)
-        self._marcar_credito_reparto_a_recalcular()
+        partners_despues = self._partners_credito_reparto()
+        self._marcar_partners_credito_a_recalcular(partners_antes | partners_despues)
+        return res
+
+    def unlink(self):
+        partners = self._partners_credito_reparto()
+        res = super().unlink()
+        self._marcar_partners_credito_a_recalcular(partners)
         return res
 ```
 
@@ -594,26 +617,35 @@ Crear `models/account_payment.py`:
 ```python
 from odoo import api, models
 
+from .account_move_line import CAMPOS_CREDITO_REPARTO
+
 
 class AccountPayment(models.Model):
     _inherit = 'account.payment'
 
-    def _marcar_credito_reparto_a_recalcular(self):
-        partners = self.partner_id
+    def _marcar_partners_credito_a_recalcular(self, partners):
         if not partners:
             return
-        field = partners._fields['credito_monto_adeudado']
-        self.env.add_to_compute(field, partners)
+        for nombre in CAMPOS_CREDITO_REPARTO:
+            self.env.add_to_compute(partners._fields[nombre], partners)
 
     @api.model_create_multi
     def create(self, vals_list):
         payments = super().create(vals_list)
-        payments._marcar_credito_reparto_a_recalcular()
+        payments._marcar_partners_credito_a_recalcular(payments.partner_id)
         return payments
 
     def write(self, vals):
+        partners_antes = self.partner_id
         res = super().write(vals)
-        self._marcar_credito_reparto_a_recalcular()
+        partners_despues = self.partner_id
+        self._marcar_partners_credito_a_recalcular(partners_antes | partners_despues)
+        return res
+
+    def unlink(self):
+        partners = self.partner_id
+        res = super().unlink()
+        self._marcar_partners_credito_a_recalcular(partners)
         return res
 ```
 
@@ -624,8 +656,6 @@ from . import res_partner
 from . import account_move_line
 from . import account_payment
 ```
-
-Nota técnica: marcar un solo campo con `env.add_to_compute` alcanza para que Odoo recalcule los 4 — comparten el mismo método `compute=`, así que al ejecutarse una vez deja los 4 al día (verificado: es el mismo mecanismo que usa `modified()` internamente, que agrupa por método de cómputo).
 
 - [ ] **Step 0b: correr los tests existentes (Tasks 2-4), confirmar que siguen los 6 en verde con `store=True`**
 
