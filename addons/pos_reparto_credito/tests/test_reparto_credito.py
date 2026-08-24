@@ -1,0 +1,70 @@
+from datetime import timedelta
+
+from odoo import Command, fields
+from odoo.tests.common import TransactionCase, tagged
+from odoo.tools.safe_eval import safe_eval
+
+
+@tagged('post_install', '-at_install')
+class TestRepartoCredito(TransactionCase):
+
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        cls.receivable_account = cls.env['account.account'].search([
+            ('account_type', '=', 'asset_receivable'),
+            ('company_id', '=', cls.env.company.id),
+        ], limit=1)
+        cls.income_account = cls.env['account.account'].search([
+            ('account_type', '=', 'income'),
+            ('company_id', '=', cls.env.company.id),
+        ], limit=1)
+        cls.bank_journal = cls.env['account.journal'].search([
+            ('type', '=', 'bank'),
+            ('company_id', '=', cls.env.company.id),
+        ], limit=1)
+
+    def _crear_partner_credito(self, name):
+        return self.env['res.partner'].create({
+            'name': name,
+            'property_account_receivable_id': self.receivable_account.id,
+        })
+
+    def _crear_linea_por_cobrar(self, partner, monto, fecha):
+        move = self.env['account.move'].create({
+            'move_type': 'entry',
+            'date': fecha,
+            'line_ids': [
+                Command.create({
+                    'account_id': self.receivable_account.id,
+                    'partner_id': partner.id,
+                    'debit': monto,
+                    'credit': 0.0,
+                    'name': 'Pedido a credito de prueba',
+                }),
+                Command.create({
+                    'account_id': self.income_account.id,
+                    'debit': 0.0,
+                    'credit': monto,
+                    'name': 'Contrapartida de prueba',
+                }),
+            ],
+        })
+        move.action_post()
+        return move.line_ids.filtered(lambda l: l.account_id == self.receivable_account)
+
+    def _crear_y_conciliar_pago(self, partner, receivable_line, monto, fecha):
+        payment = self.env['account.payment'].create({
+            'payment_type': 'inbound',
+            'partner_type': 'customer',
+            'partner_id': partner.id,
+            'amount': monto,
+            'date': fecha,
+            'journal_id': self.bank_journal.id,
+        })
+        payment.action_post()
+        payment_line = payment.move_id.line_ids.filtered(
+            lambda l: l.account_id == self.receivable_account
+        )
+        (payment_line + receivable_line).reconcile()
+        return payment
