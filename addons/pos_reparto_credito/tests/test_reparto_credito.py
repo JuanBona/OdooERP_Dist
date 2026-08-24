@@ -151,3 +151,16 @@ class TestRepartoCredito(TransactionCase):
         encontrados = self.env['res.partner'].with_user(vendedor_1).search(domain)
         self.assertIn(deudor_1, encontrados)
         self.assertNotIn(deudor_2, encontrados)
+
+    def test_reasignar_partner_de_linea_actualiza_ambos_clientes(self):
+        partner_original = self._crear_partner_credito('Cliente Original')
+        partner_nuevo = self._crear_partner_credito('Cliente Nuevo')
+        linea = self._crear_linea_por_cobrar(partner_original, 1000.0, fields.Date.today())
+
+        self.assertEqual(partner_original.credito_monto_adeudado, 1000.0)
+        self.assertEqual(partner_nuevo.credito_monto_adeudado, 0.0)
+
+        linea.write({'partner_id': partner_nuevo.id})
+
+        self.assertEqual(partner_original.credito_monto_adeudado, 0.0)
+        self.assertEqual(partner_nuevo.credito_monto_adeudado, 1000.0)
