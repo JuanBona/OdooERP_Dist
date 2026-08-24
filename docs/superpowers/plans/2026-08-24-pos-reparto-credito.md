@@ -111,11 +111,11 @@ class TestRepartoCredito(TransactionCase):
         super().setUpClass()
         cls.receivable_account = cls.env['account.account'].search([
             ('account_type', '=', 'asset_receivable'),
-            ('company_id', '=', cls.env.company.id),
+            ('company_ids', 'in', cls.env.company.id),
         ], limit=1)
         cls.income_account = cls.env['account.account'].search([
             ('account_type', '=', 'income'),
-            ('company_id', '=', cls.env.company.id),
+            ('company_ids', 'in', cls.env.company.id),
         ], limit=1)
         cls.bank_journal = cls.env['account.journal'].search([
             ('type', '=', 'bank'),
@@ -433,6 +433,8 @@ Expected: `test_pago_parcial_reinicia_contador_de_dias_pero_no_borra_la_deuda` f
 
 Reemplazar el método `_compute_credito_fields` en `models/res_partner.py` (el resto del archivo, los 4 campos declarados arriba, no cambia):
 
+Nota: el método de partida ya no es el de la versión original del plan — una review de Task 3 encontró que convenía unificar los dos `_read_group` sobre `account.move.line` en uno solo (mismo domain, dos aggregates) y hacer que las 4 columnas queden neutras juntas cuando `monto` es 0 (antes `credito_fecha_pedido_mas_viejo` podía quedar con una fecha vieja aunque el monto diera 0 en un caso borde de líneas que se cancelan entre sí sin estar conciliadas). Esa versión ya está commiteada en la rama — partir de ella, no de una versión anterior del plan.
+
 ```python
     def _compute_credito_fields(self):
         today = fields.Date.context_today(self)
@@ -442,16 +444,11 @@ Reemplazar el método `_compute_credito_fields` en `models/res_partner.py` (el r
             ('reconciled', '=', False),
             ('parent_state', '=', 'posted'),
         ]
-        monto_por_partner = {
-            partner.id: monto
-            for partner, monto in self.env['account.move.line']._read_group(
-                deuda_domain, groupby=['partner_id'], aggregates=['amount_residual:sum'],
-            )
-        }
-        fecha_vieja_por_partner = {
-            partner.id: fecha
-            for partner, fecha in self.env['account.move.line']._read_group(
-                deuda_domain, groupby=['partner_id'], aggregates=['date:min'],
+        deuda_por_partner = {
+            partner.id: (monto, fecha)
+            for partner, monto, fecha in self.env['account.move.line']._read_group(
+                deuda_domain, groupby=['partner_id'],
+                aggregates=['amount_residual:sum', 'date:min'],
             )
         }
         ultimo_pago_por_partner = {
@@ -467,14 +464,14 @@ Reemplazar el método `_compute_credito_fields` en `models/res_partner.py` (el r
         }
 
         for partner in self:
-            monto = monto_por_partner.get(partner.id, 0.0)
+            monto, fecha_vieja = deuda_por_partner.get(partner.id, (0.0, False))
             partner.credito_monto_adeudado = monto
-            fecha_vieja = fecha_vieja_por_partner.get(partner.id, False)
-            partner.credito_fecha_pedido_mas_viejo = fecha_vieja
             if not monto:
+                partner.credito_fecha_pedido_mas_viejo = False
                 partner.credito_fecha_ultimo_pago = False
                 partner.credito_dias_sin_pago = 0
                 continue
+            partner.credito_fecha_pedido_mas_viejo = fecha_vieja
             fecha_referencia = ultimo_pago_por_partner.get(partner.id) or fecha_vieja
             partner.credito_fecha_ultimo_pago = fecha_referencia
             partner.credito_dias_sin_pago = (today - fecha_referencia).days if fecha_referencia else 0
