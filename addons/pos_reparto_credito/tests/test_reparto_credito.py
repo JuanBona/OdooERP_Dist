@@ -78,3 +78,18 @@ class TestRepartoCredito(TransactionCase):
     def test_sin_deuda_monto_adeudado_es_cero(self):
         partner = self._crear_partner_credito('Cliente Al Dia')
         self.assertEqual(partner.credito_monto_adeudado, 0.0)
+
+    def test_dias_sin_pago_usa_fecha_de_pedido_mas_viejo_si_nunca_pago(self):
+        partner = self._crear_partner_credito('Cliente Sin Pagos')
+        fecha_vieja = fields.Date.today() - timedelta(days=20)
+        self._crear_linea_por_cobrar(partner, 1000.0, fecha_vieja)
+        self._crear_linea_por_cobrar(partner, 500.0, fields.Date.today() - timedelta(days=5))
+        self.assertEqual(partner.credito_fecha_pedido_mas_viejo, fecha_vieja)
+        self.assertEqual(partner.credito_fecha_ultimo_pago, fecha_vieja)
+        self.assertEqual(partner.credito_dias_sin_pago, 20)
+
+    def test_sin_deuda_dias_y_fechas_son_neutros(self):
+        partner = self._crear_partner_credito('Cliente Al Dia')
+        self.assertEqual(partner.credito_dias_sin_pago, 0)
+        self.assertFalse(partner.credito_fecha_ultimo_pago)
+        self.assertFalse(partner.credito_fecha_pedido_mas_viejo)
