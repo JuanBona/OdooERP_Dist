@@ -1,6 +1,6 @@
 # Estado del proyecto — Odoo 19 CE local (Reparto)
 
-Última actualización: 2026-08-23
+Última actualización: 2026-08-24
 
 ## 1. Infraestructura
 
@@ -85,6 +85,29 @@ Pendiente manual (fuera de este módulo): crear los usuarios reales de cada vend
 
 Ver spec: `docs/superpowers/specs/2026-08-23-pos-reparto-security-design.md`.
 
+## 5ter. Módulo custom: `pos_reparto_credito`
+
+Ubicación: `addons/pos_reparto_credito/`. Instalado. Depende de `point_of_sale`, `account` y `pos_reparto_security`.
+
+Qué hace: implementa la alerta de crédito de RF-PV-07 del relevamiento v2.0 (deuda vencida por cliente) más una pantalla de consulta de deudores.
+
+- **4 campos nuevos en `res.partner`** (todos `compute`, `store=True`, recalculados por triggers reales — no `@api.depends()` vacío decorativo, sino invalidación disparada a mano desde `account.move.line` y `account.payment` cuando cambia algo que afecta la deuda de un partner):
+  - `credito_monto_adeudado`: suma de `amount_residual` de líneas de `account.move.line` tipo `asset_receivable`, no conciliadas, del asiento posteado.
+  - `credito_fecha_pedido_mas_viejo`: fecha del asiento más viejo con saldo pendiente.
+  - `credito_fecha_ultimo_pago`: fecha del último `account.payment` entrante confirmado; si nunca pagó, cae a la fecha del pedido más viejo.
+  - `credito_dias_sin_pago`: días transcurridos desde esa fecha de referencia hasta hoy.
+- **Pantalla "Deudores"** (`res_partner_deudores_views.xml`): entrada de menú dentro de Punto de Venta, visible para los 4 grupos de `pos_reparto_security`. Lista de clientes con `credito_monto_adeudado > 0`, ordenada por días sin pago descendente, con semáforo de color (naranja ≥10 días, rojo ≥15 días — el corte de 15 días es el crédito máximo del proyecto según el relevamiento v2.0). Como no tiene regla de acceso propia, un Vendedor la ve filtrada automáticamente por la regla de `res.partner` de `pos_reparto_security` (solo sus propios clientes); los otros 3 grupos ven todos los deudores.
+- **Popup no bloqueante en POS**: al seleccionar un cliente con deuda en cualquier punto de venta, un parche de `PosStore.setPartnerToCurrentOrder` (JS, `static/src/app/services/pos_store.js`) muestra un `AlertDialog` informativo con el monto adeudado y los días sin pago (mismo semáforo de severidad que la pantalla Deudores). Es puramente informativo — no impide continuar la venta, a propósito (RF-PV-07 pide avisar, no bloquear).
+- **Offline**: los 3 campos que necesita el popup (`credito_monto_adeudado`, `credito_fecha_ultimo_pago`, `credito_dias_sin_pago`) se agregan a `_load_pos_data_fields` de `res.partner`, así viajan en la carga inicial de datos del POS y el aviso funciona también sin conexión.
+
+Cubierto por 10 tests automáticos (`tests/test_reparto_credito.py`), todos en verde, más verificación manual del popup en navegador real.
+
+**Deuda técnica aceptada** (revisada y aceptada por ahora durante el proceso de build, a tener en cuenta a futuro):
+
+1. Las queries de `account.move.line`/`account.payment` en `_compute_credito_fields` no tienen scoping por `company_id`. Aceptable porque el proyecto es de una sola compañía; si algún día se agrega una segunda compañía hay que sumar ese filtro (el propio Odoo core lo hace en el campo análogo `res.partner.credit`/`debit`, ver `account/models/partner.py::_credit_debit_get`).
+2. El criterio de "2 visitas consecutivas sin cobro" de RF-PV-07 no está implementado — solo el criterio de días sin pago. Requiere trackear visitas/pedidos independientemente de si generaron deuda, que es una pieza de datos distinta a lo que hoy calculan estos campos.
+3. Si se concilian dos líneas de `account.move.line` ya existentes directamente entre sí (sin pasar por un `account.payment` nuevo — ej. contra una nota de crédito o un ajuste manual), el trigger de recálculo no se dispara, porque `create`/`write`/`unlink` de `account.move.line` no cubren ese camino (la reconciliación en sí no hace `write()` sobre las líneas que concilia). Aceptado porque el flujo real de este proyecto siempre cobra vía un `account.payment` nuevo (ver `ADR-001` y el spec del módulo) — si en algún momento aparece un caso real de conciliación directa sin pago, hay que sumar un trigger también sobre `account.partial.reconcile`/`account.full.reconcile`.
+
 ## 6. Facturación (ARCA/AFIP)
 
 Decisión tomada: por ahora, factura **local de Odoo sin timbrar** (Factura A/B/C interna, sin conexión a los webservices de ARCA). El vendedor elige facturar o no, caso por caso, en cada venta — es el comportamiento nativo de POS, no requiere config extra.
@@ -130,7 +153,7 @@ Configurado servidor MCP `odoo` en Claude Code (`claude mcp add odoo ...`), modo
 - Probar el circuito completo en el navegador (vos o tu compañero) desde POS Camión 1.
 - Definir si se necesitan más camiones/ubicaciones (el patrón ya es repetible: ubicación + picking type + pos.config).
 - Implementar banner con listener del evento `online` del navegador para reintento automático de sync en POS (ver sección 7 — estimado una tarde, no bloqueante, hay mitigación de proceso mientras tanto).
-- Módulo de alerta de crédito (15 días/2 visitas sin pago) sobre `res.partner`, con dashboard filtrado por rol usando los grupos de `pos_reparto_security` recién armados — action item pendiente del ADR-001, bloque 2.
+- Módulo de alerta de crédito: **hecho**, ver `pos_reparto_credito` en sección 5ter — cubre el criterio de días sin pago; el criterio de "2 visitas consecutivas sin cobro" de RF-PV-07 queda pendiente (ver deuda técnica en esa sección).
 
 ---
 

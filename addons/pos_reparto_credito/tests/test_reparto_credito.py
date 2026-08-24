@@ -1,0 +1,212 @@
+from datetime import timedelta
+
+from lxml import etree
+
+from odoo import Command, fields
+from odoo.tests.common import TransactionCase, tagged
+from odoo.tools.safe_eval import safe_eval
+
+
+@tagged('post_install', '-at_install')
+class TestRepartoCredito(TransactionCase):
+
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        cls.receivable_account = cls.env['account.account'].search([
+            ('account_type', '=', 'asset_receivable'),
+            ('company_ids', 'in', cls.env.company.id),
+        ], limit=1)
+        cls.income_account = cls.env['account.account'].search([
+            ('account_type', '=', 'income'),
+            ('company_ids', 'in', cls.env.company.id),
+        ], limit=1)
+        cls.bank_journal = cls.env['account.journal'].search([
+            ('type', '=', 'bank'),
+            ('company_id', '=', cls.env.company.id),
+        ], limit=1)
+
+    def _crear_partner_credito(self, name):
+        return self.env['res.partner'].create({
+            'name': name,
+            'property_account_receivable_id': self.receivable_account.id,
+        })
+
+    def _crear_linea_por_cobrar(self, partner, monto, fecha):
+        move = self.env['account.move'].create({
+            'move_type': 'entry',
+            'date': fecha,
+            'line_ids': [
+                Command.create({
+                    'account_id': self.receivable_account.id,
+                    'partner_id': partner.id,
+                    'debit': monto,
+                    'credit': 0.0,
+                    'name': 'Pedido a credito de prueba',
+                }),
+                Command.create({
+                    'account_id': self.income_account.id,
+                    'debit': 0.0,
+                    'credit': monto,
+                    'name': 'Contrapartida de prueba',
+                }),
+            ],
+        })
+        move.action_post()
+        return move.line_ids.filtered(lambda l: l.account_id == self.receivable_account)
+
+    def _crear_y_conciliar_pago(self, partner, receivable_line, monto, fecha):
+        payment = self.env['account.payment'].create({
+            'payment_type': 'inbound',
+            'partner_type': 'customer',
+            'partner_id': partner.id,
+            'amount': monto,
+            'date': fecha,
+            'journal_id': self.bank_journal.id,
+        })
+        payment.action_post()
+        payment_line = payment.move_id.line_ids.filtered(
+            lambda l: l.account_id == self.receivable_account
+        )
+        (payment_line + receivable_line).reconcile()
+        return payment
+
+    def test_monto_adeudado_suma_lineas_sin_conciliar(self):
+        partner = self._crear_partner_credito('Cliente Deudor')
+        self._crear_linea_por_cobrar(partner, 1000.0, fields.Date.today() - timedelta(days=20))
+        self._crear_linea_por_cobrar(partner, 500.0, fields.Date.today() - timedelta(days=5))
+        self.assertEqual(partner.credito_monto_adeudado, 1500.0)
+
+    def test_sin_deuda_monto_adeudado_es_cero(self):
+        partner = self._crear_partner_credito('Cliente Al Dia')
+        self.assertEqual(partner.credito_monto_adeudado, 0.0)
+
+    def test_dias_sin_pago_usa_fecha_de_pedido_mas_viejo_si_nunca_pago(self):
+        partner = self._crear_partner_credito('Cliente Sin Pagos')
+        fecha_vieja = fields.Date.today() - timedelta(days=20)
+        self._crear_linea_por_cobrar(partner, 1000.0, fecha_vieja)
+        self._crear_linea_por_cobrar(partner, 500.0, fields.Date.today() - timedelta(days=5))
+        self.assertEqual(partner.credito_fecha_pedido_mas_viejo, fecha_vieja)
+        self.assertEqual(partner.credito_fecha_ultimo_pago, fecha_vieja)
+        self.assertEqual(partner.credito_dias_sin_pago, 20)
+
+    def test_sin_deuda_dias_y_fechas_son_neutros(self):
+        partner = self._crear_partner_credito('Cliente Al Dia')
+        self.assertEqual(partner.credito_dias_sin_pago, 0)
+        self.assertFalse(partner.credito_fecha_ultimo_pago)
+        self.assertFalse(partner.credito_fecha_pedido_mas_viejo)
+
+    def test_pago_parcial_reinicia_contador_de_dias_pero_no_borra_la_deuda(self):
+        partner = self._crear_partner_credito('Cliente Pago Parcial')
+        linea = self._crear_linea_por_cobrar(partner, 1000.0, fields.Date.today() - timedelta(days=20))
+        self._crear_y_conciliar_pago(partner, linea, 200.0, fields.Date.today() - timedelta(days=1))
+
+        self.assertEqual(partner.credito_dias_sin_pago, 1)
+        self.assertEqual(partner.credito_fecha_ultimo_pago, fields.Date.today() - timedelta(days=1))
+        self.assertEqual(partner.credito_monto_adeudado, 800.0)
+        self.assertEqual(
+            partner.credito_fecha_pedido_mas_viejo,
+            fields.Date.today() - timedelta(days=20),
+        )
+
+    def test_pago_total_deja_al_cliente_sin_deuda(self):
+        partner = self._crear_partner_credito('Cliente Pago Total')
+        linea = self._crear_linea_por_cobrar(partner, 300.0, fields.Date.today() - timedelta(days=20))
+        self._crear_y_conciliar_pago(partner, linea, 300.0, fields.Date.today())
+
+        self.assertEqual(partner.credito_monto_adeudado, 0.0)
+        self.assertEqual(partner.credito_dias_sin_pago, 0)
+
+    def test_accion_deudores_solo_lista_clientes_con_saldo(self):
+        deudor = self._crear_partner_credito('Cliente Con Saldo')
+        self._crear_linea_por_cobrar(deudor, 500.0, fields.Date.today() - timedelta(days=3))
+        al_dia = self._crear_partner_credito('Cliente Al Dia')
+
+        action = self.env.ref('pos_reparto_credito.action_reparto_deudores')
+        domain = safe_eval(action.domain)
+        encontrados = self.env['res.partner'].search(domain, order='credito_dias_sin_pago desc')
+        self.assertIn(deudor, encontrados)
+        self.assertNotIn(al_dia, encontrados)
+
+    def test_vendedor_en_pantalla_deudores_ve_solo_lo_suyo(self):
+        group_vendedor = self.env.ref('pos_reparto_security.group_reparto_vendedor')
+        group_internal = self.env.ref('base.group_user')
+        vendedor_1 = self.env['res.users'].create({
+            'name': 'Vendedor Deudores Uno',
+            'login': 'vendedor_deudores_uno_test',
+            'group_ids': [(6, 0, [group_internal.id, group_vendedor.id])],
+        })
+        vendedor_2 = self.env['res.users'].create({
+            'name': 'Vendedor Deudores Dos',
+            'login': 'vendedor_deudores_dos_test',
+            'group_ids': [(6, 0, [group_internal.id, group_vendedor.id])],
+        })
+        deudor_1 = self._crear_partner_credito('Deudor De Vendedor 1')
+        deudor_1.user_id = vendedor_1
+        self._crear_linea_por_cobrar(deudor_1, 100.0, fields.Date.today())
+        deudor_2 = self._crear_partner_credito('Deudor De Vendedor 2')
+        deudor_2.user_id = vendedor_2
+        self._crear_linea_por_cobrar(deudor_2, 100.0, fields.Date.today())
+
+        action = self.env.ref('pos_reparto_credito.action_reparto_deudores')
+        domain = safe_eval(action.domain)
+        encontrados = self.env['res.partner'].with_user(vendedor_1).search(domain)
+        self.assertIn(deudor_1, encontrados)
+        self.assertNotIn(deudor_2, encontrados)
+
+    def test_reasignar_partner_de_linea_actualiza_ambos_clientes(self):
+        partner_original = self._crear_partner_credito('Cliente Original')
+        partner_nuevo = self._crear_partner_credito('Cliente Nuevo')
+        linea = self._crear_linea_por_cobrar(partner_original, 1000.0, fields.Date.today())
+
+        self.assertEqual(partner_original.credito_monto_adeudado, 1000.0)
+        self.assertEqual(partner_nuevo.credito_monto_adeudado, 0.0)
+
+        linea.write({'partner_id': partner_nuevo.id})
+
+        self.assertEqual(partner_original.credito_monto_adeudado, 0.0)
+        self.assertEqual(partner_nuevo.credito_monto_adeudado, 1000.0)
+
+    def test_campos_de_credito_se_cargan_en_pos_offline(self):
+        campos = self.env['res.partner']._load_pos_data_fields(self.env['pos.config'])
+        self.assertIn('credito_monto_adeudado', campos)
+        self.assertIn('credito_dias_sin_pago', campos)
+
+    def test_vendedor_puede_leer_campos_de_credito_sin_access_error(self):
+        group_vendedor = self.env.ref('pos_reparto_security.group_reparto_vendedor')
+        group_internal = self.env.ref('base.group_user')
+        vendedor = self.env['res.users'].create({
+            'name': 'Vendedor Lee Credito',
+            'login': 'vendedor_lee_credito_test',
+            'group_ids': [(6, 0, [group_internal.id, group_vendedor.id])],
+        })
+        partner = self._crear_partner_credito('Cliente De Vendedor Lee Credito')
+        partner.user_id = vendedor
+        linea = self._crear_linea_por_cobrar(partner, 500.0, fields.Date.today() - timedelta(days=5))
+        self._crear_y_conciliar_pago(partner, linea, 200.0, fields.Date.today())
+
+        partner_como_vendedor = partner.with_user(vendedor)
+        # group_reparto_vendedor no tiene acceso a account.payment (ni a
+        # account.move.line via point_of_sale sin group_pos_user). Esto no
+        # rompe: un compute con store=True corre en modo superusuario por
+        # default (compute_sudo = store, ver odoo/orm/fields.py), asi que
+        # _compute_credito_fields nunca corre con los permisos del usuario
+        # que dispara la lectura. Este test fija ese comportamiento -- si
+        # alguien le agrega compute_sudo=False a algun campo de credito,
+        # este test explota con AccessError y avisa.
+        self.assertEqual(partner_como_vendedor.credito_monto_adeudado, 300.0)
+        self.assertEqual(partner_como_vendedor.credito_dias_sin_pago, 0)
+
+    def test_decoraciones_deudores_coinciden_con_umbrales_del_popup(self):
+        # Las mismas 2 franjas (10 y 15 dias) estan hardcodeadas en el
+        # popup de POS (static/src/app/services/pos_store.js). Este test
+        # no las sincroniza automaticamente, pero evita que alguien
+        # cambie un umbral en un solo lugar sin darse cuenta.
+        view = self.env.ref('pos_reparto_credito.view_reparto_deudores_list')
+        arch = etree.fromstring(view.arch)
+        list_node = arch if arch.tag == 'list' else arch.find('.//list')
+        self.assertEqual(list_node.get('decoration-danger'), 'credito_dias_sin_pago >= 15')
+        self.assertEqual(
+            list_node.get('decoration-warning'),
+            'credito_dias_sin_pago >= 10 and credito_dias_sin_pago < 15',
+        )

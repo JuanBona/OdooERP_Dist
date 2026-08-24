@@ -1,0 +1,36 @@
+<odoo>
+    <record id="view_reparto_deudores_list" model="ir.ui.view">
+        <field name="name">res.partner.reparto.deudores.list</field>
+        <field name="model">res.partner</field>
+        <field name="arch" type="xml">
+            <list string="Deudores"
+                  default_order="credito_dias_sin_pago desc"
+                  create="false"
+                  decoration-danger="credito_dias_sin_pago &gt;= 15"
+                  decoration-warning="credito_dias_sin_pago &gt;= 10 and credito_dias_sin_pago &lt; 15">
+                <field name="name" string="Cliente"/>
+                <field name="credito_dias_sin_pago" string="Días sin pago"/>
+                <field name="credito_monto_adeudado" string="Monto adeudado"/>
+                <field name="user_id" string="Vendedor"/>
+                <field name="credito_fecha_pedido_mas_viejo" string="Pedido más viejo sin pagar"/>
+                <field name="phone" string="Teléfono"/>
+                <field name="street" string="Dirección"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="action_reparto_deudores" model="ir.actions.act_window">
+        <field name="name">Deudores</field>
+        <field name="res_model">res.partner</field>
+        <field name="view_mode">list,form</field>
+        <field name="view_id" ref="view_reparto_deudores_list"/>
+        <field name="domain">[('credito_monto_adeudado', '&gt;', 0)]</field>
+    </record>
+
+    <menuitem id="menu_reparto_deudores"
+        name="Deudores"
+        parent="point_of_sale.menu_point_root"
+        action="action_reparto_deudores"
+        groups="pos_reparto_security.group_reparto_vendedor,pos_reparto_security.group_reparto_deposito,pos_reparto_security.group_reparto_adminop,pos_reparto_security.group_reparto_gerencia"
+        sequence="15"/>
+</odoo>
