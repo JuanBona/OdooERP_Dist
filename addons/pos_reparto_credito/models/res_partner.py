@@ -30,27 +30,22 @@ class ResPartner(models.Model):
             ('reconciled', '=', False),
             ('parent_state', '=', 'posted'),
         ]
-        monto_por_partner = {
-            partner.id: monto
-            for partner, monto in self.env['account.move.line']._read_group(
-                deuda_domain, groupby=['partner_id'], aggregates=['amount_residual:sum'],
-            )
-        }
-        fecha_vieja_por_partner = {
-            partner.id: fecha
-            for partner, fecha in self.env['account.move.line']._read_group(
-                deuda_domain, groupby=['partner_id'], aggregates=['date:min'],
+        deuda_por_partner = {
+            partner.id: (monto, fecha)
+            for partner, monto, fecha in self.env['account.move.line']._read_group(
+                deuda_domain, groupby=['partner_id'],
+                aggregates=['amount_residual:sum', 'date:min'],
             )
         }
 
         for partner in self:
-            monto = monto_por_partner.get(partner.id, 0.0)
+            monto, fecha_vieja = deuda_por_partner.get(partner.id, (0.0, False))
             partner.credito_monto_adeudado = monto
-            fecha_vieja = fecha_vieja_por_partner.get(partner.id, False)
-            partner.credito_fecha_pedido_mas_viejo = fecha_vieja
             if not monto:
+                partner.credito_fecha_pedido_mas_viejo = False
                 partner.credito_fecha_ultimo_pago = False
                 partner.credito_dias_sin_pago = 0
                 continue
+            partner.credito_fecha_pedido_mas_viejo = fecha_vieja
             partner.credito_fecha_ultimo_pago = fecha_vieja
             partner.credito_dias_sin_pago = (today - fecha_vieja).days if fecha_vieja else 0
