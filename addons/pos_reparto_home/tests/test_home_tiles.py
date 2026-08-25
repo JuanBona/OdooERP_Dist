@@ -44,6 +44,11 @@ class TestRepartoHomeTiles(TransactionCase):
         for excluded in ('Discuss', 'To-do', 'Apps', 'Settings'):
             self.assertNotIn(excluded, names)
 
+    def test_inicio_no_aparece_en_su_propia_grilla(self):
+        tiles = self.env['ir.ui.menu'].with_user(self.gerencia).get_reparto_home_tiles()
+        names = {tile['name'] for tile in tiles}
+        self.assertNotIn('Inicio', names)
+
     def test_tile_trae_action_id_resuelto_y_valido(self):
         tiles = self.env['ir.ui.menu'].with_user(self.vendedor).get_reparto_home_tiles()
         pos_tile = next(t for t in tiles if t['name'] == 'Point of Sale')

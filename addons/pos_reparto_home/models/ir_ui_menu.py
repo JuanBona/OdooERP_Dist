@@ -6,6 +6,7 @@ _BLACKLIST_XMLIDS = [
     'base.menu_management',
     'base.menu_administration',
     'base.menu_tests',
+    'pos_reparto_home.menu_reparto_home',
 ]
 
 
