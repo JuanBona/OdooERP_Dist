@@ -108,6 +108,17 @@ Cubierto por 10 tests automáticos (`tests/test_reparto_credito.py`), todos en v
 2. El criterio de "2 visitas consecutivas sin cobro" de RF-PV-07 no está implementado — solo el criterio de días sin pago. Requiere trackear visitas/pedidos independientemente de si generaron deuda, que es una pieza de datos distinta a lo que hoy calculan estos campos.
 3. Si se concilian dos líneas de `account.move.line` ya existentes directamente entre sí (sin pasar por un `account.payment` nuevo — ej. contra una nota de crédito o un ajuste manual), el trigger de recálculo no se dispara, porque `create`/`write`/`unlink` de `account.move.line` no cubren ese camino (la reconciliación en sí no hace `write()` sobre las líneas que concilia). Aceptado porque el flujo real de este proyecto siempre cobra vía un `account.payment` nuevo (ver `ADR-001` y el spec del módulo) — si en algún momento aparece un caso real de conciliación directa sin pago, hay que sumar un trigger también sobre `account.partial.reconcile`/`account.full.reconcile`.
 
+## 5quater. Módulo custom: `pos_reparto_branding`
+
+Ubicación: `addons/pos_reparto_branding/`. Instalado. Depende de `web`, `project`, `spreadsheet_dashboard` y `utm`.
+
+Qué hace: personalización visual pedida por el cliente en la sesión de brainstorming del 2026-08-24 (spec en `docs/superpowers/specs/2026-08-24-erp-branding-design.md`).
+
+- Oculta del menú principal (grilla de apps) tres apps que hoy no se usan: Proyecto, Tableros y Rastreador de enlaces. No se desinstalan — quedan reversibles desde modo desarrollador (`ir.ui.menu.active`) si algún día hacen falta.
+- Recolorea la barra superior de **todo el backend** (todas las apps) con el rojo de marca `#A81C21`, vía override de las variables SCSS `$o-navbar-background` / `$o-navbar-border-bottom` en el bundle `web._assets_primary_variables`. No toca el branding del ticket de POS ni de las facturas, que ya estaban resueltos antes de este módulo. Elementos menores fuera de este alcance a propósito (quedan en el violeta por defecto de Odoo): el indicador de carga (`.o_loading_indicator`) y el encabezado del buscador en la vista mobile, que leen `$o-brand-odoo` directo en vez de las variables del navbar.
+
+Fuera de este módulo: el nombre de la compañía se cambió a mano (Ajustes → Compañías) de "My Company" a "Rincon del sur" — es un dato, no código, no requiere módulo.
+
 ## 6. Facturación (ARCA/AFIP)
 
 Decisión tomada: por ahora, factura **local de Odoo sin timbrar** (Factura A/B/C interna, sin conexión a los webservices de ARCA). El vendedor elige facturar o no, caso por caso, en cada venta — es el comportamiento nativo de POS, no requiere config extra.
