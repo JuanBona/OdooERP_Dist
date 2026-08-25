@@ -1,0 +1,7 @@
+// Color de marca de Rincón del Sur — ver res.company.primary_color (#a81c21)
+// Pisa las variables del navbar del backend antes de que se compilen las
+// reglas que las usan (ver Task 3 en el plan de implementacion para el
+// detalle de por que este archivo va en el bundle _assets_primary_variables
+// y no directamente en assets_backend).
+$o-navbar-background: #A81C21;
+$o-navbar-border-bottom: 1px solid darken(#A81C21, 10%);

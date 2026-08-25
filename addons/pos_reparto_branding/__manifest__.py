@@ -7,6 +7,11 @@
     'data': [
         'data/hide_unused_menus.xml',
     ],
+    'assets': {
+        'web._assets_primary_variables': [
+            'pos_reparto_branding/static/src/scss/navbar_colors.scss',
+        ],
+    },
     'installable': True,
     'application': False,
     'license': 'LGPL-3',
