@@ -119,6 +119,8 @@ Qué hace: personalización visual pedida por el cliente en la sesión de brains
 
 Fuera de este módulo: el nombre de la compañía se cambió a mano (Ajustes → Compañías) de "My Company" a "Rincon del sur" — es un dato, no código, no requiere módulo.
 
+**Nota operativa:** después de cualquier `-u pos_reparto_branding` (o de cualquier módulo que toque un bundle de assets), el proceso de Odoo que ya está corriendo puede seguir sirviendo el CSS viejo desde su caché en memoria (`ir.qweb._generate_asset_links_cache`), aunque la base ya tenga el bundle actualizado. Borrar el `ir.attachment` cacheado no alcanza en ese caso — hace falta `docker compose restart odoo` para que el proceso vivo levante el bundle nuevo.
+
 ## 6. Facturación (ARCA/AFIP)
 
 Decisión tomada: por ahora, factura **local de Odoo sin timbrar** (Factura A/B/C interna, sin conexión a los webservices de ARCA). El vendedor elige facturar o no, caso por caso, en cada venta — es el comportamiento nativo de POS, no requiere config extra.
