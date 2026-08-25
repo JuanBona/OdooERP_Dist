@@ -6,6 +6,9 @@
             <div t-if="state.loading" class="o_reparto_home_loading">
                 Cargando...
             </div>
+            <div t-elif="state.error" class="o_reparto_home_empty">
+                No se pudo cargar la pantalla de inicio. Probá recargar la página.
+            </div>
             <div t-elif="!state.tiles.length" class="o_reparto_home_empty">
                 No tenés apps asignadas. Avisá a un administrador.
             </div>

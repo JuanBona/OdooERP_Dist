@@ -10,9 +10,13 @@ export class RepartoHomeScreen extends Component {
     setup() {
         this.actionService = useService("action");
         this.orm = useService("orm");
-        this.state = useState({ tiles: [], loading: true });
+        this.state = useState({ tiles: [], loading: true, error: false });
         onWillStart(async () => {
-            this.state.tiles = await this.orm.call("ir.ui.menu", "get_reparto_home_tiles", []);
+            try {
+                this.state.tiles = await this.orm.call("ir.ui.menu", "get_reparto_home_tiles", []);
+            } catch {
+                this.state.error = true;
+            }
             this.state.loading = false;
         });
     }
