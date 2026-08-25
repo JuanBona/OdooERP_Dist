@@ -18,6 +18,14 @@ class TestHideUnusedMenus(TransactionCase):
             )
 
     def test_used_apps_stay_visible(self):
+        # Estos xml_ids pertenecen a modulos (point_of_sale, stock, contacts,
+        # sale, account) que NO estan en el `depends` de pos_reparto_branding
+        # (solo web, project, spreadsheet_dashboard, utm). Se asumen presentes
+        # porque este es un deployment single-tenant: la instancia de Odoo de
+        # este proyecto siempre tiene instalado el stack completo de
+        # POS/Ventas/Inventario/Facturacion (ver ESTADO_PROYECTO.md). No se
+        # agregan como depends reales para no acoplar el modulo a apps que no
+        # usa ni necesita instalar por su cuenta.
         visible_menu_xml_ids = [
             'point_of_sale.menu_point_root',
             'stock.menu_stock_root',
