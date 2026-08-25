@@ -1,1 +1,64 @@
-// Estilos de la pantalla de inicio: agregados en Task 4.
+// Mismo rojo de marca que pos_reparto_branding (ver navbar_colors.scss,
+// $o-navbar-background ya vale #A81C21 ahi). Se referencia la variable en
+// vez de repetir el hex a mano.
+$reparto-home-accent: $o-navbar-background;
+
+.o_reparto_home {
+    height: 100%;
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background-color: #f5f5f5;
+}
+
+.o_reparto_home_grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: 24px;
+    max-width: 900px;
+    padding: 24px;
+}
+
+.o_reparto_home_tile {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    aspect-ratio: 1 / 1;
+    min-height: 140px;
+    padding: 16px;
+    background: white;
+    border-radius: 12px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+    cursor: pointer;
+    user-select: none;
+    transition: transform 0.1s ease, box-shadow 0.1s ease;
+
+    &:active {
+        transform: scale(0.96);
+        box-shadow: 0 1px 4px rgba(0, 0, 0, 0.2);
+        border: 2px solid $reparto-home-accent;
+    }
+
+    img {
+        width: 64px;
+        height: 64px;
+        margin-bottom: 12px;
+    }
+
+    span {
+        font-size: 1rem;
+        font-weight: 600;
+        text-align: center;
+        color: #333333;
+    }
+}
+
+.o_reparto_home_loading,
+.o_reparto_home_empty {
+    font-size: 1.2rem;
+    color: #666666;
+    text-align: center;
+    padding: 24px;
+}
