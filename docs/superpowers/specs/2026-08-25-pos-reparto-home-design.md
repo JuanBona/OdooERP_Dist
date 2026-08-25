@@ -45,7 +45,7 @@ addons/pos_reparto_home/
 Método `@api.model` llamable por RPC. Pasos:
 
 1. Toma los menús raíz (`parent_id = False`) visibles para el usuario actual, vía el mecanismo estándar de visibilidad de menús de Odoo (mismo criterio que ya decide qué aparece en el dropdown chico) — no se reimplementa lógica de permisos.
-2. Excluye por external id fijo (constante en el módulo, no configurable — YAGNI): el root de Discuss, el de To-do y el de Apps (el instalador). Estos ids se confirman en implementación abriendo modo desarrollador y mirando cada menú raíz.
+2. Excluye por external id fijo (constante en el módulo, no configurable — YAGNI): Discuss (`mail.menu_root_discuss`), To-do (`project_todo.menu_todo_todos`), Apps/instalador (`base.menu_management`), Settings (`base.menu_administration`) y Tests (`base.menu_tests`, menú técnico que aparece en este entorno de desarrollo). Los dos últimos ya quedan implícitamente afuera para los 4 roles Reparto por no tener `base.group_system`, pero se excluyen igual por si loguea un admin.
 3. Por cada menú restante devuelve: `id`, `name`, `web_icon` (tal cual lo expone Odoo, ya viene coloreado por app), y descriptor de la acción a ejecutar (mismo `action` que usa el menú nativo).
 4. Orden: por `sequence` del menú, igual que hoy en el dropdown.
 
