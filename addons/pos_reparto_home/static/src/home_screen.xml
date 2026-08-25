@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<templates xml:space="preserve">
+
+    <t t-name="pos_reparto_home.HomeScreen">
+        <div class="o_reparto_home">
+            <div t-if="state.loading" class="o_reparto_home_loading">
+                Cargando...
+            </div>
+            <div t-elif="!state.tiles.length" class="o_reparto_home_empty">
+                No tenés apps asignadas. Avisá a un administrador.
+            </div>
+            <div t-else="" class="o_reparto_home_grid">
+                <div t-foreach="state.tiles" t-as="tile" t-key="tile.id"
+                     class="o_reparto_home_tile"
+                     t-on-click="() => this.onTileClick(tile)">
+                    <img t-if="tile.web_icon_data"
+                         t-attf-src="data:image/png;base64,{{tile.web_icon_data}}"/>
+                    <span t-out="tile.name"/>
+                </div>
+            </div>
+        </div>
+    </t>
+
+</templates>
