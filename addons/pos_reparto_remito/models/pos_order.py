@@ -19,6 +19,8 @@ class PosOrder(models.Model):
 
     def _generate_remito(self):
         self.ensure_one()
+        if self.remito_number:
+            return
         self.remito_number = self.env['ir.sequence'].next_by_code('pos.remito.reparto')
         pdf_content = self._render_remito_pdf()
         attachment = self.env['ir.attachment'].create({

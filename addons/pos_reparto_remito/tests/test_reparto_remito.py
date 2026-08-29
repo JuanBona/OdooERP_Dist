@@ -100,3 +100,28 @@ class TestRepartoRemito(TransactionCase):
             ('res_id', '=', order.id),
         ])
         self.assertEqual(len(attachment), 1)
+
+    def test_remito_idempotente(self):
+        order = self._make_order()
+        with patch.object(type(order), '_render_remito_pdf', return_value=b'%PDF-fake'), \
+             patch.object(self.env['mail.mail'].__class__, 'send', return_value=None):
+            order._generate_remito()
+            first_number = order.remito_number
+            order._generate_remito()  # second call — must be no-op
+        self.assertEqual(order.remito_number, first_number)
+        attachments = self.env['ir.attachment'].search([
+            ('res_model', '=', 'pos.order'),
+            ('res_id', '=', order.id),
+        ])
+        self.assertEqual(len(attachments), 1)
+
+    def test_sin_partner_no_falla(self):
+        order = self._make_order(partner=None)
+        with patch.object(type(order), '_render_remito_pdf', return_value=b'%PDF-fake'):
+            order._generate_remito()  # must not raise
+        self.assertTrue(order.remito_number)
+        attachment = self.env['ir.attachment'].search([
+            ('res_model', '=', 'pos.order'),
+            ('res_id', '=', order.id),
+        ])
+        self.assertEqual(len(attachment), 1)
