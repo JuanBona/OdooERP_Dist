@@ -125,3 +125,15 @@ class TestRepartoRemito(TransactionCase):
             ('res_id', '=', order.id),
         ])
         self.assertEqual(len(attachment), 1)
+
+    def test_remito_generado_al_pagar(self):
+        order = self._make_order()
+        with patch.object(type(order), '_render_remito_pdf', return_value=b'%PDF-fake'), \
+             patch.object(self.env['mail.mail'].__class__, 'send', return_value=None):
+            order.write({'state': 'paid'})
+        self.assertTrue(order.remito_number)
+        attachment = self.env['ir.attachment'].search([
+            ('res_model', '=', 'pos.order'),
+            ('res_id', '=', order.id),
+        ])
+        self.assertEqual(len(attachment), 1)

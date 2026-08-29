@@ -39,6 +39,18 @@ class PosOrder(models.Model):
         })
         self._send_remito_email(attachment)
 
+    def write(self, vals):
+        result = super().write(vals)
+        if vals.get('state') in ('paid', 'done'):
+            for order in self:
+                try:
+                    order._generate_remito()
+                except Exception:
+                    _logger.warning(
+                        "Failed to generate remito for order %s", order.name
+                    )
+        return result
+
     def _send_remito_email(self, attachment):
         if not self.partner_id or not self.partner_id.email:
             return
