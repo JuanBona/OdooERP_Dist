@@ -18,12 +18,13 @@ class PosOrder(models.Model):
         return pdf_content
 
     def _generate_remito(self):
+        self.ensure_one()
         self.remito_number = self.env['ir.sequence'].next_by_code('pos.remito.reparto')
         pdf_content = self._render_remito_pdf()
         attachment = self.env['ir.attachment'].create({
             'name': f'Remito-{self.remito_number}.pdf',
             'type': 'binary',
-            'datas': base64.b64encode(pdf_content),
+            'datas': base64.b64encode(pdf_content).decode(),
             'res_model': 'pos.order',
             'res_id': self.id,
             'mimetype': 'application/pdf',
