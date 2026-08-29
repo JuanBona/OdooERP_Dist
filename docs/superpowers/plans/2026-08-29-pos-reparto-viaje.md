@@ -14,6 +14,10 @@
 - Este proyecto se ejecuta en un worktree separado del checkout principal. Todos los comandos `docker compose` de este plan deben llevar `-p odooerp_dist` (ej. `docker compose -p odooerp_dist stop odoo`) para reusar la misma base de datos real (productos, pos.config, usuarios) en vez de crear una vacía nueva basada en el nombre de carpeta del worktree.
 - En Git Bash (Windows), el argumento `--test-tags /pos_reparto_viaje` se mangling a una ruta de Windows si no se antepone `MSYS_NO_PATHCONV=1` al comando — sin eso, corren 0 tests silenciosamente ("Invalid tag..."). Ya está incorporado en los comandos de este plan.
 - Odoo 19 ya no soporta el atributo de clase `_sql_constraints` (queda como no-op silencioso, sin error ni warning fuerte — solo un log). El equivalente nuevo es un atributo de clase asignado a `models.Constraint(sql, message)` (ver Task 2). Si se agrega alguna otra constraint SQL en tasks futuros de este o cualquier otro módulo del proyecto, usar `models.Constraint`, no la sintaxis vieja.
+- Al re-correr los tests, si el `odoo` service ya está parado (`docker compose -p odooerp_dist stop odoo`) desde un intento anterior, el `stop` del siguiente comando es un no-op inofensivo — no hace falta chequear el estado antes.
+- **(Task 3)** `context_today()` NO está disponible en el contexto de evaluación de `domain_force` de `ir.rule` (a diferencia de los dominios de vistas de búsqueda, que sí lo tienen vía el intérprete del cliente web) — usar un override de `ir.rule._eval_context()` (ver `models/ir_rule.py` del Task 3) y referenciar `today` directo en el dominio, no `context_today()`.
+- **(Task 5)** En una vista de búsqueda (`search`), el `<group>` que envuelve filtros de "Agrupar por" NO acepta los atributos `string`/`expand` en el esquema RelaxNG de Odoo 19 (`RNG_ERR_INVALIDATTR`) — usar `<group>` sin atributos, mismo patrón que la vista `point_of_sale.view_pos_order_filter` del core. El `<filter>` de agrupación necesita `domain="[]"` explícito (convención del core).
+- **(Task 5)** `fields.Date.context_today` no es invocable sin argumento (`context_today(record, timestamp=None)`) — si se necesita pasarlo como `context_today` de cero-argumentos a un `safe_eval` (para reproducir en tests cómo se evalúa un dominio de filtro de búsqueda), envolverlo en `lambda: fields.Date.context_today(self.env.user)`.
 
 ---
 
@@ -678,8 +682,8 @@ git commit -m "pos_reparto_viaje: auto-tick de parada al crear pos.order"
                 <field name="chofer_id"/>
                 <field name="fecha"/>
                 <filter name="filter_hoy" string="Hoy" domain="[('fecha', '=', context_today().strftime('%Y-%m-%d'))]"/>
-                <group expand="0" string="Agrupar por">
-                    <filter name="groupby_chofer" string="Chofer" context="{'group_by': 'chofer_id'}"/>
+                <group>
+                    <filter name="groupby_chofer" string="Chofer" domain="[]" context="{'group_by': 'chofer_id'}"/>
                 </group>
             </search>
         </field>
@@ -735,7 +739,7 @@ Agregar al final de la clase `TestRepartoViaje`:
         search_view = self.env.ref('pos_reparto_viaje.view_reparto_viaje_search')
         arch = etree.fromstring(search_view.arch)
         filtro_hoy = arch.find(".//filter[@name='filter_hoy']")
-        domain = safe_eval(filtro_hoy.get('domain'), {'context_today': fields.Date.context_today})
+        domain = safe_eval(filtro_hoy.get('domain'), {'context_today': lambda: fields.Date.context_today(self.env.user)})
 
         encontrados = self.env['reparto.viaje'].with_user(self.admin_op).search(domain)
         self.assertEqual(len(encontrados), 1)
