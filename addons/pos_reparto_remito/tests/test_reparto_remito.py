@@ -67,3 +67,15 @@ class TestRepartoRemito(TransactionCase):
         num1 = int(order1.remito_number.split('-')[-1])
         num2 = int(order2.remito_number.split('-')[-1])
         self.assertEqual(num2, num1 + 1)
+
+    def test_adjunto_creado(self):
+        order = self._make_order()
+        with patch.object(type(order), '_render_remito_pdf', return_value=b'%PDF-fake'):
+            order._generate_remito()
+        attachment = self.env['ir.attachment'].search([
+            ('res_model', '=', 'pos.order'),
+            ('res_id', '=', order.id),
+        ])
+        self.assertEqual(len(attachment), 1)
+        self.assertIn(order.remito_number, attachment.name)
+        self.assertEqual(attachment.mimetype, 'application/pdf')
