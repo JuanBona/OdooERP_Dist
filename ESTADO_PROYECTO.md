@@ -1,6 +1,6 @@
 # Estado del proyecto — Odoo 19 CE local (Reparto)
 
-Última actualización: 2026-08-24
+Última actualización: 2026-08-29
 
 ## 1. Infraestructura
 
@@ -121,11 +121,25 @@ Fuera de este módulo: el nombre de la compañía se cambió a mano (Ajustes →
 
 **Nota operativa:** después de cualquier `-u pos_reparto_branding` (o de cualquier módulo que toque un bundle de assets), el proceso de Odoo que ya está corriendo puede seguir sirviendo el CSS viejo desde su caché en memoria (`ir.qweb._generate_asset_links_cache`), aunque la base ya tenga el bundle actualizado. Borrar el `ir.attachment` cacheado no alcanza en ese caso — hace falta `docker compose restart odoo` para que el proceso vivo levante el bundle nuevo.
 
-## 6. Facturación (ARCA/AFIP)
+## 5quinquies. Módulo custom: `pos_reparto_home`
 
-Decisión tomada: por ahora, factura **local de Odoo sin timbrar** (Factura A/B/C interna, sin conexión a los webservices de ARCA). El vendedor elige facturar o no, caso por caso, en cada venta — es el comportamiento nativo de POS, no requiere config extra.
+Ubicación: `addons/pos_reparto_home/`. Instalado, en `main` (mergeado directo, no quedó rama separada).
 
-Conexión real a ARCA (testing u homologación) queda pendiente para más adelante si hace falta, requiere CUIT real, certificado digital y punto de venta habilitado en ARCA — no se puede simular en este entorno local sin esos datos.
+Qué hace: reemplaza el landing post-login (antes caía en Discuss) por una grilla táctil de cuadrados grandes, uno por app de negocio a la que el usuario tiene acceso — pensada para Depósito/AdminOp/Gerencia/Vendedor tocando en tablet en vez de leer el dropdown de texto chico.
+
+- Método `ir.ui.menu.get_reparto_home_tiles()` arma la lista reusando la visibilidad nativa de menús de Odoo (no duplica permisos), resolviendo por DFS la acción real de cada app (muchos root menus como Sales/Inventory/POS tienen `action=False`, la acción real vive 1-2 niveles más abajo).
+- Client action OWL renderiza la grilla; wireado como landing vía un `ir.ui.menu` raíz "Inicio" con `sequence=1`.
+- No depende de `pos_reparto_security` — es genérico, se ajusta solo si cambian los grupos de rol.
+- Bug corregido durante el build: el propio tile "Inicio" se devolvía a sí mismo en la grilla — está en lista negra de exclusión, con test de regresión.
+- 6 tests, todos en verde. Verificado por navegador con los 4 usuarios placeholder.
+
+Spec: `docs/superpowers/specs/2026-08-25-pos-reparto-home-design.md`. Plan: `docs/superpowers/plans/2026-08-25-pos-reparto-home.md`.
+
+## 6. Facturación (ARCA/AFIP) — **DECISIÓN OBSOLETA, ver relevamiento v2.0**
+
+~~Decisión tomada: por ahora, factura local de Odoo sin timbrar (Factura A/B/C interna, sin conexión a los webservices de ARCA).~~
+
+**Reemplazada el 2026-08-24**: el cliente confirmó por escrito (`Relevamiento_Requerimientos_Odoo_Reparto.docx` v2.0) que **factura con software externo en su PC** (incluida Factura A) y que **facturación fiscal queda 100% fuera de alcance** de este sistema. Odoo solo debe emitir hoja de pedido/remito interno (sin valor fiscal). No hace falta ningún flujo de facturación de POS, ni conexión a ARCA. Ver `ADR-001-arquitectura-toma-pedido.md` en el repo para el detalle de la decisión de arquitectura que surgió de este relevamiento (se sigue sobre POS, no se migra a `sale.order`, justamente porque POS ya es offline-first y no hace falta facturar desde ahí).
 
 ## 7. Test de funcionamiento offline — "Punto de Venta Reparto" y "POS Camión 1"
 
@@ -162,11 +176,32 @@ Configurado servidor MCP `odoo` en Claude Code (`claude mcp add odoo ...`), modo
 
 ## 9. Pendiente / próximos pasos
 
-- Parte 2 del diseño de "venta por camión": flujo completo de facturación opcional al cerrar la venta (todavía no se armó, quedó frenado para escribir este reporte).
-- Probar el circuito completo en el navegador (vos o tu compañero) desde POS Camión 1.
-- Definir si se necesitan más camiones/ubicaciones (el patrón ya es repetible: ubicación + picking type + pos.config).
-- Implementar banner con listener del evento `online` del navegador para reintento automático de sync en POS (ver sección 7 — estimado una tarde, no bloqueante, hay mitigación de proceso mientras tanto).
-- Módulo de alerta de crédito: **hecho**, ver `pos_reparto_credito` en sección 5ter — cubre el criterio de días sin pago; el criterio de "2 visitas consecutivas sin cobro" de RF-PV-07 queda pendiente (ver deuda técnica en esa sección).
+**Hecho hasta ahora** (relevamiento v2.0, `Relevamiento_Requerimientos_Odoo_Reparto.docx`): `pos_reparto_security` (4 roles + reglas de acceso, sección 5bis), `pos_reparto_credito` (alerta 15 días, sección 5ter), `pos_reparto_branding` (personalización visual, 5quater), `pos_reparto_home` (pantalla de inicio táctil, 5quinquies). Todo en `main`.
+
+**Gaps Must/Should que quedan del relevamiento v2.0** (ver detalle y justificación en memoria `project-reparto-v2-requirements`, o repreguntar al cliente si hace falta el docx):
+
+1. Remito interno QWeb (hoja de pedido/entrega, sin valor fiscal — reemplaza a la factura, ver sección 6).
+2. Descuentos por volumen parametrizables por producto (ej. 4%/8%/12% según cantidad) + override manual en el renglón (RF-PV-09).
+3. Comisiones sobre pedidos generados en el día, no sobre el cobro (RF-GV-03) — evaluar módulo OCA `commission` (github.com/OCA/commission).
+4. Feature "Viaje": hoja de ruta que Administración/Depósito arma antes de que el fletero salga a repartir (lista de clientes a visitar del día). Todavía sin diseño — pasar primero por `superpowers:brainstorming` antes de escribir código.
+5. Criterio "2 visitas consecutivas sin cobro" de `pos_reparto_credito` (hoy solo días sin pago, ver deuda técnica en 5ter).
+6. Productos habituales por cliente / venta sugerida (Should).
+7. Integración Google Maps para secuenciar recorrido (Should, requiere API paga).
+8. Reconexión automática de sync offline en POS — listener del evento `online` del navegador (ver sección 7, estimado una tarde, no bloqueante).
+
+**Datos maestros pendientes** (no es código, es carga manual):
+- Cargar excel `Clientes_Ordenados_por_Codigo.xlsx` (clientes reales) — todavía no se cargó.
+- Reemplazar los 4 usuarios placeholder de `pos_reparto_security` (`vendedor@reparto.local` etc., pass `Reparto2026!`) por personas reales del cliente, y asignar `user_id` (vendedor) en cada `res.partner` real.
+
+### División de trabajo (2026-08-29)
+
+Para laburar en paralelo sin pisarnos archivos:
+
+- **Juan (esta sesión)**: sigue con **ítem 4, feature "Viaje"** (hoja de ruta). Rama `feature/pos-reparto-viaje` desde `main`. Tiene sentido que lo siga yo porque se apoya en los roles/tiles de `pos_reparto_security`/`pos_reparto_home` que ya construí. **En curso: brainstorming del diseño (`superpowers:brainstorming`), todavía sin spec escrita ni código.** No arrancar a codear esta feature hasta que exista el doc en `docs/superpowers/specs/` — si retomás vos esta rama, primero chequeá si ese doc ya existe.
+  - Decidido hasta ahora (2026-08-29): Admin Operativa/Gerencia arman el viaje eligiendo clientes a mano (sin filtro automático por zona/día), un viaje = un chofer (Vendedor) + una fecha. Módulo nuevo `pos_reparto_viaje`, depende de `point_of_sale` + `pos_reparto_security`. Modelo `reparto.viaje` (fecha, chofer_id, pos_config_id, computados paradas_totales/paradas_completadas/progreso, constraint única chofer_id+fecha) + `reparto.viaje.parada` (viaje_id, partner_id, visitado, pedido_id) — sin orden/secuencia entre paradas. El chofer ve solo el viaje de HOY como tile en pantalla de Inicio; tocar una parada abre una sesión de POS nueva con ese cliente preseleccionado (mecanismo: query param + patch JS, mismo patrón que `pos_reparto_credito`); la parada se tilda **sola** al generar el pedido (sin acción manual). Admin/Gerencia tienen panel de progreso del día (viajes de todos los choferes con % completado). Todavía falta cerrar: UX de las 2 pantallas (chofer y admin) y detalle técnico del deep-link a POS + testing — retomar el brainstorming donde quedó, no reempezar de cero.
+- **Compañero**: arranca con **ítem 1, remito interno QWeb**. Es autocontenido (plantilla de reporte, no toca los módulos de roles/crédito/home/viaje), bajo riesgo de choque de merge, y buen punto de entrada al código para alguien que no tocó el repo todavía. Rama sugerida: `feature/pos-reparto-remito` desde `main`. Antes de codear, pasar por `superpowers:brainstorming` igual que se hizo con los módulos anteriores (ver specs en `docs/superpowers/specs/` como ejemplo). Referencia de arquitectura: `ADR-001-arquitectura-toma-pedido.md` (por qué seguimos sobre POS y no `sale.order`, punto 4 de la decisión menciona directo el remito).
+
+Cuando alguno termine su feature y mergee a `main`, actualizar esta sección con el siguiente ítem de la lista de gaps de arriba (orden sugerido: ítem 2, después 3, después 5).
 
 ---
 
