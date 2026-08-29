@@ -32,4 +32,26 @@ class PosOrder(models.Model):
         self._send_remito_email(attachment)
 
     def _send_remito_email(self, attachment):
-        pass
+        if not self.partner_id or not self.partner_id.email:
+            return
+        company = self.env.company
+        date_str = self.date_order.strftime('%d/%m/%Y') if self.date_order else ''
+        subject = f"Remito {self.remito_number} — {company.name}"
+        body = (
+            f"Estimado/a {self.partner_id.name}, adjunto encontrará su remito de compra "
+            f"del {date_str}. Ante cualquier consulta no dude en comunicarse con nosotros."
+        )
+        try:
+            mail = self.env['mail.mail'].create({
+                'subject': subject,
+                'email_to': self.partner_id.email,
+                'body_html': body,
+                'attachment_ids': [(4, attachment.id)],
+            })
+            mail.send()
+        except Exception:
+            _logger.warning(
+                "Failed to send remito email for order %s to %s",
+                self.name,
+                self.partner_id.email,
+            )

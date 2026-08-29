@@ -79,3 +79,23 @@ class TestRepartoRemito(TransactionCase):
         self.assertEqual(len(attachment), 1)
         self.assertIn(order.remito_number, attachment.name)
         self.assertEqual(attachment.mimetype, 'application/pdf')
+
+    def test_email_enviado_con_email(self):
+        order = self._make_order(partner=self.partner_con_email)
+        with patch.object(type(order), '_render_remito_pdf', return_value=b'%PDF-fake'):
+            order._generate_remito()
+        mail = self.env['mail.mail'].search([
+            ('email_to', '=', 'cliente@test.com'),
+        ])
+        self.assertEqual(len(mail), 1)
+        self.assertIn(order.remito_number, mail.subject)
+
+    def test_sin_email_no_falla(self):
+        order = self._make_order(partner=self.partner_sin_email)
+        with patch.object(type(order), '_render_remito_pdf', return_value=b'%PDF-fake'):
+            order._generate_remito()  # must not raise
+        attachment = self.env['ir.attachment'].search([
+            ('res_model', '=', 'pos.order'),
+            ('res_id', '=', order.id),
+        ])
+        self.assertEqual(len(attachment), 1)
