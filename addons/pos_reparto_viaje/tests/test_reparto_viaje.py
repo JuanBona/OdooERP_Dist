@@ -31,8 +31,12 @@ class TestRepartoViaje(TransactionCase):
         cls.pos_config = cls.env['pos.config'].search([], limit=1)
         assert cls.pos_config, 'Se necesita al menos un pos.config existente en la base para estos tests.'
 
-        cls.cliente_a = cls.env['res.partner'].create({'name': 'Cliente Viaje A'})
-        cls.cliente_b = cls.env['res.partner'].create({'name': 'Cliente Viaje B'})
+        # user_id (Vendedor) = chofer_1: la regla de pos_reparto_security que
+        # restringe res.partner a "solo mis clientes" exige esto para que un
+        # chofer pueda leer partner_id.name de las paradas de su propio viaje
+        # (ver test_get_mi_viaje_hoy_devuelve_paradas_propias).
+        cls.cliente_a = cls.env['res.partner'].create({'name': 'Cliente Viaje A', 'user_id': cls.chofer_1.id})
+        cls.cliente_b = cls.env['res.partner'].create({'name': 'Cliente Viaje B', 'user_id': cls.chofer_1.id})
 
     def _crear_viaje(self, chofer, fecha, partners):
         return self.env['reparto.viaje'].create({
@@ -66,3 +70,51 @@ class TestRepartoViaje(TransactionCase):
         self.assertEqual(viaje.paradas_totales, 2)
         self.assertEqual(viaje.paradas_completadas, 1)
         self.assertEqual(viaje.progreso, 50.0)
+
+    def test_get_mi_viaje_hoy_sin_viaje_asignado(self):
+        resultado = self.env['reparto.viaje'].with_user(self.chofer_2).get_mi_viaje_hoy()
+        self.assertFalse(resultado)
+
+    def test_get_mi_viaje_hoy_devuelve_paradas_propias(self):
+        self._crear_viaje(self.chofer_1, fields.Date.today(), [self.cliente_a, self.cliente_b])
+        resultado = self.env['reparto.viaje'].with_user(self.chofer_1).get_mi_viaje_hoy()
+        self.assertTrue(resultado)
+        nombres = {p['partner_name'] for p in resultado['paradas']}
+        self.assertEqual(nombres, {'Cliente Viaje A', 'Cliente Viaje B'})
+
+    def test_action_abrir_pos_agrega_partner_id_a_la_url(self):
+        viaje = self._crear_viaje(self.chofer_1, fields.Date.today(), [self.cliente_a])
+        parada = viaje.parada_ids[0]
+        action = parada.with_user(self.chofer_1).action_abrir_pos()
+        self.assertEqual(action['type'], 'ir.actions.act_url')
+        self.assertIn(f'reparto_partner_id={self.cliente_a.id}', action['url'])
+
+    def test_chofer_no_ve_viaje_de_otro_chofer(self):
+        self._crear_viaje(self.chofer_1, fields.Date.today(), [self.cliente_a])
+        viajes_vistos = self.env['reparto.viaje'].with_user(self.chofer_2).search([])
+        self.assertFalse(viajes_vistos)
+
+    def test_chofer_no_ve_viaje_de_otra_fecha(self):
+        ayer = fields.Date.subtract(fields.Date.today(), days=1)
+        self._crear_viaje(self.chofer_1, ayer, [self.cliente_a])
+        viajes_vistos = self.env['reparto.viaje'].with_user(self.chofer_1).search([])
+        self.assertFalse(viajes_vistos)
+
+    def test_chofer_ve_su_propio_viaje_de_hoy(self):
+        viaje = self._crear_viaje(self.chofer_1, fields.Date.today(), [self.cliente_a])
+        viajes_vistos = self.env['reparto.viaje'].with_user(self.chofer_1).search([])
+        self.assertEqual(viajes_vistos, viaje)
+
+    def test_admin_operativa_ve_todos_los_viajes(self):
+        self._crear_viaje(self.chofer_1, fields.Date.today(), [self.cliente_a])
+        self._crear_viaje(self.chofer_2, fields.Date.today(), [self.cliente_b])
+        viajes_vistos = self.env['reparto.viaje'].with_user(self.admin_op).search([])
+        self.assertEqual(len(viajes_vistos), 2)
+
+    def test_chofer_no_puede_crear_viaje(self):
+        with self.assertRaises(Exception):
+            self.env['reparto.viaje'].with_user(self.chofer_1).create({
+                'fecha': fields.Date.today(),
+                'chofer_id': self.chofer_1.id,
+                'pos_config_id': self.pos_config.id,
+            })
