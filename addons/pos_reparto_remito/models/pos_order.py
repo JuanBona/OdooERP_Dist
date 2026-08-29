@@ -72,7 +72,7 @@ class PosOrder(models.Model):
             })
             mail.send()
         except Exception:
-            _logger.warning(
+            _logger.exception(
                 "Failed to send remito email for order %s to %s",
                 self.name,
                 self.partner_id.email,
