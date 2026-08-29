@@ -31,6 +31,10 @@ class TestRepartoViaje(TransactionCase):
         cls.pos_config = cls.env['pos.config'].search([], limit=1)
         assert cls.pos_config, 'Se necesita al menos un pos.config existente en la base para estos tests.'
 
+        if not cls.pos_config.current_session_id:
+            cls.pos_config.open_ui()
+        cls.session = cls.pos_config.current_session_id
+
         # user_id (Vendedor) = chofer_1: la regla de pos_reparto_security que
         # restringe res.partner a "solo mis clientes" exige esto para que un
         # chofer pueda leer partner_id.name de las paradas de su propio viaje
@@ -118,3 +122,43 @@ class TestRepartoViaje(TransactionCase):
                 'chofer_id': self.chofer_1.id,
                 'pos_config_id': self.pos_config.id,
             })
+
+    def _crear_pedido(self, chofer, partner, fecha_order=None):
+        return self.env['pos.order'].create({
+            'session_id': self.session.id,
+            'config_id': self.pos_config.id,
+            'partner_id': partner.id,
+            'user_id': chofer.id,
+            'date_order': fecha_order or fields.Datetime.now(),
+            'amount_total': 0,
+            'amount_tax': 0,
+            'amount_paid': 0,
+            'amount_return': 0,
+            'lines': [],
+        })
+
+    def test_auto_tick_marca_parada_visitada_al_crear_pedido(self):
+        viaje = self._crear_viaje(self.chofer_1, fields.Date.today(), [self.cliente_a])
+        parada = viaje.parada_ids[0]
+        pedido = self._crear_pedido(self.chofer_1, self.cliente_a)
+        self.assertTrue(parada.visitado)
+        self.assertEqual(parada.pedido_id, pedido)
+
+    def test_pedido_a_cliente_fuera_del_viaje_no_hace_nada(self):
+        viaje = self._crear_viaje(self.chofer_1, fields.Date.today(), [self.cliente_a])
+        self._crear_pedido(self.chofer_1, self.cliente_b)
+        self.assertFalse(viaje.parada_ids[0].visitado)
+
+    def test_segundo_pedido_al_mismo_cliente_no_pisa_la_parada_ya_visitada(self):
+        viaje = self._crear_viaje(self.chofer_1, fields.Date.today(), [self.cliente_a])
+        parada = viaje.parada_ids[0]
+        primer_pedido = self._crear_pedido(self.chofer_1, self.cliente_a)
+        self._crear_pedido(self.chofer_1, self.cliente_a)
+        self.assertEqual(parada.pedido_id, primer_pedido)
+
+    def test_auto_tick_usa_fecha_del_pedido_no_fecha_de_sincronizacion(self):
+        ayer = fields.Date.subtract(fields.Date.today(), days=1)
+        viaje = self._crear_viaje(self.chofer_1, ayer, [self.cliente_a])
+        fecha_ayer_datetime = fields.Datetime.to_datetime(ayer)
+        self._crear_pedido(self.chofer_1, self.cliente_a, fecha_order=fecha_ayer_datetime)
+        self.assertTrue(viaje.parada_ids[0].visitado)
