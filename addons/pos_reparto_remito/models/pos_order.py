@@ -19,9 +19,15 @@ class PosOrder(models.Model):
 
     def _generate_remito(self):
         self.ensure_one()
+        self.env.cr.execute(
+            'SELECT id FROM pos_order WHERE id = %s FOR UPDATE',
+            (self.id,),
+        )
+        self.invalidate_recordset(['remito_number'])
         if self.remito_number:
             return
         self.remito_number = self.env['ir.sequence'].next_by_code('pos.remito.reparto')
+        self.flush_recordset(['remito_number'])
         pdf_content = self._render_remito_pdf()
         attachment = self.env['ir.attachment'].create({
             'name': f'Remito-{self.remito_number}.pdf',
