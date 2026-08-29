@@ -47,6 +47,7 @@ class PosOrder(models.Model):
                 'email_to': self.partner_id.email,
                 'body_html': body,
                 'attachment_ids': [(4, attachment.id)],
+                'author_id': self.env.company.partner_id.id,
             })
             mail.send()
         except Exception:

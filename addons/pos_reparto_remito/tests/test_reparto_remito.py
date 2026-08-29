@@ -82,7 +82,8 @@ class TestRepartoRemito(TransactionCase):
 
     def test_email_enviado_con_email(self):
         order = self._make_order(partner=self.partner_con_email)
-        with patch.object(type(order), '_render_remito_pdf', return_value=b'%PDF-fake'):
+        with patch.object(type(order), '_render_remito_pdf', return_value=b'%PDF-fake'), \
+             patch.object(self.env['mail.mail'].__class__, 'send', return_value=None):
             order._generate_remito()
         mail = self.env['mail.mail'].search([
             ('email_to', '=', 'cliente@test.com'),
