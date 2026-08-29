@@ -16,6 +16,9 @@
             'pos_reparto_viaje/static/src/viaje_screen.js',
             'pos_reparto_viaje/static/src/viaje_screen.xml',
         ],
+        'point_of_sale._assets_pos': [
+            'pos_reparto_viaje/static/src/app/services/pos_store.js',
+        ],
     },
     'installable': True,
     'application': False,
