@@ -10,6 +10,11 @@
 
 **Nota de secuencia importante:** el manifest se arma incrementalmente, task por task — cada task agrega a `data`/`assets` solo los archivos que ese mismo task crea. No adelantar referencias a archivos que todavía no existen: Odoo falla la instalación (`-i`/`-u`) si un archivo listado en `data` no existe en disco. Además: `TransactionCase.env` corre como superusuario (bypassa toda ACL/regla), así que los tests que usan el `env` a secas funcionan aunque todavía no exista el CSV de accesos — pero cualquier test con `.with_user(...)` sí necesita que el CSV/las reglas ya existan (por eso esos tests están recién en el Task 3, no antes).
 
+**Nota de entorno (encontrada ejecutando el Task 2):**
+- Este proyecto se ejecuta en un worktree separado del checkout principal. Todos los comandos `docker compose` de este plan deben llevar `-p odooerp_dist` (ej. `docker compose -p odooerp_dist stop odoo`) para reusar la misma base de datos real (productos, pos.config, usuarios) en vez de crear una vacía nueva basada en el nombre de carpeta del worktree.
+- En Git Bash (Windows), el argumento `--test-tags /pos_reparto_viaje` se mangling a una ruta de Windows si no se antepone `MSYS_NO_PATHCONV=1` al comando — sin eso, corren 0 tests silenciosamente ("Invalid tag..."). Ya está incorporado en los comandos de este plan.
+- Odoo 19 ya no soporta el atributo de clase `_sql_constraints` (queda como no-op silencioso, sin error ni warning fuerte — solo un log). El equivalente nuevo es un atributo de clase asignado a `models.Constraint(sql, message)` (ver Task 2). Si se agrega alguna otra constraint SQL en tasks futuros de este o cualquier otro módulo del proyecto, usar `models.Constraint`, no la sintaxis vieja.
+
 ---
 
 ## Antes de empezar
@@ -25,9 +30,9 @@ git checkout -b feature/pos-reparto-viaje
 Todos los comandos de test de este plan siguen la convención ya documentada en `ESTADO_PROYECTO.md` §5bis (Docker Desktop en Windows/Git Bash):
 
 ```bash
-docker compose stop odoo
-docker compose run --rm odoo odoo server -d odoo --db_host=db --db_user=odoo --db_password=odoo -u pos_reparto_viaje --test-enable --test-tags /pos_reparto_viaje --stop-after-init
-docker compose up -d odoo
+docker compose -p odooerp_dist stop odoo
+MSYS_NO_PATHCONV=1 docker compose -p odooerp_dist run --rm odoo odoo server -d odoo --db_host=db --db_user=odoo --db_password=odoo -u pos_reparto_viaje --test-enable --test-tags /pos_reparto_viaje --stop-after-init
+docker compose -p odooerp_dist up -d odoo
 ```
 
 Usar `-u` (update) una vez instalado por primera vez; el Task 1 usa `-i` (install) porque el módulo todavía no existe en la base.
@@ -97,9 +102,9 @@ class RepartoViajeParada(models.Model):
 
 Run:
 ```bash
-docker compose stop odoo
-docker compose run --rm odoo odoo server -d odoo --db_host=db --db_user=odoo --db_password=odoo -i pos_reparto_viaje --stop-after-init
-docker compose up -d odoo
+docker compose -p odooerp_dist stop odoo
+docker compose -p odooerp_dist run --rm odoo odoo server -d odoo --db_host=db --db_user=odoo --db_password=odoo -i pos_reparto_viaje --stop-after-init
+docker compose -p odooerp_dist up -d odoo
 ```
 Expected: instala sin errores, sin tests todavía (no se pasó `--test-enable` porque todavía no hay tests).
 
@@ -143,13 +148,10 @@ class RepartoViaje(models.Model):
     paradas_completadas = fields.Integer(string='Paradas completadas', compute='_compute_progreso')
     progreso = fields.Float(string='Progreso (%)', compute='_compute_progreso')
 
-    _sql_constraints = [
-        (
-            'chofer_fecha_unique',
-            'unique(chofer_id, fecha)',
-            'Este chofer ya tiene un viaje asignado para esa fecha.',
-        ),
-    ]
+    _chofer_fecha_unique = models.Constraint(
+        'unique(chofer_id, fecha)',
+        'Este chofer ya tiene un viaje asignado para esa fecha.',
+    )
 
     @api.depends('parada_ids.visitado')
     def _compute_progreso(self):
@@ -279,9 +281,9 @@ Estos tests no usan `.with_user(...)`, así que corren en modo superusuario (def
 
 Run:
 ```bash
-docker compose stop odoo
-docker compose run --rm odoo odoo server -d odoo --db_host=db --db_user=odoo --db_password=odoo -u pos_reparto_viaje --test-enable --test-tags /pos_reparto_viaje --stop-after-init
-docker compose up -d odoo
+docker compose -p odooerp_dist stop odoo
+MSYS_NO_PATHCONV=1 docker compose -p odooerp_dist run --rm odoo odoo server -d odoo --db_host=db --db_user=odoo --db_password=odoo -u pos_reparto_viaje --test-enable --test-tags /pos_reparto_viaje --stop-after-init
+docker compose -p odooerp_dist up -d odoo
 ```
 Expected: 4 tests, todos en verde.
 
@@ -409,9 +411,9 @@ Agregar al final de la clase `TestRepartoViaje` en `addons/pos_reparto_viaje/tes
 
 Run:
 ```bash
-docker compose stop odoo
-docker compose run --rm odoo odoo server -d odoo --db_host=db --db_user=odoo --db_password=odoo -u pos_reparto_viaje --test-enable --test-tags /pos_reparto_viaje --stop-after-init
-docker compose up -d odoo
+docker compose -p odooerp_dist stop odoo
+MSYS_NO_PATHCONV=1 docker compose -p odooerp_dist run --rm odoo odoo server -d odoo --db_host=db --db_user=odoo --db_password=odoo -u pos_reparto_viaje --test-enable --test-tags /pos_reparto_viaje --stop-after-init
+docker compose -p odooerp_dist up -d odoo
 ```
 Expected: 12 tests, todos en verde.
 
@@ -541,9 +543,9 @@ Agregar al final de la clase `TestRepartoViaje`:
 
 Run:
 ```bash
-docker compose stop odoo
-docker compose run --rm odoo odoo server -d odoo --db_host=db --db_user=odoo --db_password=odoo -u pos_reparto_viaje --test-enable --test-tags /pos_reparto_viaje --stop-after-init
-docker compose up -d odoo
+docker compose -p odooerp_dist stop odoo
+MSYS_NO_PATHCONV=1 docker compose -p odooerp_dist run --rm odoo odoo server -d odoo --db_host=db --db_user=odoo --db_password=odoo -u pos_reparto_viaje --test-enable --test-tags /pos_reparto_viaje --stop-after-init
+docker compose -p odooerp_dist up -d odoo
 ```
 Expected: 16 tests, todos en verde. Si `_crear_pedido` falla por un campo requerido de `pos.order` que no está en esta lista (puede variar según la config exacta del `pos.config` elegido), el mensaje de error de Odoo dice cuál falta — agregarlo con un valor mínimo válido.
 
@@ -708,9 +710,9 @@ Agregar al final de la clase `TestRepartoViaje`:
 
 Run:
 ```bash
-docker compose stop odoo
-docker compose run --rm odoo odoo server -d odoo --db_host=db --db_user=odoo --db_password=odoo -u pos_reparto_viaje --test-enable --test-tags /pos_reparto_viaje --stop-after-init
-docker compose up -d odoo
+docker compose -p odooerp_dist stop odoo
+MSYS_NO_PATHCONV=1 docker compose -p odooerp_dist run --rm odoo odoo server -d odoo --db_host=db --db_user=odoo --db_password=odoo -u pos_reparto_viaje --test-enable --test-tags /pos_reparto_viaje --stop-after-init
+docker compose -p odooerp_dist up -d odoo
 ```
 Expected: 17 tests, todos en verde.
 
@@ -794,9 +796,9 @@ Agregar al final de la clase `TestRepartoViaje`:
 
 Run:
 ```bash
-docker compose stop odoo
-docker compose run --rm odoo odoo server -d odoo --db_host=db --db_user=odoo --db_password=odoo -u pos_reparto_viaje --test-enable --test-tags /pos_reparto_viaje --stop-after-init
-docker compose up -d odoo
+docker compose -p odooerp_dist stop odoo
+MSYS_NO_PATHCONV=1 docker compose -p odooerp_dist run --rm odoo odoo server -d odoo --db_host=db --db_user=odoo --db_password=odoo -u pos_reparto_viaje --test-enable --test-tags /pos_reparto_viaje --stop-after-init
+docker compose -p odooerp_dist up -d odoo
 ```
 Expected: 20 tests, todos en verde.
 
@@ -951,9 +953,9 @@ por:
 
 Run:
 ```bash
-docker compose stop odoo
-docker compose run --rm odoo odoo server -d odoo --db_host=db --db_user=odoo --db_password=odoo -u pos_reparto_viaje --test-enable --test-tags /pos_reparto_viaje --stop-after-init
-docker compose up -d odoo
+docker compose -p odooerp_dist stop odoo
+MSYS_NO_PATHCONV=1 docker compose -p odooerp_dist run --rm odoo odoo server -d odoo --db_host=db --db_user=odoo --db_password=odoo -u pos_reparto_viaje --test-enable --test-tags /pos_reparto_viaje --stop-after-init
+docker compose -p odooerp_dist up -d odoo
 ```
 Expected: 20 tests, todos en verde (sin regresión), sin errores de carga de assets en el log.
 
@@ -1024,9 +1026,9 @@ por:
 
 Run:
 ```bash
-docker compose stop odoo
-docker compose run --rm odoo odoo server -d odoo --db_host=db --db_user=odoo --db_password=odoo -u pos_reparto_viaje --test-enable --test-tags /pos_reparto_viaje --stop-after-init
-docker compose up -d odoo
+docker compose -p odooerp_dist stop odoo
+MSYS_NO_PATHCONV=1 docker compose -p odooerp_dist run --rm odoo odoo server -d odoo --db_host=db --db_user=odoo --db_password=odoo -u pos_reparto_viaje --test-enable --test-tags /pos_reparto_viaje --stop-after-init
+docker compose -p odooerp_dist up -d odoo
 ```
 Expected: 20 tests, todos en verde.
 
@@ -1061,7 +1063,7 @@ Cargar y cobrar un pedido para ese cliente. Volver a la pantalla de Inicio → V
 
 - [ ] **Step 5: Verificar el caso offline (regresión sobre lo ya documentado en `ESTADO_PROYECTO.md` §7)**
 
-Repetir el flujo cortando la conexión (`docker compose stop odoo`) antes de cobrar, cobrar offline, reconectar (`docker compose start odoo`) y reabrir la sesión de POS. Confirmar que el auto-tick corre igual al sincronizar (usa `date_order`, no la fecha de sincronización — ver Task 4).
+Repetir el flujo cortando la conexión (`docker compose -p odooerp_dist stop odoo`) antes de cobrar, cobrar offline, reconectar (`docker compose -p odooerp_dist start odoo`) y reabrir la sesión de POS. Confirmar que el auto-tick corre igual al sincronizar (usa `date_order`, no la fecha de sincronización — ver Task 4).
 
 - [ ] **Step 6: Si algo no anda como se espera, documentarlo como deuda técnica o bug antes de seguir** (no hay código que commitear en este task si todo funciona).
 
