@@ -20,6 +20,7 @@ services:
       HOST: db
       USER: odoo
       PASSWORD: odoo
+      DB_NAME: odoo
     volumes:
       - odoo-web-data:/var/lib/odoo
       - ./addons:/mnt/extra-addons
