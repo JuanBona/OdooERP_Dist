@@ -182,3 +182,18 @@ class TestRepartoViaje(TransactionCase):
         encontrados = self.env['reparto.viaje'].with_user(self.admin_op).search(domain)
         self.assertEqual(len(encontrados), 1)
         self.assertEqual(encontrados.chofer_id, self.chofer_1)
+
+    def test_menu_viaje_es_raiz_y_solo_grupo_vendedor(self):
+        menu = self.env.ref('pos_reparto_viaje.menu_reparto_viaje_chofer')
+        self.assertFalse(menu.parent_id)
+        self.assertEqual(menu.group_ids, self.group_vendedor)
+
+    def test_admin_operativa_no_ve_el_menu_viaje_de_chofer(self):
+        menu = self.env.ref('pos_reparto_viaje.menu_reparto_viaje_chofer')
+        roots_admin = self.env['ir.ui.menu'].with_user(self.admin_op).get_user_roots()
+        self.assertNotIn(menu.id, roots_admin.ids)
+
+    def test_chofer_ve_el_menu_viaje_entre_sus_roots(self):
+        menu = self.env.ref('pos_reparto_viaje.menu_reparto_viaje_chofer')
+        roots_chofer = self.env['ir.ui.menu'].with_user(self.chofer_1).get_user_roots()
+        self.assertIn(menu.id, roots_chofer.ids)

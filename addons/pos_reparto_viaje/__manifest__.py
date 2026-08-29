@@ -8,6 +8,7 @@
         'security/ir.model.access.csv',
         'security/reparto_viaje_rules.xml',
         'views/reparto_viaje_views.xml',
+        'data/viaje_menu.xml',
     ],
     'assets': {},
     'installable': True,

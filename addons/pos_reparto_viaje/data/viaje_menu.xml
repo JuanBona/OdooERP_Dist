@@ -1,0 +1,12 @@
+<odoo>
+    <record id="action_reparto_viaje_chofer" model="ir.actions.client">
+        <field name="name">Viaje</field>
+        <field name="tag">pos_reparto_viaje.viaje_screen</field>
+    </record>
+
+    <menuitem id="menu_reparto_viaje_chofer"
+        name="Viaje"
+        action="action_reparto_viaje_chofer"
+        sequence="5"
+        groups="pos_reparto_security.group_reparto_vendedor"/>
+</odoo>
