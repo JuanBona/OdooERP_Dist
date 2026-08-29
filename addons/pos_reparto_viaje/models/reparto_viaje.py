@@ -62,5 +62,6 @@ class RepartoViajeParada(models.Model):
     def action_abrir_pos(self):
         self.ensure_one()
         action = self.viaje_id.pos_config_id.open_ui()
-        action['url'] += f'&reparto_partner_id={self.partner_id.id}'
+        separator = '&' if '?' in action['url'] else '?'
+        action['url'] += f'{separator}reparto_partner_id={self.partner_id.id}'
         return action
