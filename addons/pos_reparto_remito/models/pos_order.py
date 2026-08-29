@@ -19,6 +19,7 @@ class PosOrder(models.Model):
 
     def _generate_remito(self):
         self.ensure_one()
+        self.flush_recordset(['remito_number'])
         self.env.cr.execute(
             'SELECT id FROM pos_order WHERE id = %s FOR UPDATE',
             (self.id,),
@@ -46,7 +47,7 @@ class PosOrder(models.Model):
                 try:
                     order._generate_remito()
                 except Exception:
-                    _logger.warning(
+                    _logger.exception(
                         "Failed to generate remito for order %s", order.name
                     )
         return result
