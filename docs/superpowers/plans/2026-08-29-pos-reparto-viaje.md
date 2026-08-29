@@ -301,8 +301,12 @@ git commit -m "pos_reparto_viaje: modelo completo con compute y constraint"
 **Files:**
 - Create: `addons/pos_reparto_viaje/security/ir.model.access.csv`
 - Create: `addons/pos_reparto_viaje/security/reparto_viaje_rules.xml`
+- Create: `addons/pos_reparto_viaje/models/ir_rule.py`
+- Modify: `addons/pos_reparto_viaje/models/__init__.py`
 - Modify: `addons/pos_reparto_viaje/__manifest__.py`
 - Modify: `addons/pos_reparto_viaje/tests/test_reparto_viaje.py`
+
+**Corrección real de ejecución:** `context_today()` NO está disponible en el contexto de evaluación de `domain_force` de `ir.rule` en este Odoo 19 (a diferencia de los dominios de vistas de búsqueda, que se evalúan con un intérprete distinto en el cliente web y sí lo tienen). `ir.rule._eval_context()` (base) solo expone `user`/`company_id`/`company_ids` — usar `context_today()` ahí revienta con `NameError` al cargar el módulo. Por eso este task agrega `models/ir_rule.py`, que hereda `ir.rule` y agrega `today` al contexto (mismo patrón que usa el core en `website/models/ir_rule.py` para agregar `website`), y los dominios usan `today` directo en vez de `context_today().strftime(...)`.
 
 - [ ] **Step 1: CSV de accesos base**
 
@@ -327,18 +331,48 @@ Nota: a diferencia de `pos_reparto_security` (que restringe modelos ya existente
     <record id="rule_reparto_viaje_vendedor" model="ir.rule">
         <field name="name">Vendedor Reparto: solo su viaje de hoy</field>
         <field name="model_id" ref="model_reparto_viaje"/>
-        <field name="domain_force">[('chofer_id', '=', user.id), ('fecha', '=', context_today().strftime('%Y-%m-%d'))]</field>
+        <field name="domain_force">[('chofer_id', '=', user.id), ('fecha', '=', today)]</field>
         <field name="groups" eval="[(4, ref('pos_reparto_security.group_reparto_vendedor'))]"/>
     </record>
 
     <record id="rule_reparto_viaje_parada_vendedor" model="ir.rule">
         <field name="name">Vendedor Reparto: solo paradas de su viaje de hoy</field>
         <field name="model_id" ref="model_reparto_viaje_parada"/>
-        <field name="domain_force">[('viaje_id.chofer_id', '=', user.id), ('viaje_id.fecha', '=', context_today().strftime('%Y-%m-%d'))]</field>
+        <field name="domain_force">[('viaje_id.chofer_id', '=', user.id), ('viaje_id.fecha', '=', today)]</field>
         <field name="groups" eval="[(4, ref('pos_reparto_security.group_reparto_vendedor'))]"/>
     </record>
 </odoo>
 ```
+
+- [ ] **Step 2bis: Override de `ir.rule` para exponer `today` al dominio**
+
+`addons/pos_reparto_viaje/models/ir_rule.py`:
+```python
+from odoo import api, fields, models
+
+
+class IrRule(models.Model):
+    _inherit = 'ir.rule'
+
+    @api.model
+    def _eval_context(self):
+        result = super()._eval_context()
+        result['today'] = fields.Date.context_today(self)
+        return result
+```
+
+Reemplazar en `addons/pos_reparto_viaje/models/__init__.py`:
+```python
+from . import reparto_viaje
+from . import pos_order
+```
+por:
+```python
+from . import ir_rule
+from . import reparto_viaje
+from . import pos_order
+```
+(si `pos_order` todavía no existe en este archivo porque el Task 4 no corrió antes que este, dejar solo la línea de `reparto_viaje`; el orden entre `ir_rule` y los demás no importa.)
 
 - [ ] **Step 3: Agregar los 2 archivos a `data` en el manifest**
 
@@ -353,6 +387,8 @@ por:
         'security/reparto_viaje_rules.xml',
     ],
 ```
+
+**Corrección real adicional:** `pos_reparto_security` ya restringe `res.partner` para el grupo Vendedor a "solo mis clientes" (`user_id = user.id`). `get_mi_viaje_hoy()` lee `parada.partner_id.name`, así que `cliente_a`/`cliente_b` en `setUpClass` necesitan `user_id=cls.chofer_1.id` para que el chofer pueda leerlos — si no, `test_get_mi_viaje_hoy_devuelve_paradas_propias` falla con `AccessError`. Agregar ese campo a los dos `create()` de partners en `setUpClass` (ver Task 2 para dónde están esas líneas).
 
 - [ ] **Step 4: Agregar los tests que dependen del ACL/reglas (acceso + `get_mi_viaje_hoy` + `action_abrir_pos`)**
 
@@ -420,7 +456,7 @@ Expected: 12 tests, todos en verde.
 - [ ] **Step 6: Commit**
 
 ```bash
-git add addons/pos_reparto_viaje/security/ addons/pos_reparto_viaje/__manifest__.py addons/pos_reparto_viaje/tests/test_reparto_viaje.py
+git add addons/pos_reparto_viaje/security/ addons/pos_reparto_viaje/models/ir_rule.py addons/pos_reparto_viaje/models/__init__.py addons/pos_reparto_viaje/__manifest__.py addons/pos_reparto_viaje/tests/test_reparto_viaje.py
 git commit -m "pos_reparto_viaje: ACL y regla de acceso del chofer a su viaje de hoy"
 ```
 
