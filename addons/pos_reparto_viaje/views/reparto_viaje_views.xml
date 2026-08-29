@@ -1,0 +1,95 @@
+<odoo>
+    <record id="view_reparto_viaje_kanban" model="ir.ui.view">
+        <field name="name">reparto.viaje.kanban</field>
+        <field name="model">reparto.viaje</field>
+        <field name="arch" type="xml">
+            <kanban>
+                <field name="chofer_id"/>
+                <field name="fecha"/>
+                <field name="paradas_totales"/>
+                <field name="paradas_completadas"/>
+                <field name="progreso"/>
+                <templates>
+                    <t t-name="kanban-box">
+                        <div class="oe_kanban_card oe_kanban_global_click">
+                            <strong><field name="chofer_id"/></strong>
+                            <div><field name="fecha"/></div>
+                            <div>
+                                <field name="paradas_completadas"/> / <field name="paradas_totales"/> paradas
+                            </div>
+                            <field name="progreso" widget="progressbar"/>
+                        </div>
+                    </t>
+                </templates>
+            </kanban>
+        </field>
+    </record>
+
+    <record id="view_reparto_viaje_list" model="ir.ui.view">
+        <field name="name">reparto.viaje.list</field>
+        <field name="model">reparto.viaje</field>
+        <field name="arch" type="xml">
+            <list>
+                <field name="fecha"/>
+                <field name="chofer_id"/>
+                <field name="pos_config_id"/>
+                <field name="paradas_completadas"/>
+                <field name="paradas_totales"/>
+                <field name="progreso" widget="progressbar"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="view_reparto_viaje_form" model="ir.ui.view">
+        <field name="name">reparto.viaje.form</field>
+        <field name="model">reparto.viaje</field>
+        <field name="arch" type="xml">
+            <form>
+                <sheet>
+                    <group>
+                        <field name="fecha"/>
+                        <field name="chofer_id"/>
+                        <field name="pos_config_id"/>
+                    </group>
+                    <field name="parada_ids">
+                        <list editable="bottom">
+                            <field name="partner_id"/>
+                            <field name="visitado" readonly="1"/>
+                            <field name="pedido_id" readonly="1"/>
+                        </list>
+                    </field>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <record id="view_reparto_viaje_search" model="ir.ui.view">
+        <field name="name">reparto.viaje.search</field>
+        <field name="model">reparto.viaje</field>
+        <field name="arch" type="xml">
+            <search>
+                <field name="chofer_id"/>
+                <field name="fecha"/>
+                <filter name="filter_hoy" string="Hoy" domain="[('fecha', '=', context_today().strftime('%Y-%m-%d'))]"/>
+                <group>
+                    <filter name="groupby_chofer" string="Chofer" domain="[]" context="{'group_by': 'chofer_id'}"/>
+                </group>
+            </search>
+        </field>
+    </record>
+
+    <record id="action_reparto_viaje" model="ir.actions.act_window">
+        <field name="name">Viajes</field>
+        <field name="res_model">reparto.viaje</field>
+        <field name="view_mode">kanban,list,form</field>
+        <field name="search_view_id" ref="view_reparto_viaje_search"/>
+        <field name="context">{'search_default_filter_hoy': 1}</field>
+    </record>
+
+    <menuitem id="menu_reparto_viaje_admin"
+        name="Viajes"
+        parent="point_of_sale.menu_point_root"
+        action="action_reparto_viaje"
+        groups="pos_reparto_security.group_reparto_adminop,pos_reparto_security.group_reparto_gerencia"
+        sequence="16"/>
+</odoo>

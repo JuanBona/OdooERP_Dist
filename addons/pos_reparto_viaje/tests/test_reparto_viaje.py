@@ -162,3 +162,23 @@ class TestRepartoViaje(TransactionCase):
         fecha_ayer_datetime = fields.Datetime.to_datetime(ayer)
         self._crear_pedido(self.chofer_1, self.cliente_a, fecha_order=fecha_ayer_datetime)
         self.assertTrue(viaje.parada_ids[0].visitado)
+
+    def test_filtro_hoy_de_la_vista_admin_excluye_otras_fechas(self):
+        from lxml import etree
+        from odoo.tools.safe_eval import safe_eval
+
+        ayer = fields.Date.subtract(fields.Date.today(), days=1)
+        self._crear_viaje(self.chofer_1, fields.Date.today(), [self.cliente_a])
+        self._crear_viaje(self.chofer_2, ayer, [self.cliente_b])
+
+        search_view = self.env.ref('pos_reparto_viaje.view_reparto_viaje_search')
+        arch = etree.fromstring(search_view.arch)
+        filtro_hoy = arch.find(".//filter[@name='filter_hoy']")
+        domain = safe_eval(
+            filtro_hoy.get('domain'),
+            {'context_today': lambda: fields.Date.context_today(self.env.user)},
+        )
+
+        encontrados = self.env['reparto.viaje'].with_user(self.admin_op).search(domain)
+        self.assertEqual(len(encontrados), 1)
+        self.assertEqual(encontrados.chofer_id, self.chofer_1)
