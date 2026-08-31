@@ -14,6 +14,31 @@ Instancia local de Odoo 19.0 Community vía Docker Compose (`docker-compose.yml`
 
 Levantar: `docker compose up -d`. Ver estado: `docker compose ps`. Logs: `docker compose logs -f odoo`.
 
+### Incidente de encoding — 2026-08-31
+
+La base `odoo` tenía **corrupción sistémica de UTF-8**: cada `ó/é/í/á/ñ` en strings
+`es_AR` (y en parte del plan de cuentas AR) había quedado como `??`. Entró en una
+restauración previa de `backup.sql` por un pipe que rompió el encoding (típico de
+PowerShell `Get-Content backup.sql | psql`). El `backup.sql` en disco está limpio.
+
+Reparado:
+- Recarga de traducciones `es_AR` con overwrite (`base.language.install`) → menús,
+  acciones, grupos, labels de campos.
+- Script `repair_from_backup.py` (en scratchpad de la sesión): extrae valores limpios
+  de `backup.sql` y hace `UPDATE` solo de filas con `??`, verificando que el "esqueleto
+  ASCII" coincida. ~1950 filas en `res_country_state`, `res_country`, `account_account`,
+  `account_tax`, `account_journal`, `res_currency`, `res_lang`, `l10n_latam_document_type`,
+  `ir_module_module`, `mail_template`, `payment_*`, secuencias, grupos, etc.
+- Recompute de `complete_name` (partner, location) y fix literal de `pos_order.name`.
+
+Residual (~700 filas, baja visibilidad, no tocado): `ir_module_module.description`
+(descripción larga en Apps), `ir_ui_view.arch_db`/`arch_prev` (~28, labels internos en
+vistas core — algunas divergen del backup por point-release; se arreglan con `-u <módulo>`
+si hiciera falta), chatter viejo (`mail_message`), paneles de onboarding, `ir_model_fields_selection.name`.
+
+**Para futuras restauraciones**: `docker compose exec -T -e PGCLIENTENCODING=UTF8 db psql
+-U odoo -d odoo < backup.sql` (binario, sin PowerShell `Get-Content`).
+
 ## 2. Localización Argentina
 
 - País de la compañía ("My Company") = Argentina.
