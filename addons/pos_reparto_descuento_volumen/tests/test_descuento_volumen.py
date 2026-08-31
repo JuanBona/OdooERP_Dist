@@ -76,3 +76,24 @@ class TestDescuentoVolumen(TransactionCase):
         self.assertAlmostEqual(precio(11), 96.0, places=2)
         self.assertAlmostEqual(precio(12), 92.0, places=2)
         self.assertAlmostEqual(precio(100), 92.0, places=2)
+
+    def test_menu_lista_solo_productos_con_tramos(self):
+        """La acción del menú 'Descuentos por volumen' filtra a los
+        productos que tienen al menos un tramo."""
+        from odoo.tools.safe_eval import safe_eval
+        con_tramo = self.env['product.template'].create({
+            'name': 'Con Tramo', 'list_price': 10.0, 'type': 'consu',
+            'reparto_volumen_item_ids': [(0, 0, {'min_quantity': 6, 'percent_price': 4.0})],
+        })
+        sin_tramo = self.env['product.template'].create({
+            'name': 'Sin Tramo', 'list_price': 10.0, 'type': 'consu',
+        })
+        action = self.env['ir.actions.act_window']._for_xml_id(
+            'pos_reparto_descuento_volumen.action_productos_descuento_volumen'
+        )
+        domain = action['domain']
+        if isinstance(domain, str):
+            domain = safe_eval(domain)
+        productos = self.env['product.template'].search(domain)
+        self.assertIn(con_tramo, productos)
+        self.assertNotIn(sin_tramo, productos)
