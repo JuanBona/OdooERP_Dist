@@ -150,10 +150,17 @@ Qué hace: implementa la feature "Viaje" (hoja de ruta) del relevamiento v2.0 �
 
 **Deuda técnica aceptada**: un mismo cliente en 2 viajes de choferes distintos el mismo día no está bloqueado (caso raro, carga manual duplicada).
 
-**Pendiente al cierre de esta sesión:**
-1. **Task 9 (verificación manual en navegador) sin hacer** — la extensión Chrome no estaba conectada. Datos de prueba ya sembrados en la base para retomarla: usuario `vendedor_manual_test` / password `Test12345!`, viaje id creado con 2 paradas (`Cliente Manual A`, `Cliente Manual B`), `pos.config` id 1 ("Punto de Venta Reparto", vacío — recreado tras el incidente de abajo). Conectar la extensión y seguir los pasos del Task 9 del plan (`docs/superpowers/plans/2026-08-29-pos-reparto-viaje.md`).
-2. Mergear a `main` una vez pase el Task 9 (usar `superpowers:finishing-a-development-branch`).
-3. **Incidente 2026-08-29**: el volumen de Postgres compartido se vació durante la verificación del Task 5 de este módulo (causa exacta no identificada). Se perdieron los 182 productos, clientes reales, 2 pos.config originales y los 4 usuarios placeholder de `pos_reparto_security`. Recuperado reinstalando los 7 módulos custom y creando un `pos.config` mínimo a mano — pero el catálogo real y los usuarios placeholder hay que recargarlos de nuevo (ver ítem de abajo, ya estaba pendiente antes pero ahora aplica también a datos que sí estaban cargados). Detalle completo en el plan de este módulo.
+**Task 9 (verificación manual en navegador) — hecha el 2026-08-31.** Flujo probado end-to-end como usuario real (`chofer_viaje_manual_test`, grupo Vendedor): tile "Viaje" en Inicio → lista de paradas → tocar parada abre POS Camión 1 con el cliente ya preseleccionado → cobrar → volver a Inicio/Viaje muestra la parada tildada sola (auto-tick) → panel de Admin (Punto de Venta → Viajes) refleja el progreso actualizado (1/2, 50%). No se repitió el caso offline de la sección 7 específicamente para este módulo (queda como regresión pendiente, no bloqueante — el mecanismo de auto-tick ya usa `date_order` para cubrir ese escenario, ver sección 5sexies).
+
+Dos bugs reales encontrados y arreglados durante la verificación:
+1. **`pos_store.js`** (`pos_reparto_viaje`): el patch de `PosStore.setup()` asumía que ya existía una orden al momento de preseleccionar el cliente; `this.getOrder()` puede ser `undefined` ahí. Fix: `getOrder() || addNewOrder()`.
+2. **`pos_reparto_security`** — bug más serio, no específico de este módulo: la regla de Vendedor sobre `res.partner` (`user_id = user.id`, "solo mis clientes") bloqueaba sin querer el **propio contacto vinculado del vendedor**, porque nadie lo asigna como Salesperson de sí mismo. Como `res.users.name` (y otros campos) son `related` a `partner_id.*`, esto rompía la lectura de `res.users` para cualquier usuario del grupo Vendedor — lo que a su vez rompía abrir **cualquier** sesión de POS (el popup "Opening Control" de Odoo no podía resolver el cashier y crasheaba). Fix: la regla ahora es `['|', ('user_id','=',user.id), ('id','=',user.partner_id.id)]`. Cubierto por un test nuevo (`test_vendedor_puede_leer_su_propio_contacto`). Este bug afecta a **cualquier** usuario del grupo Vendedor en **cualquier** POS, no solo en el flujo de Viaje — ya estaba latente desde que se creó `pos_reparto_security`, simplemente nunca se había probado abrir una sesión de POS real con un usuario de ese grupo hasta ahora.
+
+**Mergeado a `main` — pendiente, ver `superpowers:finishing-a-development-branch`.**
+
+**Incidente 2026-08-29 (ya resuelto, dejado por historial):** el volumen de Postgres compartido se vació durante la verificación del Task 5 de este módulo. Recuperado reinstalando los módulos custom. El catálogo real de productos y los usuarios placeholder de `pos_reparto_security` se perdieron en ese incidente y siguen sin recargar (ver ítem de datos maestros pendientes más abajo) — la base actual tiene datos de prueba al azar (50 clientes, 50 productos), no el catálogo real del cliente.
+
+**Nota operativa (encontrada 2026-08-31, importante para cualquiera que retome este proyecto):** los comandos `docker compose` para este proyecto **deben correrse desde el directorio de este worktree**, no desde el checkout principal. El `docker-compose.yml` usa un bind mount relativo (`./addons`), así que si se corre `docker compose -p odooerp_dist up -d odoo` desde otro directorio (aunque se use el mismo `-p` para reusar la base), el mount de `/mnt/extra-addons` se recalcula contra ESE directorio y el container termina sirviendo un `addons/` distinto — silenciosamente, sin error. Eso pasó en esta sesión y causó horas de debugging (el módulo parecía "perder" su ACL/vistas/menú en cada reinstall, cuando en realidad estaba instalando una copia vieja y sin trackear que quedó suelta en `addons/pos_reparto_viaje/` del repo principal). Antes de reinstalar/actualizar cualquier módulo, correr `docker inspect odooerp_dist-odoo-1 --format "{{json .Mounts}}"` y confirmar que el `Source` del bind mount apunta al worktree correcto.
 
 Spec: `docs/superpowers/specs/2026-08-29-pos-reparto-viaje-design.md`. Plan: `docs/superpowers/plans/2026-08-29-pos-reparto-viaje.md`.
 
@@ -198,14 +205,14 @@ Configurado servidor MCP `odoo` en Claude Code (`claude mcp add odoo ...`), modo
 
 ## 9. Pendiente / próximos pasos
 
-**Hecho hasta ahora** (relevamiento v2.0, `Relevamiento_Requerimientos_Odoo_Reparto.docx`): `pos_reparto_security` (4 roles + reglas de acceso, sección 5bis), `pos_reparto_credito` (alerta 15 días, sección 5ter), `pos_reparto_branding` (personalización visual, 5quater), `pos_reparto_home` (pantalla de inicio táctil, 5quinquies). Todo en `main`. `pos_reparto_viaje` (hoja de ruta, sección 5sexies) completo en su rama, falta verificación manual y merge.
+**Hecho hasta ahora** (relevamiento v2.0, `Relevamiento_Requerimientos_Odoo_Reparto.docx`): `pos_reparto_security` (4 roles + reglas de acceso, sección 5bis), `pos_reparto_credito` (alerta 15 días, sección 5ter), `pos_reparto_branding` (personalización visual, 5quater), `pos_reparto_home` (pantalla de inicio táctil, 5quinquies), `pos_reparto_remito` (remito interno QWeb — mergeado a `main` por el compañero). Todo en `main`. `pos_reparto_viaje` (hoja de ruta, sección 5sexies) completo y verificado, falta merge.
 
 **Gaps Must/Should que quedan del relevamiento v2.0** (ver detalle y justificación en memoria `project-reparto-v2-requirements`, o repreguntar al cliente si hace falta el docx):
 
-1. Remito interno QWeb (hoja de pedido/entrega, sin valor fiscal — reemplaza a la factura, ver sección 6). **En curso por el compañero**, ver división de trabajo abajo.
-2. Descuentos por volumen parametrizables por producto (ej. 4%/8%/12% según cantidad) + override manual en el renglón (RF-PV-09).
+1. ~~Remito interno QWeb~~ — hecho, mergeado a `main` (módulo `pos_reparto_remito`).
+2. Descuentos por volumen parametrizables por producto (ej. 4%/8%/12% según cantidad) + override manual en el renglón (RF-PV-09). **Rama `feature/pos-reparto-descuentos-volumen` ya existe en el remoto** — en curso por alguien, confirmar con el compañero antes de tomarlo.
 3. Comisiones sobre pedidos generados en el día, no sobre el cobro (RF-GV-03) — evaluar módulo OCA `commission` (github.com/OCA/commission).
-4. ~~Feature "Viaje"~~ — hecho, ver sección 5sexies (falta solo Task 9 de verificación manual y merge).
+4. ~~Feature "Viaje"~~ — hecho y verificado (Task 9 completa 2026-08-31), ver sección 5sexies. Falta solo el merge a `main`.
 5. Criterio "2 visitas consecutivas sin cobro" de `pos_reparto_credito` (hoy solo días sin pago, ver deuda técnica en 5ter).
 6. Productos habituales por cliente / venta sugerida (Should).
 7. Integración Google Maps para secuenciar recorrido (Should, requiere API paga).
@@ -217,14 +224,12 @@ Configurado servidor MCP `odoo` en Claude Code (`claude mcp add odoo ...`), modo
 - Cargar excel `Clientes_Ordenados_por_Codigo.xlsx` (clientes reales) — todavía no se cargó (esto ya estaba pendiente antes del incidente).
 - Recrear los 4 usuarios placeholder de `pos_reparto_security` (`vendedor@reparto.local` etc., pass `Reparto2026!`) — se perdieron con el reset — y cuando haya datos reales, reemplazarlos por personas reales del cliente y asignar `user_id` (vendedor) en cada `res.partner` real.
 
-### División de trabajo (2026-08-29)
+### División de trabajo (actualizado 2026-08-31)
 
-Para laburar en paralelo sin pisarnos archivos:
+- **Juan**: ítem 4 (feature "Viaje") **completo y verificado** — 10/10 tasks del plan, 20 tests en verde, verificación manual en navegador hecha (ver sección 5sexies). **Falta: merge a `main` vía `superpowers:finishing-a-development-branch`.** Después de mergear, seguir con ítem 3 (comisiones) o ítem 5 (criterio de 2 visitas), ya que ítem 2 (descuentos por volumen) parece que ya lo tomó el compañero (ver más abajo).
+- **Compañero**: terminó ítem 1 (remito interno QWeb, mergeado a `main`) y arrancó ítem 2 (descuentos por volumen) — hay una rama `feature/pos-reparto-descuentos-volumen` en el remoto. Confirmar estado con él antes de que alguien más lo toque.
 
-- **Juan (esta sesión)**: **ítem 4, feature "Viaje", código completo** (ver sección 5sexies) — 8 de 10 tasks del plan hechas y revisadas (spec + calidad por task), en la rama `worktree-pos-reparto-viaje`. **Falta: Task 9 (verificación manual en navegador — la extensión Chrome no estaba conectada, datos de prueba ya sembrados, ver sección 5sexies) y el merge a `main` vía `superpowers:finishing-a-development-branch`.** Después de mergear, seguir con ítem 2 (descuentos por volumen) como próximo, salvo que el compañero ya lo haya tomado.
-- **Compañero**: arranca con **ítem 1, remito interno QWeb**. Es autocontenido (plantilla de reporte, no toca los módulos de roles/crédito/home/viaje), bajo riesgo de choque de merge, y buen punto de entrada al código para alguien que no tocó el repo todavía. Rama sugerida: `feature/pos-reparto-remito` desde `main`. Antes de codear, pasar por `superpowers:brainstorming` igual que se hizo con los módulos anteriores (ver specs en `docs/superpowers/specs/` como ejemplo). Referencia de arquitectura: `ADR-001-arquitectura-toma-pedido.md` (por qué seguimos sobre POS y no `sale.order`, punto 4 de la decisión menciona directo el remito).
-
-Cuando alguno termine su feature y mergee a `main`, actualizar esta sección con el siguiente ítem de la lista de gaps de arriba (orden sugerido: ítem 2, después 3, después 5).
+Cuando alguno termine su feature y mergee a `main`, actualizar esta sección con el siguiente ítem de la lista de gaps de arriba.
 
 ---
 
