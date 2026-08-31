@@ -1,3 +1,4 @@
+from odoo.exceptions import UserError
 from odoo.tests.common import TransactionCase, tagged
 
 
@@ -97,3 +98,54 @@ class TestDescuentoVolumen(TransactionCase):
         productos = self.env['product.template'].search(domain)
         self.assertIn(con_tramo, productos)
         self.assertNotIn(sin_tramo, productos)
+
+    def _user_con_grupo(self, login, group_name):
+        return self.env['res.users'].create({
+            'name': login, 'login': login,
+            'group_ids': [(6, 0, [self.env.ref('pos_reparto_security.%s' % group_name).id])],
+        })
+
+    def _vals_orden(self, user, line_vals):
+        return {
+            'user_id': user.id,
+            'pricelist_id': self.pricelist.id,
+            'lines': [(0, 0, {
+                'product_id': self.product.product_variant_id.id,
+                'qty': line_vals.get('qty', 1),
+                'price_unit': line_vals['price_unit'],
+                'discount': line_vals.get('discount', 0.0),
+            })],
+        }
+
+    def test_guard_bloquea_precio_bajo_de_vendedor(self):
+        vendedor = self._user_con_grupo('vend_dv_test', 'group_reparto_vendedor')
+        with self.assertRaises(UserError):
+            self.env['pos.order']._reparto_check_override_manual(
+                self._vals_orden(vendedor, {'price_unit': 80.0})
+            )
+
+    def test_guard_bloquea_descuento_de_vendedor(self):
+        vendedor = self._user_con_grupo('vend_dv_test2', 'group_reparto_vendedor')
+        with self.assertRaises(UserError):
+            self.env['pos.order']._reparto_check_override_manual(
+                self._vals_orden(vendedor, {'price_unit': 100.0, 'discount': 10.0})
+            )
+
+    def test_guard_permite_precio_bajo_de_gerencia(self):
+        gerente = self._user_con_grupo('ger_dv_test', 'group_reparto_gerencia')
+        # No debe levantar excepción.
+        self.env['pos.order']._reparto_check_override_manual(
+            self._vals_orden(gerente, {'price_unit': 80.0})
+        )
+
+    def test_guard_permite_descuento_por_volumen_de_vendedor(self):
+        """Un price_unit que coincide con el precio de lista para esa
+        cantidad (aunque esté rebajado por un tramo) NO dispara el guard."""
+        self.product.write({
+            'reparto_volumen_item_ids': [(0, 0, {'min_quantity': 6, 'percent_price': 4.0})],
+        })
+        vendedor = self._user_con_grupo('vend_dv_test3', 'group_reparto_vendedor')
+        # qty 6 -> precio de lista 96.0; no debe levantar.
+        self.env['pos.order']._reparto_check_override_manual(
+            self._vals_orden(vendedor, {'qty': 6, 'price_unit': 96.0})
+        )
