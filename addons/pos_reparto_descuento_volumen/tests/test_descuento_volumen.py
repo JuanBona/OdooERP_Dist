@@ -149,3 +149,18 @@ class TestDescuentoVolumen(TransactionCase):
         self.env['pos.order']._reparto_check_override_manual(
             self._vals_orden(vendedor, {'qty': 6, 'price_unit': 96.0})
         )
+
+    def _pos_config(self):
+        return self.env['pos.config'].search([('name', '=', 'POS Camión 1')], limit=1) \
+            or self.env['pos.config'].search([], limit=1)
+
+    def test_pos_data_marca_flag_de_override_por_rol(self):
+        gerente = self._user_con_grupo('ger_flag_test', 'group_reparto_gerencia')
+        vendedor = self._user_con_grupo('vend_flag_test', 'group_reparto_vendedor')
+        config = self._pos_config()
+
+        data_ger = self.env['res.users'].with_user(gerente)._load_pos_data_read(gerente, config)
+        data_vend = self.env['res.users'].with_user(vendedor)._load_pos_data_read(vendedor, config)
+
+        self.assertTrue(data_ger[0]['_reparto_puede_override'])
+        self.assertFalse(data_vend[0]['_reparto_puede_override'])
