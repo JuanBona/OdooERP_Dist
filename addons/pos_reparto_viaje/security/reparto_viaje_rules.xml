@@ -1,0 +1,15 @@
+<odoo>
+    <record id="rule_reparto_viaje_vendedor" model="ir.rule">
+        <field name="name">Vendedor Reparto: solo su viaje de hoy</field>
+        <field name="model_id" ref="model_reparto_viaje"/>
+        <field name="domain_force">[('chofer_id', '=', user.id), ('fecha', '=', today)]</field>
+        <field name="groups" eval="[(4, ref('pos_reparto_security.group_reparto_vendedor'))]"/>
+    </record>
+
+    <record id="rule_reparto_viaje_parada_vendedor" model="ir.rule">
+        <field name="name">Vendedor Reparto: solo paradas de su viaje de hoy</field>
+        <field name="model_id" ref="model_reparto_viaje_parada"/>
+        <field name="domain_force">[('viaje_id.chofer_id', '=', user.id), ('viaje_id.fecha', '=', today)]</field>
+        <field name="groups" eval="[(4, ref('pos_reparto_security.group_reparto_vendedor'))]"/>
+    </record>
+</odoo>

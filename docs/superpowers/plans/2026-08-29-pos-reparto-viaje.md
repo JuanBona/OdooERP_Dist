@@ -10,6 +10,16 @@
 
 **Nota de secuencia importante:** el manifest se arma incrementalmente, task por task — cada task agrega a `data`/`assets` solo los archivos que ese mismo task crea. No adelantar referencias a archivos que todavía no existen: Odoo falla la instalación (`-i`/`-u`) si un archivo listado en `data` no existe en disco. Además: `TransactionCase.env` corre como superusuario (bypassa toda ACL/regla), así que los tests que usan el `env` a secas funcionan aunque todavía no exista el CSV de accesos — pero cualquier test con `.with_user(...)` sí necesita que el CSV/las reglas ya existan (por eso esos tests están recién en el Task 3, no antes).
 
+**Nota de entorno (encontrada ejecutando el Task 2):**
+- Este proyecto se ejecuta en un worktree separado del checkout principal. Todos los comandos `docker compose` de este plan deben llevar `-p odooerp_dist` (ej. `docker compose -p odooerp_dist stop odoo`) para reusar la misma base de datos real (productos, pos.config, usuarios) en vez de crear una vacía nueva basada en el nombre de carpeta del worktree.
+- En Git Bash (Windows), el argumento `--test-tags /pos_reparto_viaje` se mangling a una ruta de Windows si no se antepone `MSYS_NO_PATHCONV=1` al comando — sin eso, corren 0 tests silenciosamente ("Invalid tag..."). Ya está incorporado en los comandos de este plan.
+- Odoo 19 ya no soporta el atributo de clase `_sql_constraints` (queda como no-op silencioso, sin error ni warning fuerte — solo un log). El equivalente nuevo es un atributo de clase asignado a `models.Constraint(sql, message)` (ver Task 2). Si se agrega alguna otra constraint SQL en tasks futuros de este o cualquier otro módulo del proyecto, usar `models.Constraint`, no la sintaxis vieja.
+- Al re-correr los tests, si el `odoo` service ya está parado (`docker compose -p odooerp_dist stop odoo`) desde un intento anterior, el `stop` del siguiente comando es un no-op inofensivo — no hace falta chequear el estado antes.
+- **(Task 3)** `context_today()` NO está disponible en el contexto de evaluación de `domain_force` de `ir.rule` (a diferencia de los dominios de vistas de búsqueda, que sí lo tienen vía el intérprete del cliente web) — usar un override de `ir.rule._eval_context()` (ver `models/ir_rule.py` del Task 3) y referenciar `today` directo en el dominio, no `context_today()`.
+- **(Task 5)** En una vista de búsqueda (`search`), el `<group>` que envuelve filtros de "Agrupar por" NO acepta los atributos `string`/`expand` en el esquema RelaxNG de Odoo 19 (`RNG_ERR_INVALIDATTR`) — usar `<group>` sin atributos, mismo patrón que la vista `point_of_sale.view_pos_order_filter` del core. El `<filter>` de agrupación necesita `domain="[]"` explícito (convención del core).
+- **(Task 5)** `fields.Date.context_today` no es invocable sin argumento (`context_today(record, timestamp=None)`) — si se necesita pasarlo como `context_today` de cero-argumentos a un `safe_eval` (para reproducir en tests cómo se evalúa un dominio de filtro de búsqueda), envolverlo en `lambda: fields.Date.context_today(self.env.user)`.
+- **(Incidente 2026-08-29, post-Task 5):** el volumen de Postgres compartido (`odooerp_dist_odoo-db-data`) se resetió a vacío durante la verificación del Task 5 — causa exacta no identificada, sospecha de comandos `docker compose` concurrentes (implementador + reviewer corriendo `-u`/tests al mismo tiempo contra la misma base real). Se perdieron los 182 productos, clientes reales, 2 pos.config y usuarios placeholder cargados a mano (sin script de recarga, ver `ESTADO_PROYECTO.md`). Recuperado reinstalando los 7 módulos custom (`-i` con la lista completa de `addons/`) y creando un `pos.config` mínimo a mano para que los tests de este plan tengan al menos uno (`assert cls.pos_config` en `setUpClass`). **Regla para el resto de este plan y para trabajo futuro: nunca correr dos `docker compose ... run/stop/up` en simultáneo contra el mismo proyecto (`-p odooerp_dist`) desde procesos distintos (ej. un subagente implementador y un subagente reviewer al mismo tiempo) — serializar siempre. Además: ningún subagente debe correr `docker compose down` (con o sin `-v`) ni ningún comando que borre volúmenes/contenedores bajo ningún motivo — si algo se traba o da un resultado raro, la instrucción es parar y reportar BLOCKED, no "resetear" el entorno por su cuenta.**
+
 ---
 
 ## Antes de empezar
@@ -25,9 +35,9 @@ git checkout -b feature/pos-reparto-viaje
 Todos los comandos de test de este plan siguen la convención ya documentada en `ESTADO_PROYECTO.md` §5bis (Docker Desktop en Windows/Git Bash):
 
 ```bash
-docker compose stop odoo
-docker compose run --rm odoo odoo server -d odoo --db_host=db --db_user=odoo --db_password=odoo -u pos_reparto_viaje --test-enable --test-tags /pos_reparto_viaje --stop-after-init
-docker compose up -d odoo
+docker compose -p odooerp_dist stop odoo
+MSYS_NO_PATHCONV=1 docker compose -p odooerp_dist run --rm odoo odoo server -d odoo --db_host=db --db_user=odoo --db_password=odoo -u pos_reparto_viaje --test-enable --test-tags /pos_reparto_viaje --stop-after-init
+docker compose -p odooerp_dist up -d odoo
 ```
 
 Usar `-u` (update) una vez instalado por primera vez; el Task 1 usa `-i` (install) porque el módulo todavía no existe en la base.
@@ -97,9 +107,9 @@ class RepartoViajeParada(models.Model):
 
 Run:
 ```bash
-docker compose stop odoo
-docker compose run --rm odoo odoo server -d odoo --db_host=db --db_user=odoo --db_password=odoo -i pos_reparto_viaje --stop-after-init
-docker compose up -d odoo
+docker compose -p odooerp_dist stop odoo
+docker compose -p odooerp_dist run --rm odoo odoo server -d odoo --db_host=db --db_user=odoo --db_password=odoo -i pos_reparto_viaje --stop-after-init
+docker compose -p odooerp_dist up -d odoo
 ```
 Expected: instala sin errores, sin tests todavía (no se pasó `--test-enable` porque todavía no hay tests).
 
@@ -143,13 +153,10 @@ class RepartoViaje(models.Model):
     paradas_completadas = fields.Integer(string='Paradas completadas', compute='_compute_progreso')
     progreso = fields.Float(string='Progreso (%)', compute='_compute_progreso')
 
-    _sql_constraints = [
-        (
-            'chofer_fecha_unique',
-            'unique(chofer_id, fecha)',
-            'Este chofer ya tiene un viaje asignado para esa fecha.',
-        ),
-    ]
+    _chofer_fecha_unique = models.Constraint(
+        'unique(chofer_id, fecha)',
+        'Este chofer ya tiene un viaje asignado para esa fecha.',
+    )
 
     @api.depends('parada_ids.visitado')
     def _compute_progreso(self):
@@ -279,9 +286,9 @@ Estos tests no usan `.with_user(...)`, así que corren en modo superusuario (def
 
 Run:
 ```bash
-docker compose stop odoo
-docker compose run --rm odoo odoo server -d odoo --db_host=db --db_user=odoo --db_password=odoo -u pos_reparto_viaje --test-enable --test-tags /pos_reparto_viaje --stop-after-init
-docker compose up -d odoo
+docker compose -p odooerp_dist stop odoo
+MSYS_NO_PATHCONV=1 docker compose -p odooerp_dist run --rm odoo odoo server -d odoo --db_host=db --db_user=odoo --db_password=odoo -u pos_reparto_viaje --test-enable --test-tags /pos_reparto_viaje --stop-after-init
+docker compose -p odooerp_dist up -d odoo
 ```
 Expected: 4 tests, todos en verde.
 
@@ -299,8 +306,12 @@ git commit -m "pos_reparto_viaje: modelo completo con compute y constraint"
 **Files:**
 - Create: `addons/pos_reparto_viaje/security/ir.model.access.csv`
 - Create: `addons/pos_reparto_viaje/security/reparto_viaje_rules.xml`
+- Create: `addons/pos_reparto_viaje/models/ir_rule.py`
+- Modify: `addons/pos_reparto_viaje/models/__init__.py`
 - Modify: `addons/pos_reparto_viaje/__manifest__.py`
 - Modify: `addons/pos_reparto_viaje/tests/test_reparto_viaje.py`
+
+**Corrección real de ejecución:** `context_today()` NO está disponible en el contexto de evaluación de `domain_force` de `ir.rule` en este Odoo 19 (a diferencia de los dominios de vistas de búsqueda, que se evalúan con un intérprete distinto en el cliente web y sí lo tienen). `ir.rule._eval_context()` (base) solo expone `user`/`company_id`/`company_ids` — usar `context_today()` ahí revienta con `NameError` al cargar el módulo. Por eso este task agrega `models/ir_rule.py`, que hereda `ir.rule` y agrega `today` al contexto (mismo patrón que usa el core en `website/models/ir_rule.py` para agregar `website`), y los dominios usan `today` directo en vez de `context_today().strftime(...)`.
 
 - [ ] **Step 1: CSV de accesos base**
 
@@ -325,18 +336,48 @@ Nota: a diferencia de `pos_reparto_security` (que restringe modelos ya existente
     <record id="rule_reparto_viaje_vendedor" model="ir.rule">
         <field name="name">Vendedor Reparto: solo su viaje de hoy</field>
         <field name="model_id" ref="model_reparto_viaje"/>
-        <field name="domain_force">[('chofer_id', '=', user.id), ('fecha', '=', context_today().strftime('%Y-%m-%d'))]</field>
+        <field name="domain_force">[('chofer_id', '=', user.id), ('fecha', '=', today)]</field>
         <field name="groups" eval="[(4, ref('pos_reparto_security.group_reparto_vendedor'))]"/>
     </record>
 
     <record id="rule_reparto_viaje_parada_vendedor" model="ir.rule">
         <field name="name">Vendedor Reparto: solo paradas de su viaje de hoy</field>
         <field name="model_id" ref="model_reparto_viaje_parada"/>
-        <field name="domain_force">[('viaje_id.chofer_id', '=', user.id), ('viaje_id.fecha', '=', context_today().strftime('%Y-%m-%d'))]</field>
+        <field name="domain_force">[('viaje_id.chofer_id', '=', user.id), ('viaje_id.fecha', '=', today)]</field>
         <field name="groups" eval="[(4, ref('pos_reparto_security.group_reparto_vendedor'))]"/>
     </record>
 </odoo>
 ```
+
+- [ ] **Step 2bis: Override de `ir.rule` para exponer `today` al dominio**
+
+`addons/pos_reparto_viaje/models/ir_rule.py`:
+```python
+from odoo import api, fields, models
+
+
+class IrRule(models.Model):
+    _inherit = 'ir.rule'
+
+    @api.model
+    def _eval_context(self):
+        result = super()._eval_context()
+        result['today'] = fields.Date.context_today(self)
+        return result
+```
+
+Reemplazar en `addons/pos_reparto_viaje/models/__init__.py`:
+```python
+from . import reparto_viaje
+from . import pos_order
+```
+por:
+```python
+from . import ir_rule
+from . import reparto_viaje
+from . import pos_order
+```
+(si `pos_order` todavía no existe en este archivo porque el Task 4 no corrió antes que este, dejar solo la línea de `reparto_viaje`; el orden entre `ir_rule` y los demás no importa.)
 
 - [ ] **Step 3: Agregar los 2 archivos a `data` en el manifest**
 
@@ -351,6 +392,8 @@ por:
         'security/reparto_viaje_rules.xml',
     ],
 ```
+
+**Corrección real adicional:** `pos_reparto_security` ya restringe `res.partner` para el grupo Vendedor a "solo mis clientes" (`user_id = user.id`). `get_mi_viaje_hoy()` lee `parada.partner_id.name`, así que `cliente_a`/`cliente_b` en `setUpClass` necesitan `user_id=cls.chofer_1.id` para que el chofer pueda leerlos — si no, `test_get_mi_viaje_hoy_devuelve_paradas_propias` falla con `AccessError`. Agregar ese campo a los dos `create()` de partners en `setUpClass` (ver Task 2 para dónde están esas líneas).
 
 - [ ] **Step 4: Agregar los tests que dependen del ACL/reglas (acceso + `get_mi_viaje_hoy` + `action_abrir_pos`)**
 
@@ -409,16 +452,16 @@ Agregar al final de la clase `TestRepartoViaje` en `addons/pos_reparto_viaje/tes
 
 Run:
 ```bash
-docker compose stop odoo
-docker compose run --rm odoo odoo server -d odoo --db_host=db --db_user=odoo --db_password=odoo -u pos_reparto_viaje --test-enable --test-tags /pos_reparto_viaje --stop-after-init
-docker compose up -d odoo
+docker compose -p odooerp_dist stop odoo
+MSYS_NO_PATHCONV=1 docker compose -p odooerp_dist run --rm odoo odoo server -d odoo --db_host=db --db_user=odoo --db_password=odoo -u pos_reparto_viaje --test-enable --test-tags /pos_reparto_viaje --stop-after-init
+docker compose -p odooerp_dist up -d odoo
 ```
 Expected: 12 tests, todos en verde.
 
 - [ ] **Step 6: Commit**
 
 ```bash
-git add addons/pos_reparto_viaje/security/ addons/pos_reparto_viaje/__manifest__.py addons/pos_reparto_viaje/tests/test_reparto_viaje.py
+git add addons/pos_reparto_viaje/security/ addons/pos_reparto_viaje/models/ir_rule.py addons/pos_reparto_viaje/models/__init__.py addons/pos_reparto_viaje/__manifest__.py addons/pos_reparto_viaje/tests/test_reparto_viaje.py
 git commit -m "pos_reparto_viaje: ACL y regla de acceso del chofer a su viaje de hoy"
 ```
 
@@ -541,9 +584,9 @@ Agregar al final de la clase `TestRepartoViaje`:
 
 Run:
 ```bash
-docker compose stop odoo
-docker compose run --rm odoo odoo server -d odoo --db_host=db --db_user=odoo --db_password=odoo -u pos_reparto_viaje --test-enable --test-tags /pos_reparto_viaje --stop-after-init
-docker compose up -d odoo
+docker compose -p odooerp_dist stop odoo
+MSYS_NO_PATHCONV=1 docker compose -p odooerp_dist run --rm odoo odoo server -d odoo --db_host=db --db_user=odoo --db_password=odoo -u pos_reparto_viaje --test-enable --test-tags /pos_reparto_viaje --stop-after-init
+docker compose -p odooerp_dist up -d odoo
 ```
 Expected: 16 tests, todos en verde. Si `_crear_pedido` falla por un campo requerido de `pos.order` que no está en esta lista (puede variar según la config exacta del `pos.config` elegido), el mensaje de error de Odoo dice cuál falta — agregarlo con un valor mínimo válido.
 
@@ -640,8 +683,8 @@ git commit -m "pos_reparto_viaje: auto-tick de parada al crear pos.order"
                 <field name="chofer_id"/>
                 <field name="fecha"/>
                 <filter name="filter_hoy" string="Hoy" domain="[('fecha', '=', context_today().strftime('%Y-%m-%d'))]"/>
-                <group expand="0" string="Agrupar por">
-                    <filter name="groupby_chofer" string="Chofer" context="{'group_by': 'chofer_id'}"/>
+                <group>
+                    <filter name="groupby_chofer" string="Chofer" domain="[]" context="{'group_by': 'chofer_id'}"/>
                 </group>
             </search>
         </field>
@@ -697,7 +740,7 @@ Agregar al final de la clase `TestRepartoViaje`:
         search_view = self.env.ref('pos_reparto_viaje.view_reparto_viaje_search')
         arch = etree.fromstring(search_view.arch)
         filtro_hoy = arch.find(".//filter[@name='filter_hoy']")
-        domain = safe_eval(filtro_hoy.get('domain'), {'context_today': fields.Date.context_today})
+        domain = safe_eval(filtro_hoy.get('domain'), {'context_today': lambda: fields.Date.context_today(self.env.user)})
 
         encontrados = self.env['reparto.viaje'].with_user(self.admin_op).search(domain)
         self.assertEqual(len(encontrados), 1)
@@ -708,9 +751,9 @@ Agregar al final de la clase `TestRepartoViaje`:
 
 Run:
 ```bash
-docker compose stop odoo
-docker compose run --rm odoo odoo server -d odoo --db_host=db --db_user=odoo --db_password=odoo -u pos_reparto_viaje --test-enable --test-tags /pos_reparto_viaje --stop-after-init
-docker compose up -d odoo
+docker compose -p odooerp_dist stop odoo
+MSYS_NO_PATHCONV=1 docker compose -p odooerp_dist run --rm odoo odoo server -d odoo --db_host=db --db_user=odoo --db_password=odoo -u pos_reparto_viaje --test-enable --test-tags /pos_reparto_viaje --stop-after-init
+docker compose -p odooerp_dist up -d odoo
 ```
 Expected: 17 tests, todos en verde.
 
@@ -777,7 +820,7 @@ Agregar al final de la clase `TestRepartoViaje`:
     def test_menu_viaje_es_raiz_y_solo_grupo_vendedor(self):
         menu = self.env.ref('pos_reparto_viaje.menu_reparto_viaje_chofer')
         self.assertFalse(menu.parent_id)
-        self.assertEqual(menu.groups_id, self.group_vendedor)
+        self.assertEqual(menu.group_ids, self.group_vendedor)
 
     def test_admin_operativa_no_ve_el_menu_viaje_de_chofer(self):
         menu = self.env.ref('pos_reparto_viaje.menu_reparto_viaje_chofer')
@@ -794,9 +837,9 @@ Agregar al final de la clase `TestRepartoViaje`:
 
 Run:
 ```bash
-docker compose stop odoo
-docker compose run --rm odoo odoo server -d odoo --db_host=db --db_user=odoo --db_password=odoo -u pos_reparto_viaje --test-enable --test-tags /pos_reparto_viaje --stop-after-init
-docker compose up -d odoo
+docker compose -p odooerp_dist stop odoo
+MSYS_NO_PATHCONV=1 docker compose -p odooerp_dist run --rm odoo odoo server -d odoo --db_host=db --db_user=odoo --db_password=odoo -u pos_reparto_viaje --test-enable --test-tags /pos_reparto_viaje --stop-after-init
+docker compose -p odooerp_dist up -d odoo
 ```
 Expected: 20 tests, todos en verde.
 
@@ -951,9 +994,9 @@ por:
 
 Run:
 ```bash
-docker compose stop odoo
-docker compose run --rm odoo odoo server -d odoo --db_host=db --db_user=odoo --db_password=odoo -u pos_reparto_viaje --test-enable --test-tags /pos_reparto_viaje --stop-after-init
-docker compose up -d odoo
+docker compose -p odooerp_dist stop odoo
+MSYS_NO_PATHCONV=1 docker compose -p odooerp_dist run --rm odoo odoo server -d odoo --db_host=db --db_user=odoo --db_password=odoo -u pos_reparto_viaje --test-enable --test-tags /pos_reparto_viaje --stop-after-init
+docker compose -p odooerp_dist up -d odoo
 ```
 Expected: 20 tests, todos en verde (sin regresión), sin errores de carga de assets en el log.
 
@@ -1024,9 +1067,9 @@ por:
 
 Run:
 ```bash
-docker compose stop odoo
-docker compose run --rm odoo odoo server -d odoo --db_host=db --db_user=odoo --db_password=odoo -u pos_reparto_viaje --test-enable --test-tags /pos_reparto_viaje --stop-after-init
-docker compose up -d odoo
+docker compose -p odooerp_dist stop odoo
+MSYS_NO_PATHCONV=1 docker compose -p odooerp_dist run --rm odoo odoo server -d odoo --db_host=db --db_user=odoo --db_password=odoo -u pos_reparto_viaje --test-enable --test-tags /pos_reparto_viaje --stop-after-init
+docker compose -p odooerp_dist up -d odoo
 ```
 Expected: 20 tests, todos en verde.
 
@@ -1061,7 +1104,7 @@ Cargar y cobrar un pedido para ese cliente. Volver a la pantalla de Inicio → V
 
 - [ ] **Step 5: Verificar el caso offline (regresión sobre lo ya documentado en `ESTADO_PROYECTO.md` §7)**
 
-Repetir el flujo cortando la conexión (`docker compose stop odoo`) antes de cobrar, cobrar offline, reconectar (`docker compose start odoo`) y reabrir la sesión de POS. Confirmar que el auto-tick corre igual al sincronizar (usa `date_order`, no la fecha de sincronización — ver Task 4).
+Repetir el flujo cortando la conexión (`docker compose -p odooerp_dist stop odoo`) antes de cobrar, cobrar offline, reconectar (`docker compose -p odooerp_dist start odoo`) y reabrir la sesión de POS. Confirmar que el auto-tick corre igual al sincronizar (usa `date_order`, no la fecha de sincronización — ver Task 4).
 
 - [ ] **Step 6: Si algo no anda como se espera, documentarlo como deuda técnica o bug antes de seguir** (no hay código que commitear en este task si todo funciona).
 

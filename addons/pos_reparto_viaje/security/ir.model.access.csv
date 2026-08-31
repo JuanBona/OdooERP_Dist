@@ -1,0 +1,7 @@
+id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
+access_reparto_viaje_vendedor,reparto.viaje.vendedor,model_reparto_viaje,pos_reparto_security.group_reparto_vendedor,1,0,0,0
+access_reparto_viaje_adminop,reparto.viaje.adminop,model_reparto_viaje,pos_reparto_security.group_reparto_adminop,1,1,1,1
+access_reparto_viaje_gerencia,reparto.viaje.gerencia,model_reparto_viaje,pos_reparto_security.group_reparto_gerencia,1,1,1,1
+access_reparto_viaje_parada_vendedor,reparto.viaje.parada.vendedor,model_reparto_viaje_parada,pos_reparto_security.group_reparto_vendedor,1,0,0,0
+access_reparto_viaje_parada_adminop,reparto.viaje.parada.adminop,model_reparto_viaje_parada,pos_reparto_security.group_reparto_adminop,1,1,1,1
+access_reparto_viaje_parada_gerencia,reparto.viaje.parada.gerencia,model_reparto_viaje_parada,pos_reparto_security.group_reparto_gerencia,1,1,1,1

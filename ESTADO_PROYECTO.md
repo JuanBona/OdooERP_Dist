@@ -135,6 +135,35 @@ Qué hace: reemplaza el landing post-login (antes caía en Discuss) por una gril
 
 Spec: `docs/superpowers/specs/2026-08-25-pos-reparto-home-design.md`. Plan: `docs/superpowers/plans/2026-08-25-pos-reparto-home.md`.
 
+## 5sexies. Módulo custom: `pos_reparto_viaje`
+
+Ubicación: `addons/pos_reparto_viaje/`. Instalado en el worktree de la rama `feature/pos-reparto-viaje` (branch real de trabajo: `worktree-pos-reparto-viaje`, todavía no mergeada a `main` al cierre de esta sesión). Depende de `point_of_sale` y `pos_reparto_security`.
+
+Qué hace: implementa la feature "Viaje" (hoja de ruta) del relevamiento v2.0 — Admin Operativa/Gerencia arman a mano, para un chofer y una fecha, la lista de clientes a visitar ese día; el chofer la ve como checklist táctil y se tilda sola al generar cada pedido.
+
+- **Modelos** `reparto.viaje` (`fecha`, `chofer_id`, `pos_config_id`, `parada_ids`, computados `paradas_totales`/`paradas_completadas`/`progreso`, constraint única `(chofer_id, fecha)`) y `reparto.viaje.parada` (`viaje_id`, `partner_id`, `visitado`, `pedido_id`). Sin orden entre paradas (decisión explícita, no es ruta optimizada).
+- **Auto-tick**: override de `pos.order.create()` que busca la parada pendiente que matchee chofer+fecha+cliente y la marca visitada — usa `order.date_order` (fecha real de la venta), no la fecha de sincronización, para no romper con pedidos offline sincronizados tarde.
+- **Deep-link a POS**: tocar una parada en la pantalla del chofer llama a `action_abrir_pos()` (extiende la URL de `pos.config.open_ui()` con `&reparto_partner_id=<id>`), y un patch de `PosStore` en el frontend de POS lee ese query param al arrancar y preselecciona el cliente en la orden nueva.
+- **Pantalla del chofer**: client action OWL nueva, aparece sola como tile en la grilla de `pos_reparto_home` (mismo mecanismo genérico por menú raíz, sin declarar dependencia entre módulos).
+- **Panel de Admin**: vista Kanban en menú Punto de Venta → Viajes, filtrada a "Hoy" por defecto, con barra de progreso por chofer.
+- 20 tests automáticos, todos en verde. Construido con `superpowers:subagent-driven-development` (implementador + spec review + code review por task, 10 tasks).
+
+**Deuda técnica aceptada**: un mismo cliente en 2 viajes de choferes distintos el mismo día no está bloqueado (caso raro, carga manual duplicada).
+
+**Task 9 (verificación manual en navegador) — hecha el 2026-08-31.** Flujo probado end-to-end como usuario real (`chofer_viaje_manual_test`, grupo Vendedor): tile "Viaje" en Inicio → lista de paradas → tocar parada abre POS Camión 1 con el cliente ya preseleccionado → cobrar → volver a Inicio/Viaje muestra la parada tildada sola (auto-tick) → panel de Admin (Punto de Venta → Viajes) refleja el progreso actualizado (1/2, 50%). No se repitió el caso offline de la sección 7 específicamente para este módulo (queda como regresión pendiente, no bloqueante — el mecanismo de auto-tick ya usa `date_order` para cubrir ese escenario, ver sección 5sexies).
+
+Dos bugs reales encontrados y arreglados durante la verificación:
+1. **`pos_store.js`** (`pos_reparto_viaje`): el patch de `PosStore.setup()` asumía que ya existía una orden al momento de preseleccionar el cliente; `this.getOrder()` puede ser `undefined` ahí. Fix: `getOrder() || addNewOrder()`.
+2. **`pos_reparto_security`** — bug más serio, no específico de este módulo: la regla de Vendedor sobre `res.partner` (`user_id = user.id`, "solo mis clientes") bloqueaba sin querer el **propio contacto vinculado del vendedor**, porque nadie lo asigna como Salesperson de sí mismo. Como `res.users.name` (y otros campos) son `related` a `partner_id.*`, esto rompía la lectura de `res.users` para cualquier usuario del grupo Vendedor — lo que a su vez rompía abrir **cualquier** sesión de POS (el popup "Opening Control" de Odoo no podía resolver el cashier y crasheaba). Fix: la regla ahora es `['|', ('user_id','=',user.id), ('id','=',user.partner_id.id)]`. Cubierto por un test nuevo (`test_vendedor_puede_leer_su_propio_contacto`). Este bug afecta a **cualquier** usuario del grupo Vendedor en **cualquier** POS, no solo en el flujo de Viaje — ya estaba latente desde que se creó `pos_reparto_security`, simplemente nunca se había probado abrir una sesión de POS real con un usuario de ese grupo hasta ahora.
+
+**Mergeado a `main` — pendiente, ver `superpowers:finishing-a-development-branch`.**
+
+**Incidente 2026-08-29 (ya resuelto, dejado por historial):** el volumen de Postgres compartido se vació durante la verificación del Task 5 de este módulo. Recuperado reinstalando los módulos custom. El catálogo real de productos y los usuarios placeholder de `pos_reparto_security` se perdieron en ese incidente y siguen sin recargar (ver ítem de datos maestros pendientes más abajo) — la base actual tiene datos de prueba al azar (50 clientes, 50 productos), no el catálogo real del cliente.
+
+**Nota operativa (encontrada 2026-08-31, importante para cualquiera que retome este proyecto):** los comandos `docker compose` para este proyecto **deben correrse desde el directorio de este worktree**, no desde el checkout principal. El `docker-compose.yml` usa un bind mount relativo (`./addons`), así que si se corre `docker compose -p odooerp_dist up -d odoo` desde otro directorio (aunque se use el mismo `-p` para reusar la base), el mount de `/mnt/extra-addons` se recalcula contra ESE directorio y el container termina sirviendo un `addons/` distinto — silenciosamente, sin error. Eso pasó en esta sesión y causó horas de debugging (el módulo parecía "perder" su ACL/vistas/menú en cada reinstall, cuando en realidad estaba instalando una copia vieja y sin trackear que quedó suelta en `addons/pos_reparto_viaje/` del repo principal). Antes de reinstalar/actualizar cualquier módulo, correr `docker inspect odooerp_dist-odoo-1 --format "{{json .Mounts}}"` y confirmar que el `Source` del bind mount apunta al worktree correcto.
+
+Spec: `docs/superpowers/specs/2026-08-29-pos-reparto-viaje-design.md`. Plan: `docs/superpowers/plans/2026-08-29-pos-reparto-viaje.md`.
+
 ## 6. Facturación (ARCA/AFIP) — **DECISIÓN OBSOLETA, ver relevamiento v2.0**
 
 ~~Decisión tomada: por ahora, factura local de Odoo sin timbrar (Factura A/B/C interna, sin conexión a los webservices de ARCA).~~
@@ -176,32 +205,31 @@ Configurado servidor MCP `odoo` en Claude Code (`claude mcp add odoo ...`), modo
 
 ## 9. Pendiente / próximos pasos
 
-**Hecho hasta ahora** (relevamiento v2.0, `Relevamiento_Requerimientos_Odoo_Reparto.docx`): `pos_reparto_security` (4 roles + reglas de acceso, sección 5bis), `pos_reparto_credito` (alerta 15 días, sección 5ter), `pos_reparto_branding` (personalización visual, 5quater), `pos_reparto_home` (pantalla de inicio táctil, 5quinquies). Todo en `main`.
+**Hecho hasta ahora** (relevamiento v2.0, `Relevamiento_Requerimientos_Odoo_Reparto.docx`): `pos_reparto_security` (4 roles + reglas de acceso, sección 5bis), `pos_reparto_credito` (alerta 15 días, sección 5ter), `pos_reparto_branding` (personalización visual, 5quater), `pos_reparto_home` (pantalla de inicio táctil, 5quinquies), `pos_reparto_remito` (remito interno QWeb — mergeado a `main` por el compañero). Todo en `main`. `pos_reparto_viaje` (hoja de ruta, sección 5sexies) completo y verificado, falta merge.
 
 **Gaps Must/Should que quedan del relevamiento v2.0** (ver detalle y justificación en memoria `project-reparto-v2-requirements`, o repreguntar al cliente si hace falta el docx):
 
-1. Remito interno QWeb (hoja de pedido/entrega, sin valor fiscal — reemplaza a la factura, ver sección 6).
-2. Descuentos por volumen parametrizables por producto (ej. 4%/8%/12% según cantidad) + override manual en el renglón (RF-PV-09).
+1. ~~Remito interno QWeb~~ — hecho, mergeado a `main` (módulo `pos_reparto_remito`).
+2. Descuentos por volumen parametrizables por producto (ej. 4%/8%/12% según cantidad) + override manual en el renglón (RF-PV-09). **Rama `feature/pos-reparto-descuentos-volumen` ya existe en el remoto** — en curso por alguien, confirmar con el compañero antes de tomarlo.
 3. Comisiones sobre pedidos generados en el día, no sobre el cobro (RF-GV-03) — evaluar módulo OCA `commission` (github.com/OCA/commission).
-4. Feature "Viaje": hoja de ruta que Administración/Depósito arma antes de que el fletero salga a repartir (lista de clientes a visitar del día). Todavía sin diseño — pasar primero por `superpowers:brainstorming` antes de escribir código.
+4. ~~Feature "Viaje"~~ — hecho y verificado (Task 9 completa 2026-08-31), ver sección 5sexies. Falta solo el merge a `main`.
 5. Criterio "2 visitas consecutivas sin cobro" de `pos_reparto_credito` (hoy solo días sin pago, ver deuda técnica en 5ter).
 6. Productos habituales por cliente / venta sugerida (Should).
 7. Integración Google Maps para secuenciar recorrido (Should, requiere API paga).
 8. Reconexión automática de sync offline en POS — listener del evento `online` del navegador (ver sección 7, estimado una tarde, no bloqueante).
 
-**Datos maestros pendientes** (no es código, es carga manual):
-- Cargar excel `Clientes_Ordenados_por_Codigo.xlsx` (clientes reales) — todavía no se cargó.
-- Reemplazar los 4 usuarios placeholder de `pos_reparto_security` (`vendedor@reparto.local` etc., pass `Reparto2026!`) por personas reales del cliente, y asignar `user_id` (vendedor) en cada `res.partner` real.
+**Datos maestros pendientes** (no es código, es carga manual — **ampliado tras el incidente del 2026-08-29, ver sección 5sexies**: el catálogo de 182 productos, clientes reales, 2 pos.config originales y los 4 usuarios placeholder se perdieron y hay que recargarlos de cero, no solo completar lo que faltaba):
+- Recargar el excel `Lista_Precios_Rincon_Del_Sur_Peyrano.xlsx` (productos, ver convención de carga en memoria `project-reparto-catalogo-productos`) — se perdió con el reset.
+- Recrear las 2 configuraciones de POS ("Punto de Venta Reparto" con `ship_later`, "POS Camión 1" con ubicación propia — ver sección 4) — se perdió con el reset, solo queda un `pos.config` mínimo de prueba (id 1, sin la config de camión/ship_later).
+- Cargar excel `Clientes_Ordenados_por_Codigo.xlsx` (clientes reales) — todavía no se cargó (esto ya estaba pendiente antes del incidente).
+- Recrear los 4 usuarios placeholder de `pos_reparto_security` (`vendedor@reparto.local` etc., pass `Reparto2026!`) — se perdieron con el reset — y cuando haya datos reales, reemplazarlos por personas reales del cliente y asignar `user_id` (vendedor) en cada `res.partner` real.
 
-### División de trabajo (2026-08-29)
+### División de trabajo (actualizado 2026-08-31)
 
-Para laburar en paralelo sin pisarnos archivos:
+- **Juan**: ítem 4 (feature "Viaje") **completo y verificado** — 10/10 tasks del plan, 20 tests en verde, verificación manual en navegador hecha (ver sección 5sexies). **Falta: merge a `main` vía `superpowers:finishing-a-development-branch`.** Después de mergear, seguir con ítem 3 (comisiones) o ítem 5 (criterio de 2 visitas), ya que ítem 2 (descuentos por volumen) parece que ya lo tomó el compañero (ver más abajo).
+- **Compañero**: terminó ítem 1 (remito interno QWeb, mergeado a `main`) y arrancó ítem 2 (descuentos por volumen) — hay una rama `feature/pos-reparto-descuentos-volumen` en el remoto. Confirmar estado con él antes de que alguien más lo toque.
 
-- **Juan (esta sesión)**: sigue con **ítem 4, feature "Viaje"** (hoja de ruta). Rama `feature/pos-reparto-viaje` desde `main`. Tiene sentido que lo siga yo porque se apoya en los roles/tiles de `pos_reparto_security`/`pos_reparto_home` que ya construí. **En curso: brainstorming del diseño (`superpowers:brainstorming`), todavía sin spec escrita ni código.** No arrancar a codear esta feature hasta que exista el doc en `docs/superpowers/specs/` — si retomás vos esta rama, primero chequeá si ese doc ya existe.
-  - Decidido hasta ahora (2026-08-29): Admin Operativa/Gerencia arman el viaje eligiendo clientes a mano (sin filtro automático por zona/día), un viaje = un chofer (Vendedor) + una fecha. Módulo nuevo `pos_reparto_viaje`, depende de `point_of_sale` + `pos_reparto_security`. Modelo `reparto.viaje` (fecha, chofer_id, pos_config_id, computados paradas_totales/paradas_completadas/progreso, constraint única chofer_id+fecha) + `reparto.viaje.parada` (viaje_id, partner_id, visitado, pedido_id) — sin orden/secuencia entre paradas. El chofer ve solo el viaje de HOY como tile en pantalla de Inicio; tocar una parada abre una sesión de POS nueva con ese cliente preseleccionado (mecanismo: query param + patch JS, mismo patrón que `pos_reparto_credito`); la parada se tilda **sola** al generar el pedido (sin acción manual). Admin/Gerencia tienen panel de progreso del día (viajes de todos los choferes con % completado). Todavía falta cerrar: UX de las 2 pantallas (chofer y admin) y detalle técnico del deep-link a POS + testing — retomar el brainstorming donde quedó, no reempezar de cero.
-- **Compañero**: arranca con **ítem 1, remito interno QWeb**. Es autocontenido (plantilla de reporte, no toca los módulos de roles/crédito/home/viaje), bajo riesgo de choque de merge, y buen punto de entrada al código para alguien que no tocó el repo todavía. Rama sugerida: `feature/pos-reparto-remito` desde `main`. Antes de codear, pasar por `superpowers:brainstorming` igual que se hizo con los módulos anteriores (ver specs en `docs/superpowers/specs/` como ejemplo). Referencia de arquitectura: `ADR-001-arquitectura-toma-pedido.md` (por qué seguimos sobre POS y no `sale.order`, punto 4 de la decisión menciona directo el remito).
-
-Cuando alguno termine su feature y mergee a `main`, actualizar esta sección con el siguiente ítem de la lista de gaps de arriba (orden sugerido: ítem 2, después 3, después 5).
+Cuando alguno termine su feature y mergee a `main`, actualizar esta sección con el siguiente ítem de la lista de gaps de arriba.
 
 ---
 
