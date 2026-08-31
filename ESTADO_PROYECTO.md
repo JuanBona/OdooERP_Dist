@@ -135,6 +135,22 @@ Qué hace: reemplaza el landing post-login (antes caía en Discuss) por una gril
 
 Spec: `docs/superpowers/specs/2026-08-25-pos-reparto-home-design.md`. Plan: `docs/superpowers/plans/2026-08-25-pos-reparto-home.md`.
 
+## 5sexies. Módulo custom: `pos_reparto_descuento_volumen`
+
+Ubicación: `addons/pos_reparto_descuento_volumen/`. Depende de `point_of_sale`, `pos_reparto_security`, `pos_reparto_pricelist`. Cubre **RF-PV-09** (descuentos automáticos por volumen parametrizables por producto + override manual en el renglón, con permisos). Rama `feature/pos-reparto-descuentos-volumen` (pendiente de merge a `main`).
+
+Qué hace:
+
+- **Descuento por volumen por producto**: los tramos son `product.pricelist.item` sobre la lista "Default" (`compute_price='percentage'`, `min_quantity`, `percent_price`, `base='list_price'`). **Sin modelo nuevo** — el motor de precios nativo los aplica, también offline en el POS. Se cargan desde una pestaña "Descuentos por volumen" en el form del producto (un `One2many` de conveniencia `reparto_volumen_item_ids` que inyecta los defaults, así el usuario solo tipea cantidad y %) y se revisan desde el menú Punto de Venta → Configuración → Descuentos por volumen (lista los productos con al menos un tramo). Pestaña y menú visibles solo para Admin Operativa / Gerencia; un `ir.model.access.csv` les da CRUD sobre `product.pricelist.item`. En Odoo 19 la lista "Default" no tiene xmlid (`product.list0` fue removido) — se resuelve por búsqueda `[('company_id','in',[company,False])]`, igual que `pos_reparto_pricelist`.
+- **Aviso en el POS** (overrides OWL del `Orderline`): bajo cada renglón cuyo producto tiene tramos, un bloque lista **todos** los tramos (`10+ u → 4% · 20+ u → 8%`) y resalta el activo según la cantidad. Además, un **toast no bloqueante** avisa cuando falta poco (`≤ max(3, 20% del umbral)`) para el próximo tramo, una vez por (línea, tramo), con debounce de 400 ms y reset al alejarse. Los `product.pricelist.item` ya viajan al frontend del POS en la carga inicial (core), así que todo anda offline.
+- **Override manual restringido a Admin Operativa / Gerencia** (decisión "A" del spec): los botones "%" y "Precio" del numpad se ocultan para los demás roles (patch de `ProductScreen.getNumpadButtons`, usando un flag `_reparto_puede_override` que el módulo agrega a la carga de `res.users` al POS). El **enforcement real** es un guard en `pos.order.create` (patrón de `pos_stock_limit`): rechaza con `UserError` cualquier línea con `discount > 0` o `price_unit` por debajo del precio de lista si el cajero no es Admin/Gerencia. Cubre el sync offline. El descuento por volumen legítimo no lo dispara (viene como `price_unit` = precio de lista, `float_compare == 0`).
+
+Fuera de alcance (ver spec): descuento agregado por orden, tope de override para Vendedor, descuento en la columna "Desc.%" nativa, descuentos por categoría, escala global por defecto.
+
+9 tests Python en verde (`tests/test_descuento_volumen.py`): One2many + defaults, escala de precios con el motor nativo, dominio del menú, guard de override en sus 4 casos, flag de rol en la carga POS. El bloque de tramos, el toast y el ocultado de botones se verifican en navegador (documentado en el plan).
+
+Spec: `docs/superpowers/specs/2026-08-31-pos-reparto-descuento-volumen-design.md`. Plan: `docs/superpowers/plans/2026-08-31-pos-reparto-descuento-volumen.md`.
+
 ## 6. Facturación (ARCA/AFIP) — **DECISIÓN OBSOLETA, ver relevamiento v2.0**
 
 ~~Decisión tomada: por ahora, factura local de Odoo sin timbrar (Factura A/B/C interna, sin conexión a los webservices de ARCA).~~
@@ -181,7 +197,7 @@ Configurado servidor MCP `odoo` en Claude Code (`claude mcp add odoo ...`), modo
 **Gaps Must/Should que quedan del relevamiento v2.0** (ver detalle y justificación en memoria `project-reparto-v2-requirements`, o repreguntar al cliente si hace falta el docx):
 
 1. Remito interno QWeb (hoja de pedido/entrega, sin valor fiscal — reemplaza a la factura, ver sección 6).
-2. Descuentos por volumen parametrizables por producto (ej. 4%/8%/12% según cantidad) + override manual en el renglón (RF-PV-09).
+2. ~~Descuentos por volumen parametrizables por producto (ej. 4%/8%/12% según cantidad) + override manual en el renglón (RF-PV-09).~~ **Hecho** — `pos_reparto_descuento_volumen` (sección 5sexies), rama `feature/pos-reparto-descuentos-volumen`, pendiente de merge a `main`.
 3. Comisiones sobre pedidos generados en el día, no sobre el cobro (RF-GV-03) — evaluar módulo OCA `commission` (github.com/OCA/commission).
 4. Feature "Viaje": hoja de ruta que Administración/Depósito arma antes de que el fletero salga a repartir (lista de clientes a visitar del día). Todavía sin diseño — pasar primero por `superpowers:brainstorming` antes de escribir código.
 5. Criterio "2 visitas consecutivas sin cobro" de `pos_reparto_credito` (hoy solo días sin pago, ver deuda técnica en 5ter).

@@ -1306,3 +1306,22 @@ Sin huecos.
 - `repartoVolumenTramos` — getter definido en Task 8, reusado en Task 9 (`this.repartoVolumenTramos`). Task 9 Step 2 reemplaza el archivo completo de Task 8 conservando el getter con el mismo nombre y forma (`{minQty, percent, activo}`).
 - `_reparto_check_override_manual` / `_reparto_resolver_cajero` / `_reparto_resolver_pricelist` — definidos y usados solo dentro de `models/pos_order.py` (Task 5).
 - `GRUPOS_OVERRIDE` — constante local en `pos_order.py` (Task 5) y en `res_users.py` (Task 6); son módulos distintos, no se importan entre sí, la duplicación es deliberada y mínima.
+
+---
+
+## Desviaciones durante la ejecución (2026-08-31)
+
+Ajustes hechos al ejecutar el plan; todos preservan la intención del spec.
+
+- **Task 2 — `product.list0` no existe en Odoo 19.** El xmlid de la lista "Default" fue removido. Se agregó un helper `product.template._reparto_volumen_pricelist()` que la resuelve por búsqueda `search([('company_id','in',[company,False])], order='id', limit=1)` (misma idiom que `pos_reparto_pricelist`); el `domain` del One2many, `_reparto_volumen_item_defaults` y el `setUpClass` del test lo usan en vez de `env.ref('product.list0')`.
+- **Task 2 — restricción de grupo en la vista.** En Odoo 19 `ir.ui.view` renombró `groups_id` → `group_ids`, y además prohíbe el campo de grupos a nivel record en una vista heredada. La restricción quedó como atributo `groups="pos_reparto_security.group_reparto_adminop,pos_reparto_security.group_reparto_gerencia"` en el `<page>`. Efecto idéntico.
+- **Task 4 — test del dominio.** Se resolvió con `self.env['ir.actions.act_window']._for_xml_id(...)` + `safe_eval` del `domain`; se descartó la línea tentativa con `_get_eval_context`.
+- **Task 5 — tests del guard.** Llaman `_reparto_check_override_manual(vals)` directamente (aísla el guard de la maquinaria de `pos.session`/`pos.order.create`), en vez de crear una orden completa. Los 4 casos (2 bloquean, 2 permiten) quedan igual de cubiertos.
+- **Task 6 — helper `_pos_config`.** Se agregó al archivo de tests (no existía).
+- **Task 9 — sin reescritura de `orderline.js`.** Todo el toast (incluido el `setup()` con `useEffect` sobre `line.qty`) quedó en `volume_toast.js`, que patchea `Orderline.prototype` en un segundo `patch()`. `orderline.js` (Task 8) quedó intacto con solo el getter `repartoVolumenTramos`. Menos churn, mismo comportamiento.
+
+## Resultado
+
+- 9 tests Python del módulo en verde. Regresión de `pos_reparto_credito` / `pos_reparto_home` / `pos_reparto_security`: 25/25 en verde.
+- Comportamiento JS del POS (bloque de tramos, toast, ocultado de botones %/Precio) **pendiente de verificación en navegador** — sin infra de test JS en el proyecto, igual criterio que `pos_reparto_credito`.
+- Commits en `feature/pos-reparto-descuentos-volumen`: `3b8e325` (skeleton), `9796f0e` (One2many + pestaña), `ef5c4e0` (test escala), `1897d0a` (menú), `8c9cc77` (guard), `d119a9a` (flag rol), `9384018` (numpad gate JS), `b3a4bda` (bloque de tramos JS), `425e713` (toast JS).
