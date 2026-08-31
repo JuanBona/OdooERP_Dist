@@ -1,0 +1,3 @@
+id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
+access_pricelist_item_reparto_adminop,product.pricelist.item reparto adminop,product.model_product_pricelist_item,pos_reparto_security.group_reparto_adminop,1,1,1,1
+access_pricelist_item_reparto_gerencia,product.pricelist.item reparto gerencia,product.model_product_pricelist_item,pos_reparto_security.group_reparto_gerencia,1,1,1,1
