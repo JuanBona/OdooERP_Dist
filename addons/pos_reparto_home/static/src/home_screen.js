@@ -9,6 +9,7 @@ export class RepartoHomeScreen extends Component {
 
     setup() {
         this.actionService = useService("action");
+        this.menuService = useService("menu");
         this.orm = useService("orm");
         this.state = useState({ tiles: [], loading: true, error: false });
         onWillStart(async () => {
@@ -22,7 +23,14 @@ export class RepartoHomeScreen extends Component {
     }
 
     onTileClick(tile) {
-        this.actionService.doAction(tile.action_id, { clearBreadcrumbs: true });
+        // doAction por si solo no alcanza: el navbar de arriba (submenus del
+        // modulo, ej. Ventas) depende del "currentApp" del menu service, que
+        // solo se actualiza via onActionReady -> setCurrentMenu. Sin esto el
+        // navbar se queda mostrando la app anterior (o vacio).
+        this.actionService.doAction(tile.action_id, {
+            clearBreadcrumbs: true,
+            onActionReady: () => this.menuService.setCurrentMenu(tile.id),
+        });
     }
 }
 
