@@ -56,3 +56,23 @@ class TestDescuentoVolumen(TransactionCase):
         })
         self.assertEqual(len(self.product.reparto_volumen_item_ids), 1)
         self.assertEqual(self.product.reparto_volumen_item_ids.compute_price, 'percentage')
+
+    def test_escala_de_descuento_por_cantidad(self):
+        """Producto a $100 con tramos 6u->4% y 12u->8%: el precio de lista
+        baja al alcanzar cada umbral y se queda en el tope."""
+        self.product.write({
+            'reparto_volumen_item_ids': [
+                (0, 0, {'min_quantity': 6, 'percent_price': 4.0}),
+                (0, 0, {'min_quantity': 12, 'percent_price': 8.0}),
+            ],
+        })
+        variant = self.product.product_variant_id
+
+        def precio(qty):
+            return self.pricelist._get_product_price(variant, qty)
+
+        self.assertAlmostEqual(precio(5), 100.0, places=2)
+        self.assertAlmostEqual(precio(6), 96.0, places=2)
+        self.assertAlmostEqual(precio(11), 96.0, places=2)
+        self.assertAlmostEqual(precio(12), 92.0, places=2)
+        self.assertAlmostEqual(precio(100), 92.0, places=2)
