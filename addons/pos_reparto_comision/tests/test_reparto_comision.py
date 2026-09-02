@@ -246,3 +246,76 @@ class TestRepartoComision(TransactionCase):
             ('pos_payment_id', '=', orden.payment_ids[0].id),
         ])
         self.assertEqual(len(lineas), 1)
+
+    def test_pago_de_credito_genera_linea_cobro_credito(self):
+        vendedor = self._crear_vendedor('Vendedor Comision Cobro', pct=8.0)
+        partner = self._crear_partner('Cliente Comision Cobro', vendedor)
+        linea_deuda = self._crear_linea_por_cobrar(partner, 1000.0, fields.Date.today() - timedelta(days=10))
+
+        pago = self._crear_y_conciliar_pago(partner, linea_deuda, 1000.0, fields.Date.today())
+
+        lineas = self.env['pos.reparto.comision.linea'].search([
+            ('account_payment_id', '=', pago.id),
+        ])
+        self.assertEqual(len(lineas), 1)
+        self.assertEqual(lineas.vendedor_id, vendedor)
+        self.assertEqual(lineas.origen, 'cobro_credito')
+        self.assertEqual(lineas.monto_cobrado, 1000.0)
+        self.assertEqual(lineas.comision_pct, 8.0)
+        self.assertEqual(lineas.comision_monto, 80.0)
+
+    def test_pago_parcial_genera_linea_proporcional(self):
+        vendedor = self._crear_vendedor('Vendedor Comision Parcial', pct=10.0)
+        partner = self._crear_partner('Cliente Comision Parcial', vendedor)
+        linea_deuda = self._crear_linea_por_cobrar(partner, 1000.0, fields.Date.today() - timedelta(days=10))
+
+        pago_1 = self._crear_y_conciliar_pago(partner, linea_deuda, 300.0, fields.Date.today() - timedelta(days=5))
+        pago_2 = self._crear_y_conciliar_pago(partner, linea_deuda, 700.0, fields.Date.today())
+
+        lineas = self.env['pos.reparto.comision.linea'].search([
+            ('account_payment_id', 'in', (pago_1 | pago_2).ids),
+        ], order='fecha asc')
+        self.assertEqual(len(lineas), 2)
+        self.assertEqual(lineas[0].monto_cobrado, 300.0)
+        self.assertEqual(lineas[0].comision_monto, 30.0)
+        self.assertEqual(lineas[1].monto_cobrado, 700.0)
+        self.assertEqual(lineas[1].comision_monto, 70.0)
+
+    def test_pago_sin_vendedor_asignado_no_genera_linea(self):
+        partner = self._crear_partner('Cliente Comision Cobro Sin Vendedor')
+        linea_deuda = self._crear_linea_por_cobrar(partner, 500.0, fields.Date.today() - timedelta(days=3))
+
+        pago = self._crear_y_conciliar_pago(partner, linea_deuda, 500.0, fields.Date.today())
+
+        lineas = self.env['pos.reparto.comision.linea'].search([
+            ('account_payment_id', '=', pago.id),
+        ])
+        self.assertEqual(len(lineas), 0)
+
+    def test_cambiar_pct_no_afecta_lineas_ya_creadas(self):
+        vendedor = self._crear_vendedor('Vendedor Comision Cambio Pct', pct=5.0)
+        partner = self._crear_partner('Cliente Comision Cambio Pct', vendedor)
+        linea_deuda = self._crear_linea_por_cobrar(partner, 1000.0, fields.Date.today() - timedelta(days=10))
+        pago = self._crear_y_conciliar_pago(partner, linea_deuda, 1000.0, fields.Date.today())
+
+        vendedor.sudo().reparto_comision_pct = 20.0
+
+        linea = self.env['pos.reparto.comision.linea'].search([('account_payment_id', '=', pago.id)])
+        self.assertEqual(linea.comision_pct, 5.0)
+        self.assertEqual(linea.comision_monto, 50.0)
+
+    def test_anular_pago_borra_su_linea_de_comision(self):
+        vendedor = self._crear_vendedor('Vendedor Comision Anular', pct=10.0)
+        partner = self._crear_partner('Cliente Comision Anular', vendedor)
+        linea_deuda = self._crear_linea_por_cobrar(partner, 500.0, fields.Date.today() - timedelta(days=3))
+        pago = self._crear_y_conciliar_pago(partner, linea_deuda, 500.0, fields.Date.today())
+
+        self.assertEqual(
+            len(self.env['pos.reparto.comision.linea'].search([('account_payment_id', '=', pago.id)])), 1
+        )
+
+        pago.action_draft()
+
+        self.assertEqual(
+            len(self.env['pos.reparto.comision.linea'].search([('account_payment_id', '=', pago.id)])), 0
+        )
