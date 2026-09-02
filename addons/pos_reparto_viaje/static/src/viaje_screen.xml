@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<templates xml:space="preserve">
+
+    <t t-name="pos_reparto_viaje.ViajeScreen">
+        <div class="o_reparto_viaje">
+            <div t-if="state.loading" class="o_reparto_viaje_loading">
+                Cargando...
+            </div>
+            <div t-elif="state.error" class="o_reparto_viaje_empty">
+                No se pudo cargar el viaje. Probá recargar la página.
+            </div>
+            <div t-elif="!state.viaje" class="o_reparto_viaje_empty">
+                No tenés viaje asignado hoy.
+            </div>
+            <div t-else="" class="o_reparto_viaje_grid">
+                <div t-foreach="state.viaje.paradas" t-as="parada" t-key="parada.id"
+                     t-attf-class="o_reparto_viaje_parada {{ parada.visitado ? 'o_reparto_viaje_parada_visitada' : '' }}"
+                     t-on-click="() => this.onParadaClick(parada)">
+                    <span t-out="parada.partner_name"/>
+                    <span t-if="parada.visitado" class="o_reparto_viaje_check">✓</span>
+                </div>
+            </div>
+        </div>
+    </t>
+
+</templates>

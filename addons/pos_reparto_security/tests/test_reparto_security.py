@@ -48,6 +48,18 @@ class TestRepartoSecurity(TransactionCase):
         ])
         self.assertEqual(found_by_vendedor_2, partner_2)
 
+    def test_vendedor_puede_leer_su_propio_contacto(self):
+        # res.users.name (y otros campos) son related a partner_id.* -- si
+        # esta regla no deja leer el res.partner propio del vendedor cuando
+        # nadie lo puso como "Salesperson" de si mismo (caso normal: ese
+        # campo es para clientes asignados, no para la propia ficha), toda
+        # lectura de res.users para ese usuario se rompe en cascada (afecta
+        # por ejemplo abrir una sesion de POS, que necesita leer el cashier
+        # actual via res.users).
+        self.assertFalse(self.vendedor_1.partner_id.user_id)
+        contacto_propio = self.env['res.partner'].with_user(self.vendedor_1).browse(self.vendedor_1.partner_id.id)
+        self.assertEqual(contacto_propio.name, 'Vendedor Uno')
+
     def test_usuario_sin_grupo_vendedor_ve_todos_los_clientes(self):
         partner_1 = self.env['res.partner'].create({
             'name': 'Cliente de Vendedor 1',
