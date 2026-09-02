@@ -193,3 +193,56 @@ class TestRepartoComision(TransactionCase):
         self.env['pos.reparto.comision.linea'].create(vals)
         with self.assertRaises(Exception):
             self.env['pos.reparto.comision.linea'].create(vals)
+
+    def test_pedido_efectivo_pagado_genera_linea_venta_directa(self):
+        vendedor = self._crear_vendedor('Vendedor Comision Cash', pct=10.0)
+        partner = self._crear_partner('Cliente Comision Cash', vendedor)
+        orden = self._crear_orden(partner, self.metodo_efectivo, 500.0)
+
+        orden.write({'state': 'paid'})
+
+        lineas = self.env['pos.reparto.comision.linea'].search([
+            ('pos_payment_id', '=', orden.payment_ids[0].id),
+        ])
+        self.assertEqual(len(lineas), 1)
+        self.assertEqual(lineas.vendedor_id, vendedor)
+        self.assertEqual(lineas.origen, 'venta_directa')
+        self.assertEqual(lineas.monto_cobrado, 500.0)
+        self.assertEqual(lineas.comision_pct, 10.0)
+        self.assertEqual(lineas.comision_monto, 50.0)
+
+    def test_pedido_a_credito_no_genera_linea_al_pagar(self):
+        vendedor = self._crear_vendedor('Vendedor Comision Credito Pedido', pct=10.0)
+        partner = self._crear_partner('Cliente Comision Credito Pedido', vendedor)
+        orden = self._crear_orden(partner, self.metodo_cuenta_corriente, 500.0)
+
+        orden.write({'state': 'paid'})
+
+        lineas = self.env['pos.reparto.comision.linea'].search([
+            ('pos_payment_id', '=', orden.payment_ids[0].id),
+        ])
+        self.assertEqual(len(lineas), 0)
+
+    def test_pedido_sin_vendedor_asignado_no_genera_linea(self):
+        partner = self._crear_partner('Cliente Comision Sin Vendedor')
+        orden = self._crear_orden(partner, self.metodo_efectivo, 500.0)
+
+        orden.write({'state': 'paid'})
+
+        lineas = self.env['pos.reparto.comision.linea'].search([
+            ('pos_payment_id', '=', orden.payment_ids[0].id),
+        ])
+        self.assertEqual(len(lineas), 0)
+
+    def test_pedido_pagado_dos_veces_no_duplica_linea(self):
+        vendedor = self._crear_vendedor('Vendedor Comision Idempotente', pct=10.0)
+        partner = self._crear_partner('Cliente Comision Idempotente', vendedor)
+        orden = self._crear_orden(partner, self.metodo_efectivo, 500.0)
+
+        orden.write({'state': 'paid'})
+        orden.write({'state': 'paid'})
+
+        lineas = self.env['pos.reparto.comision.linea'].search([
+            ('pos_payment_id', '=', orden.payment_ids[0].id),
+        ])
+        self.assertEqual(len(lineas), 1)
