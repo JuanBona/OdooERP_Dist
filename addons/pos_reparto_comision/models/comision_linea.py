@@ -24,8 +24,8 @@ class PosRepartoComisionLinea(models.Model):
         store=True,
         currency_field='currency_id',
     )
-    pos_payment_id = fields.Many2one('pos.payment', string='Pago POS')
-    account_payment_id = fields.Many2one('account.payment', string='Pago de cuenta corriente')
+    pos_payment_id = fields.Many2one('pos.payment', string='Pago POS', ondelete='cascade')
+    account_payment_id = fields.Many2one('account.payment', string='Pago de cuenta corriente', ondelete='cascade')
 
     _pos_payment_unique = models.Constraint(
         'unique(pos_payment_id)',
