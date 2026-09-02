@@ -1,0 +1,16 @@
+<odoo>
+    <record id="view_users_form_reparto_comision" model="ir.ui.view">
+        <field name="name">res.users.form.reparto.comision</field>
+        <field name="model">res.users</field>
+        <field name="inherit_id" ref="base.view_users_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//notebook" position="inside">
+                <page string="Comisión (Reparto)" groups="pos_reparto_security.group_reparto_gerencia">
+                    <group>
+                        <field name="reparto_comision_pct"/>
+                    </group>
+                </page>
+            </xpath>
+        </field>
+    </record>
+</odoo>
