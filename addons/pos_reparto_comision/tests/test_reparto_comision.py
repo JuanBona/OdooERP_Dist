@@ -147,3 +147,49 @@ class TestRepartoComision(TransactionCase):
         gerente = self._crear_gerente('Gerente Con Acceso Comision')
         campos = self.env['res.users'].with_user(gerente).fields_get()
         self.assertIn('reparto_comision_pct', campos)
+
+    def test_comision_monto_se_calcula_del_monto_y_pct(self):
+        vendedor = self._crear_vendedor('Vendedor Comision Compute', pct=5.0)
+        partner = self._crear_partner('Cliente Comision Compute', vendedor)
+        orden = self._crear_orden(partner, self.metodo_efectivo, 1000.0)
+        linea = self.env['pos.reparto.comision.linea'].create({
+            'vendedor_id': vendedor.id,
+            'partner_id': partner.id,
+            'fecha': fields.Date.today(),
+            'origen': 'venta_directa',
+            'monto_cobrado': 1000.0,
+            'comision_pct': 5.0,
+            'pos_payment_id': orden.payment_ids[0].id,
+        })
+        self.assertEqual(linea.comision_monto, 50.0)
+
+    def test_linea_requiere_exactamente_un_origen(self):
+        vendedor = self._crear_vendedor('Vendedor Comision Origen', pct=5.0)
+        partner = self._crear_partner('Cliente Comision Origen', vendedor)
+        with self.assertRaises(Exception):
+            self.env['pos.reparto.comision.linea'].create({
+                'vendedor_id': vendedor.id,
+                'partner_id': partner.id,
+                'fecha': fields.Date.today(),
+                'origen': 'venta_directa',
+                'monto_cobrado': 1000.0,
+                'comision_pct': 5.0,
+            })
+
+    def test_no_se_duplica_linea_para_el_mismo_pago_pos(self):
+        vendedor = self._crear_vendedor('Vendedor Comision Dup Pos', pct=5.0)
+        partner = self._crear_partner('Cliente Comision Dup Pos', vendedor)
+        orden = self._crear_orden(partner, self.metodo_efectivo, 1000.0)
+        pago = orden.payment_ids[0]
+        vals = {
+            'vendedor_id': vendedor.id,
+            'partner_id': partner.id,
+            'fecha': fields.Date.today(),
+            'origen': 'venta_directa',
+            'monto_cobrado': 1000.0,
+            'comision_pct': 5.0,
+            'pos_payment_id': pago.id,
+        }
+        self.env['pos.reparto.comision.linea'].create(vals)
+        with self.assertRaises(Exception):
+            self.env['pos.reparto.comision.linea'].create(vals)
