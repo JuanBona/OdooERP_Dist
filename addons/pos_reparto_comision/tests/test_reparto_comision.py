@@ -76,6 +76,7 @@ class TestRepartoComision(TransactionCase):
             self.env['pos.order'].__class__,
             '_check_stock_availability',
             return_value=None,
+            create=True,
         ):
             return self.env['pos.order'].create({
                 'session_id': self.pos_session.id,
