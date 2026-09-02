@@ -17,7 +17,11 @@
                      class="o_reparto_home_tile"
                      t-on-click="() => this.onTileClick(tile)">
                     <img t-if="tile.web_icon_data"
-                         t-attf-src="data:image/png;base64,{{tile.web_icon_data}}"/>
+                         t-attf-src="data:image/png;base64,{{tile.web_icon_data}}"
+                         alt=""/>
+                    <img t-elif="tile.web_icon"
+                         t-att-src="tile.web_icon"
+                         alt=""/>
                     <span t-out="tile.name"/>
                 </div>
             </div>

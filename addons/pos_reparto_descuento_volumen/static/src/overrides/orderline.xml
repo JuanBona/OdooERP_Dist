@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<templates id="template" xml:space="preserve">
+    <t t-name="pos_reparto_descuento_volumen.OrderlineVolumen"
+       t-inherit="point_of_sale.Orderline" t-inherit-mode="extension">
+        <xpath expr="//t[@t-slot='default']" position="before">
+            <li t-if="repartoVolumenTramos.length" class="price-per-unit reparto-volumen-tramos">
+                <i class="fa fa-tags pe-1"/>
+                <t t-foreach="repartoVolumenTramos" t-as="tramo" t-key="tramo_index">
+                    <span t-attf-class="reparto-volumen-tramo {{ tramo.activo ? 'fw-bolder text-success' : 'text-muted' }}">
+                        <t t-esc="tramo.minQty"/>+ u → <t t-esc="tramo.percent"/>%
+                    </span>
+                    <span t-if="!tramo_last" class="text-muted px-1">·</span>
+                </t>
+            </li>
+        </xpath>
+    </t>
+</templates>

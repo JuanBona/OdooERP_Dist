@@ -59,4 +59,9 @@ class TestRepartoHomeTiles(TransactionCase):
     def test_tile_trae_icono(self):
         tiles = self.env['ir.ui.menu'].with_user(self.vendedor).get_reparto_home_tiles()
         pos_tile = next(t for t in tiles if t['name'] == 'Point of Sale')
-        self.assertTrue(pos_tile['web_icon_data'])
+        # web_icon_data no viene poblado para menus raiz en Odoo 19; el tile
+        # siempre debe traer al menos la URL del icono derivada de web_icon.
+        self.assertTrue(pos_tile['web_icon'] or pos_tile['web_icon_data'])
+        if pos_tile['web_icon']:
+            self.assertTrue(pos_tile['web_icon'].startswith('/'))
+            self.assertIn('point_of_sale', pos_tile['web_icon'])

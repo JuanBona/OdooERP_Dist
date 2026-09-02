@@ -38,6 +38,17 @@ class IrUiMenu(models.Model):
                 return action_id
         return False
 
+    def _reparto_home_icon_url(self):
+        """URL al PNG del icono de la app. `web_icon` viene como
+        'modulo,ruta/al/icono.png'; lo servimos como asset estatico
+        (/modulo/ruta...). En Odoo 19 `web_icon_data` no viene poblado
+        para los menus raiz, asi que no se puede depender de el."""
+        self.ensure_one()
+        if self.web_icon and ',' in self.web_icon:
+            module, path = self.web_icon.split(',', 1)
+            return '/%s/%s' % (module.strip(), path.strip().lstrip('/'))
+        return False
+
     @api.model
     def get_reparto_home_tiles(self):
         blacklist_ids = self._reparto_home_blacklist_ids()
@@ -53,6 +64,7 @@ class IrUiMenu(models.Model):
             tiles.append({
                 'id': menu.id,
                 'name': menu.name,
+                'web_icon': menu._reparto_home_icon_url(),
                 'web_icon_data': menu.web_icon_data.decode() if menu.web_icon_data else False,
                 'action_id': action_id,
             })
