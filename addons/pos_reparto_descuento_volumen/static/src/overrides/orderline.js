@@ -20,7 +20,10 @@ patch(Orderline.prototype, {
         // point_of_sale/static/src/app/models/product_product.js), por lo que
         // `.id` es el id de la plantilla.
         const tmplId = product.product_tmpl_id?.id;
-        const items = this.pos.models["product.pricelist.item"].getAll();
+        // El componente Orderline del core no expone `this.pos`; los records
+        // del POS sí exponen `.models` (related_models/base.js). Los
+        // product.pricelist.item ya viajan al POS en la carga inicial.
+        const items = line.models["product.pricelist.item"].getAll();
         const ahora = new Date();
         const tramos = items
             .filter((item) => {
