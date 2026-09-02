@@ -1,3 +1,7 @@
 id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
 access_pricelist_item_reparto_adminop,product.pricelist.item reparto adminop,product.model_product_pricelist_item,pos_reparto_security.group_reparto_adminop,1,1,1,1
 access_pricelist_item_reparto_gerencia,product.pricelist.item reparto gerencia,product.model_product_pricelist_item,pos_reparto_security.group_reparto_gerencia,1,1,1,1
+access_product_template_reparto_adminop,product.template reparto adminop,product.model_product_template,pos_reparto_security.group_reparto_adminop,1,1,1,0
+access_product_template_reparto_gerencia,product.template reparto gerencia,product.model_product_template,pos_reparto_security.group_reparto_gerencia,1,1,1,0
+access_product_product_reparto_adminop,product.product reparto adminop,product.model_product_product,pos_reparto_security.group_reparto_adminop,1,1,1,0
+access_product_product_reparto_gerencia,product.product reparto gerencia,product.model_product_product,pos_reparto_security.group_reparto_gerencia,1,1,1,0
