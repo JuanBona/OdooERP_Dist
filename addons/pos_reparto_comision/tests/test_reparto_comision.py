@@ -341,3 +341,7 @@ class TestRepartoComision(TransactionCase):
             ('partner_id', '=', partner.id),
         ])
         self.assertEqual(len(lineas), 1)
+
+    def test_accion_comisiones_existe_y_apunta_al_modelo(self):
+        action = self.env.ref('pos_reparto_comision.action_reparto_comision_lineas')
+        self.assertEqual(action.res_model, 'pos.reparto.comision.linea')

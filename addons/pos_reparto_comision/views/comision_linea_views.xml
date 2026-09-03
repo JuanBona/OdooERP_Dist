@@ -1,2 +1,43 @@
 <odoo>
+    <record id="view_reparto_comision_linea_list" model="ir.ui.view">
+        <field name="name">pos.reparto.comision.linea.list</field>
+        <field name="model">pos.reparto.comision.linea</field>
+        <field name="arch" type="xml">
+            <list string="Comisiones" default_order="fecha desc" create="false" edit="false" delete="false">
+                <field name="fecha"/>
+                <field name="vendedor_id"/>
+                <field name="partner_id" string="Cliente"/>
+                <field name="origen"/>
+                <field name="monto_cobrado"/>
+                <field name="comision_pct" string="%"/>
+                <field name="comision_monto" string="Comisión"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="view_reparto_comision_linea_pivot" model="ir.ui.view">
+        <field name="name">pos.reparto.comision.linea.pivot</field>
+        <field name="model">pos.reparto.comision.linea</field>
+        <field name="arch" type="xml">
+            <pivot string="Comisiones">
+                <field name="vendedor_id" type="row"/>
+                <field name="fecha" interval="month" type="col"/>
+                <field name="comision_monto" type="measure"/>
+                <field name="monto_cobrado" type="measure"/>
+            </pivot>
+        </field>
+    </record>
+
+    <record id="action_reparto_comision_lineas" model="ir.actions.act_window">
+        <field name="name">Comisiones</field>
+        <field name="res_model">pos.reparto.comision.linea</field>
+        <field name="view_mode">pivot,list</field>
+    </record>
+
+    <menuitem id="menu_reparto_comision"
+        name="Comisiones"
+        parent="point_of_sale.menu_point_root"
+        action="action_reparto_comision_lineas"
+        groups="pos_reparto_security.group_reparto_gerencia"
+        sequence="16"/>
 </odoo>
