@@ -1,0 +1,166 @@
+from odoo.exceptions import UserError
+from odoo.tests.common import TransactionCase, tagged
+
+
+@tagged('post_install', '-at_install')
+class TestDescuentoVolumen(TransactionCase):
+
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        cls.pricelist = cls.env['product.pricelist'].search(
+            [('company_id', 'in', [cls.env.company.id, False])], order='id', limit=1,
+        )
+        cls.product = cls.env['product.template'].create({
+            'name': 'Galletitas Test',
+            'list_price': 100.0,
+            'type': 'consu',
+            'available_in_pos': True,
+        })
+
+    def test_o2m_crea_item_con_defaults_correctos(self):
+        """Crear un tramo desde el One2many del producto deja el
+        product.pricelist.item bien formado sin que el usuario complete
+        pricelist/applied_on/compute_price/base a mano."""
+        self.product.write({
+            'reparto_volumen_item_ids': [(0, 0, {
+                'min_quantity': 10,
+                'percent_price': 4.0,
+            })],
+        })
+        item = self.product.reparto_volumen_item_ids
+        self.assertEqual(len(item), 1)
+        self.assertEqual(item.pricelist_id, self.pricelist)
+        self.assertEqual(item.applied_on, '1_product')
+        self.assertEqual(item.compute_price, 'percentage')
+        self.assertEqual(item.base, 'list_price')
+        self.assertEqual(item.min_quantity, 10)
+        self.assertEqual(item.percent_price, 4.0)
+        self.assertEqual(item.product_tmpl_id, self.product)
+
+    def test_o2m_solo_devuelve_tramos_de_volumen(self):
+        """El One2many filtra: un item de precio fijo sobre el mismo
+        producto no aparece en reparto_volumen_item_ids."""
+        self.env['product.pricelist.item'].create({
+            'pricelist_id': self.pricelist.id,
+            'applied_on': '1_product',
+            'product_tmpl_id': self.product.id,
+            'compute_price': 'fixed',
+            'fixed_price': 50.0,
+            'min_quantity': 0,
+        })
+        self.product.write({
+            'reparto_volumen_item_ids': [(0, 0, {
+                'min_quantity': 10,
+                'percent_price': 4.0,
+            })],
+        })
+        self.assertEqual(len(self.product.reparto_volumen_item_ids), 1)
+        self.assertEqual(self.product.reparto_volumen_item_ids.compute_price, 'percentage')
+
+    def test_escala_de_descuento_por_cantidad(self):
+        """Producto a $100 con tramos 6u->4% y 12u->8%: el precio de lista
+        baja al alcanzar cada umbral y se queda en el tope."""
+        self.product.write({
+            'reparto_volumen_item_ids': [
+                (0, 0, {'min_quantity': 6, 'percent_price': 4.0}),
+                (0, 0, {'min_quantity': 12, 'percent_price': 8.0}),
+            ],
+        })
+        variant = self.product.product_variant_id
+
+        def precio(qty):
+            return self.pricelist._get_product_price(variant, qty)
+
+        self.assertAlmostEqual(precio(5), 100.0, places=2)
+        self.assertAlmostEqual(precio(6), 96.0, places=2)
+        self.assertAlmostEqual(precio(11), 96.0, places=2)
+        self.assertAlmostEqual(precio(12), 92.0, places=2)
+        self.assertAlmostEqual(precio(100), 92.0, places=2)
+
+    def test_menu_lista_solo_productos_con_tramos(self):
+        """La acción del menú 'Descuentos por volumen' filtra a los
+        productos que tienen al menos un tramo."""
+        from odoo.tools.safe_eval import safe_eval
+        con_tramo = self.env['product.template'].create({
+            'name': 'Con Tramo', 'list_price': 10.0, 'type': 'consu',
+            'reparto_volumen_item_ids': [(0, 0, {'min_quantity': 6, 'percent_price': 4.0})],
+        })
+        sin_tramo = self.env['product.template'].create({
+            'name': 'Sin Tramo', 'list_price': 10.0, 'type': 'consu',
+        })
+        action = self.env['ir.actions.act_window']._for_xml_id(
+            'pos_reparto_descuento_volumen.action_productos_descuento_volumen'
+        )
+        domain = action['domain']
+        if isinstance(domain, str):
+            domain = safe_eval(domain)
+        productos = self.env['product.template'].search(domain)
+        self.assertIn(con_tramo, productos)
+        self.assertNotIn(sin_tramo, productos)
+
+    def _user_con_grupo(self, login, group_name):
+        return self.env['res.users'].create({
+            'name': login, 'login': login,
+            'group_ids': [(6, 0, [self.env.ref('pos_reparto_security.%s' % group_name).id])],
+        })
+
+    def _vals_orden(self, user, line_vals):
+        return {
+            'user_id': user.id,
+            'pricelist_id': self.pricelist.id,
+            'lines': [(0, 0, {
+                'product_id': self.product.product_variant_id.id,
+                'qty': line_vals.get('qty', 1),
+                'price_unit': line_vals['price_unit'],
+                'discount': line_vals.get('discount', 0.0),
+            })],
+        }
+
+    def test_guard_bloquea_precio_bajo_de_vendedor(self):
+        vendedor = self._user_con_grupo('vend_dv_test', 'group_reparto_vendedor')
+        with self.assertRaises(UserError):
+            self.env['pos.order']._reparto_check_override_manual(
+                self._vals_orden(vendedor, {'price_unit': 80.0})
+            )
+
+    def test_guard_bloquea_descuento_de_vendedor(self):
+        vendedor = self._user_con_grupo('vend_dv_test2', 'group_reparto_vendedor')
+        with self.assertRaises(UserError):
+            self.env['pos.order']._reparto_check_override_manual(
+                self._vals_orden(vendedor, {'price_unit': 100.0, 'discount': 10.0})
+            )
+
+    def test_guard_permite_precio_bajo_de_gerencia(self):
+        gerente = self._user_con_grupo('ger_dv_test', 'group_reparto_gerencia')
+        # No debe levantar excepción.
+        self.env['pos.order']._reparto_check_override_manual(
+            self._vals_orden(gerente, {'price_unit': 80.0})
+        )
+
+    def test_guard_permite_descuento_por_volumen_de_vendedor(self):
+        """Un price_unit que coincide con el precio de lista para esa
+        cantidad (aunque esté rebajado por un tramo) NO dispara el guard."""
+        self.product.write({
+            'reparto_volumen_item_ids': [(0, 0, {'min_quantity': 6, 'percent_price': 4.0})],
+        })
+        vendedor = self._user_con_grupo('vend_dv_test3', 'group_reparto_vendedor')
+        # qty 6 -> precio de lista 96.0; no debe levantar.
+        self.env['pos.order']._reparto_check_override_manual(
+            self._vals_orden(vendedor, {'qty': 6, 'price_unit': 96.0})
+        )
+
+    def _pos_config(self):
+        return self.env['pos.config'].search([('name', '=', 'POS Camión 1')], limit=1) \
+            or self.env['pos.config'].search([], limit=1)
+
+    def test_pos_data_marca_flag_de_override_por_rol(self):
+        gerente = self._user_con_grupo('ger_flag_test', 'group_reparto_gerencia')
+        vendedor = self._user_con_grupo('vend_flag_test', 'group_reparto_vendedor')
+        config = self._pos_config()
+
+        data_ger = self.env['res.users'].with_user(gerente)._load_pos_data_read(gerente, config)
+        data_vend = self.env['res.users'].with_user(vendedor)._load_pos_data_read(vendedor, config)
+
+        self.assertTrue(data_ger[0]['_reparto_puede_override'])
+        self.assertFalse(data_vend[0]['_reparto_puede_override'])
