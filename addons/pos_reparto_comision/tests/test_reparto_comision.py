@@ -319,3 +319,24 @@ class TestRepartoComision(TransactionCase):
         self.assertEqual(
             len(self.env['pos.reparto.comision.linea'].search([('account_payment_id', '=', pago.id)])), 0
         )
+
+    def test_vendedor_no_puede_leer_lineas_de_comision(self):
+        vendedor = self._crear_vendedor('Vendedor Comision Sin Acceso Modelo', pct=10.0)
+        partner = self._crear_partner('Cliente Comision Sin Acceso Modelo', vendedor)
+        orden = self._crear_orden(partner, self.metodo_efectivo, 500.0)
+        orden.write({'state': 'paid'})
+
+        with self.assertRaises(Exception):
+            self.env['pos.reparto.comision.linea'].with_user(vendedor).search([])
+
+    def test_gerencia_puede_leer_lineas_de_comision(self):
+        vendedor = self._crear_vendedor('Vendedor Comision Con Acceso Modelo', pct=10.0)
+        gerente = self._crear_gerente('Gerente Comision Con Acceso Modelo')
+        partner = self._crear_partner('Cliente Comision Con Acceso Modelo', vendedor)
+        orden = self._crear_orden(partner, self.metodo_efectivo, 500.0)
+        orden.write({'state': 'paid'})
+
+        lineas = self.env['pos.reparto.comision.linea'].with_user(gerente).search([
+            ('partner_id', '=', partner.id),
+        ])
+        self.assertEqual(len(lineas), 1)
