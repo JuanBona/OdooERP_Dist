@@ -2,6 +2,7 @@ from datetime import timedelta
 from unittest.mock import patch
 
 from odoo import Command, fields
+from odoo.exceptions import AccessError
 from odoo.tests.common import TransactionCase, tagged
 
 
@@ -326,7 +327,7 @@ class TestRepartoComision(TransactionCase):
         orden = self._crear_orden(partner, self.metodo_efectivo, 500.0)
         orden.write({'state': 'paid'})
 
-        with self.assertRaises(Exception):
+        with self.assertRaises(AccessError):
             self.env['pos.reparto.comision.linea'].with_user(vendedor).search([])
 
     def test_gerencia_puede_leer_lineas_de_comision(self):
