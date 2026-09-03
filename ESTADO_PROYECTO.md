@@ -182,7 +182,7 @@ Spec: `docs/superpowers/specs/2026-08-29-pos-reparto-viaje-design.md`. Plan: `do
 
 ## 5octies. Módulo custom: `pos_reparto_comision`
 
-Ubicación: `addons/pos_reparto_comision/`. Rama `worktree-pos-reparto-comision` (pendiente de merge a `main`). Depende de `point_of_sale`, `pos_reparto_security`, `pos_reparto_credito`. Cubre **RF-GV-03** (comisión de vendedor).
+Ubicación: `addons/pos_reparto_comision/`. Rama `worktree-pos-reparto-comision` (pendiente de merge a `main`). Depende de `point_of_sale`, `account`, `pos_reparto_security`. Cubre **RF-GV-03** (comisión de vendedor).
 
 **Corrección importante vs. lo resuelto el 2026-08-24**: el relevamiento v2.0 original decía "comisión sobre pedidos generados en el día". El cliente aclaró en el brainstorming del 2026-09-02 que la comisión se devenga **al cobrarle al cliente**, no al generar el pedido — al revés de esa resolución. Este módulo implementa la versión corregida.
 

@@ -99,6 +99,34 @@ class TestRepartoComision(TransactionCase):
                 })],
             })
 
+    def _crear_orden_pago_mixto(self, partner, tramos):
+        monto_total = sum(monto for _metodo, monto in tramos)
+        with patch.object(
+            self.env['pos.order'].__class__,
+            '_check_stock_availability',
+            return_value=None,
+            create=True,
+        ):
+            return self.env['pos.order'].create({
+                'session_id': self.pos_session.id,
+                'partner_id': partner.id if partner else False,
+                'lines': [(0, 0, {
+                    'product_id': self.product.id,
+                    'qty': 1,
+                    'price_unit': monto_total,
+                    'price_subtotal': monto_total,
+                    'price_subtotal_incl': monto_total,
+                })],
+                'amount_total': monto_total,
+                'amount_tax': 0.0,
+                'amount_paid': monto_total,
+                'amount_return': 0.0,
+                'payment_ids': [(0, 0, {
+                    'payment_method_id': metodo.id,
+                    'amount': monto,
+                }) for metodo, monto in tramos],
+            })
+
     def _crear_linea_por_cobrar(self, partner, monto, fecha):
         move = self.env['account.move'].create({
             'move_type': 'entry',
@@ -211,6 +239,24 @@ class TestRepartoComision(TransactionCase):
         self.assertEqual(lineas.monto_cobrado, 500.0)
         self.assertEqual(lineas.comision_pct, 10.0)
         self.assertEqual(lineas.comision_monto, 50.0)
+
+    def test_orden_con_pago_mixto_solo_genera_linea_por_tramo_no_pay_later(self):
+        vendedor = self._crear_vendedor('Vendedor Comision Pago Mixto', pct=10.0)
+        partner = self._crear_partner('Cliente Comision Pago Mixto', vendedor)
+        orden = self._crear_orden_pago_mixto(partner, [
+            (self.metodo_efectivo, 300.0),
+            (self.metodo_cuenta_corriente, 200.0),
+        ])
+
+        orden.write({'state': 'paid'})
+
+        lineas = self.env['pos.reparto.comision.linea'].search([
+            ('partner_id', '=', partner.id),
+        ])
+        self.assertEqual(len(lineas), 1)
+        self.assertEqual(lineas.origen, 'venta_directa')
+        self.assertEqual(lineas.monto_cobrado, 300.0)
+        self.assertEqual(lineas.pos_payment_id.payment_method_id, self.metodo_efectivo)
 
     def test_pedido_a_credito_no_genera_linea_al_pagar(self):
         vendedor = self._crear_vendedor('Vendedor Comision Credito Pedido', pct=10.0)
