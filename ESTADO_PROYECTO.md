@@ -172,13 +172,37 @@ Dos bugs reales encontrados y arreglados durante la verificación:
 1. **`pos_store.js`** (`pos_reparto_viaje`): el patch de `PosStore.setup()` asumía que ya existía una orden al momento de preseleccionar el cliente; `this.getOrder()` puede ser `undefined` ahí. Fix: `getOrder() || addNewOrder()`.
 2. **`pos_reparto_security`** — bug más serio, no específico de este módulo: la regla de Vendedor sobre `res.partner` (`user_id = user.id`, "solo mis clientes") bloqueaba sin querer el **propio contacto vinculado del vendedor**, porque nadie lo asigna como Salesperson de sí mismo. Como `res.users.name` (y otros campos) son `related` a `partner_id.*`, esto rompía la lectura de `res.users` para cualquier usuario del grupo Vendedor — lo que a su vez rompía abrir **cualquier** sesión de POS (el popup "Opening Control" de Odoo no podía resolver el cashier y crasheaba). Fix: la regla ahora es `['|', ('user_id','=',user.id), ('id','=',user.partner_id.id)]`. Cubierto por un test nuevo (`test_vendedor_puede_leer_su_propio_contacto`). Este bug afecta a **cualquier** usuario del grupo Vendedor en **cualquier** POS, no solo en el flujo de Viaje — ya estaba latente desde que se creó `pos_reparto_security`, simplemente nunca se había probado abrir una sesión de POS real con un usuario de ese grupo hasta ahora.
 
-**Mergeado a `main` — pendiente, ver `superpowers:finishing-a-development-branch`.**
+**Mergeado a `main`.**
 
 **Incidente 2026-08-29 (ya resuelto, dejado por historial):** el volumen de Postgres compartido se vació durante la verificación del Task 5 de este módulo. Recuperado reinstalando los módulos custom. El catálogo real de productos y los usuarios placeholder de `pos_reparto_security` se perdieron en ese incidente y siguen sin recargar (ver ítem de datos maestros pendientes más abajo) — la base actual tiene datos de prueba al azar (50 clientes, 50 productos), no el catálogo real del cliente.
 
 **Nota operativa (encontrada 2026-08-31, importante para cualquiera que retome este proyecto):** los comandos `docker compose` para este proyecto **deben correrse desde el directorio de este worktree**, no desde el checkout principal. El `docker-compose.yml` usa un bind mount relativo (`./addons`), así que si se corre `docker compose -p odooerp_dist up -d odoo` desde otro directorio (aunque se use el mismo `-p` para reusar la base), el mount de `/mnt/extra-addons` se recalcula contra ESE directorio y el container termina sirviendo un `addons/` distinto — silenciosamente, sin error. Eso pasó en esta sesión y causó horas de debugging (el módulo parecía "perder" su ACL/vistas/menú en cada reinstall, cuando en realidad estaba instalando una copia vieja y sin trackear que quedó suelta en `addons/pos_reparto_viaje/` del repo principal). Antes de reinstalar/actualizar cualquier módulo, correr `docker inspect odooerp_dist-odoo-1 --format "{{json .Mounts}}"` y confirmar que el `Source` del bind mount apunta al worktree correcto.
 
 Spec: `docs/superpowers/specs/2026-08-29-pos-reparto-viaje-design.md`. Plan: `docs/superpowers/plans/2026-08-29-pos-reparto-viaje.md`.
+
+## 5octies. Módulo custom: `pos_reparto_comision`
+
+Ubicación: `addons/pos_reparto_comision/`. Rama `worktree-pos-reparto-comision` (pendiente de merge a `main`). Depende de `point_of_sale`, `pos_reparto_security`, `pos_reparto_credito`. Cubre **RF-GV-03** (comisión de vendedor).
+
+**Corrección importante vs. lo resuelto el 2026-08-24**: el relevamiento v2.0 original decía "comisión sobre pedidos generados en el día". El cliente aclaró en el brainstorming del 2026-09-02 que la comisión se devenga **al cobrarle al cliente**, no al generar el pedido — al revés de esa resolución. Este módulo implementa la versión corregida.
+
+Qué hace:
+
+- **`res.users.reparto_comision_pct`**: porcentaje de comisión por vendedor, editable solo por Gerencia (restringido con `groups=` en la definición del campo, no solo en la vista).
+- **Modelo `pos.reparto.comision.linea`**: registra cada hecho de cobro que genera comisión — `fecha`, `vendedor_id`, `partner_id`, `origen` (`venta_directa` / `cobro_credito`), `monto_cobrado`, `comision_pct`, `comision_monto`. Los 2 FK de origen (`pos_payment_id`, `account_payment_id`) usan `ondelete='cascade'` y son mutuamente excluyentes (constraint "exactamente un origen"). Sin vistas de edición manual — las líneas se crean solo por los hooks, en modo `.sudo()`.
+- **Hook en `pos.order.write()`**: al pagar un pedido en efectivo/directo (venta al contado en el momento), crea la línea con `origen='venta_directa'` inmediatamente.
+- **Hook en `account.payment`**: al registrar/confirmar un pago contra la cuenta corriente de un cliente (cobro posterior de un pedido `ship_later`), crea la línea con `origen='cobro_credito'`. Cubre pagos parciales.
+- **Seguridad**: `pos.reparto.comision.linea` es de **solo lectura para Gerencia** (`perm_read=1`, resto en `0`) — nadie edita/crea/borra líneas a mano, ni siquiera Gerencia, porque las crean los hooks vía `.sudo()`.
+- **Panel para Gerencia**: vista pivot (vendedor × mes, medidas monto cobrado/comisión) + lista de detalle de solo lectura, menú "Comisiones" bajo Punto de Venta, visible solo para `group_reparto_gerencia`.
+
+**Deuda técnica aceptada (no bloqueante, evaluar antes de producción)**:
+1. El hook de `pos_order.py` envuelve la creación de la línea en `try/except Exception: log y sigue` (mismo patrón que `pos_reparto_remito`) — puede tragarse silenciosamente un fallo real de comisión de un pedido ya cobrado.
+2. El guard de `write()` en `account_payment.py` (`{'state','amount','partner_id'} & vals.keys()`) no re-sincroniza una línea ya creada si cambia `amount`/`partner_id` sin cambiar `state` — queda desactualizada sin error ni log.
+3. A diferencia de `pos_order.py`, el hook de `account_payment.py` **no** aísla errores — una excepción ahí aborta el `create()`/`write()`/`action_post()` real del pago en Contabilidad (más grave que bloquear una venta POS).
+
+17 tests Python en verde. Construido con `superpowers:subagent-driven-development` (implementador + spec review + code review por task, 7 tasks). Verificación manual en navegador (Tasks 5-6): logueado como Gerencia el menú "Comisiones" aparece y el pivot carga sin error de acceso; logueado como Vendedor el menú no aparece.
+
+Spec: `docs/superpowers/specs/2026-09-02-pos-reparto-comision-design.md`. Plan: `docs/superpowers/plans/2026-09-02-pos-reparto-comision.md`.
 
 ## 6. Facturación (ARCA/AFIP) — **DECISIÓN OBSOLETA, ver relevamiento v2.0**
 
@@ -221,15 +245,15 @@ Configurado servidor MCP `odoo` en Claude Code (`claude mcp add odoo ...`), modo
 
 ## 9. Pendiente / próximos pasos
 
-**Hecho hasta ahora** (relevamiento v2.0, `Relevamiento_Requerimientos_Odoo_Reparto.docx`): `pos_reparto_security` (4 roles + reglas de acceso, sección 5bis), `pos_reparto_credito` (alerta 15 días, sección 5ter), `pos_reparto_branding` (personalización visual, 5quater), `pos_reparto_home` (pantalla de inicio táctil, 5quinquies), `pos_reparto_remito` (remito interno QWeb — mergeado a `main` por el compañero). Todo en `main`. `pos_reparto_viaje` (hoja de ruta, sección 5sexies) completo y verificado, falta merge.
+**Hecho hasta ahora** (relevamiento v2.0, `Relevamiento_Requerimientos_Odoo_Reparto.docx`): `pos_reparto_security` (4 roles + reglas de acceso, sección 5bis), `pos_reparto_credito` (alerta 15 días, sección 5ter), `pos_reparto_branding` (personalización visual, 5quater), `pos_reparto_home` (pantalla de inicio táctil, 5quinquies), `pos_reparto_remito` (remito interno QWeb), `pos_reparto_viaje` (hoja de ruta, sección 5sexies), `pos_reparto_descuento_volumen` (RF-PV-09, sección 5septies). Todo mergeado a `main`. `pos_reparto_comision` (comisión de vendedor, sección 5octies) completo y testeado, falta merge.
 
 **Gaps Must/Should que quedan del relevamiento v2.0** (ver detalle y justificación en memoria `project-reparto-v2-requirements`, o repreguntar al cliente si hace falta el docx):
 
 1. ~~Remito interno QWeb~~ — hecho, mergeado a `main` (módulo `pos_reparto_remito`).
 2. ~~Descuentos por volumen parametrizables por producto (ej. 4%/8%/12% según cantidad) + override manual en el renglón (RF-PV-09).~~ — hecho, mergeado a `main` (módulo `pos_reparto_descuento_volumen`, sección 5septies).
-3. Comisiones sobre pedidos generados en el día, no sobre el cobro (RF-GV-03) — evaluar módulo OCA `commission` (github.com/OCA/commission).
-4. ~~Feature "Viaje"~~ — hecho y verificado (Task 9 completa 2026-08-31), ver sección 5sexies. Falta solo el merge a `main`.
-5. Criterio "2 visitas consecutivas sin cobro" de `pos_reparto_credito` (hoy solo días sin pago, ver deuda técnica en 5ter).
+3. ~~Comisión de vendedor (RF-GV-03)~~ — hecho, ver sección 5octies. Falta solo el merge a `main`. **Corrección importante**: el cliente aclaró el 2026-09-02 que la comisión se devenga al cobrarle al cliente, no al generar el pedido — al revés de lo que decía esta misma línea hasta la resolución del 2026-08-24.
+4. ~~Feature "Viaje"~~ — hecho, mergeado a `main`, ver sección 5sexies.
+5. Criterio "2 visitas consecutivas sin cobro" de `pos_reparto_credito` (hoy solo días sin pago, ver deuda técnica en 5ter). **Próximo ítem a tomar.**
 6. Productos habituales por cliente / venta sugerida (Should).
 7. Integración Google Maps para secuenciar recorrido (Should, requiere API paga).
 8. Reconexión automática de sync offline en POS — listener del evento `online` del navegador (ver sección 7, estimado una tarde, no bloqueante).
@@ -240,10 +264,10 @@ Configurado servidor MCP `odoo` en Claude Code (`claude mcp add odoo ...`), modo
 - Cargar excel `Clientes_Ordenados_por_Codigo.xlsx` (clientes reales) — todavía no se cargó (esto ya estaba pendiente antes del incidente).
 - Recrear los 4 usuarios placeholder de `pos_reparto_security` (`vendedor@reparto.local` etc., pass `Reparto2026!`) — se perdieron con el reset — y cuando haya datos reales, reemplazarlos por personas reales del cliente y asignar `user_id` (vendedor) en cada `res.partner` real.
 
-### División de trabajo (actualizado 2026-08-31)
+### División de trabajo (actualizado 2026-09-03)
 
-- **Juan**: ítem 4 (feature "Viaje") **completo y verificado** — 10/10 tasks del plan, 20 tests en verde, verificación manual en navegador hecha (ver sección 5sexies). **Falta: merge a `main` vía `superpowers:finishing-a-development-branch`.** Después de mergear, seguir con ítem 3 (comisiones) o ítem 5 (criterio de 2 visitas), ya que ítem 2 (descuentos por volumen) parece que ya lo tomó el compañero (ver más abajo).
-- **Compañero**: terminó ítem 1 (remito interno QWeb, mergeado a `main`) y arrancó ítem 2 (descuentos por volumen) — hay una rama `feature/pos-reparto-descuentos-volumen` en el remoto. Confirmar estado con él antes de que alguien más lo toque.
+- **Juan**: ítem 4 (feature "Viaje") mergeado a `main`. Ítem 3 (comisión de vendedor, RF-GV-03) **completo y testeado** — 7/7 tasks del plan, 17 tests en verde, verificación manual en navegador hecha (ver sección 5octies). **Falta: merge a `main` vía `superpowers:finishing-a-development-branch`.** Después de mergear, seguir con ítem 5 (criterio de 2 visitas consecutivas sin cobro).
+- **Compañero**: terminó ítem 1 (remito interno QWeb) e ítem 2 (descuentos por volumen) — ambos mergeados a `main`.
 
 Cuando alguno termine su feature y mergee a `main`, actualizar esta sección con el siguiente ítem de la lista de gaps de arriba.
 
