@@ -1,0 +1,13 @@
+<odoo>
+    <!--
+      Todo producto nuevo debe rastrearse en stock. Dejamos "Rastrear
+      inventario" (product.template.is_storable) tildado por defecto en el
+      formulario de alta. Sigue siendo editable si alguna vez se carga un
+      servicio.
+    -->
+    <function model="ir.default" name="set">
+        <value>product.template</value>
+        <value>is_storable</value>
+        <value eval="True"/>
+    </function>
+</odoo>
