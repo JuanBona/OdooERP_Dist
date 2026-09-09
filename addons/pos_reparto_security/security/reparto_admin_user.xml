@@ -1,0 +1,28 @@
+<odoo>
+    <!--
+      El usuario "admin" (base.user_admin) debe tener acceso a TODAS las
+      funcionalidades del proyecto. Los roles Reparto no se le asignan solos
+      (no implican ni son implicados por base.group_system), asi que sin esto
+      queda afuera de todo lo gateado a esos grupos (ej. pestaña "Descuentos
+      por volumen" del producto y sus ACL).
+
+      Se lo suma a Admin Operativa + Gerencia: son los dos roles "de
+      escritorio", sin ir.rule restrictiva propia, y todo lo que se gatea por
+      grupo en el proyecto se gatea a uno de estos dos (Gerencia es el
+      superset). NO se agregan Vendedor ni Deposito: tienen reglas de
+      visibilidad acotada (solo datos propios) que no deben aplicarse a admin.
+      Si se crea un rol/grupo nuevo de escritorio, agregarlo aca tambien.
+
+      Se usa <function> y no <record id="base.user_admin">: la fila de
+      ir_model_data de base.user_admin tiene noupdate=True (la crea `base`),
+      asi que un <record> sobre ese xmlid se saltea siempre. La funcion se
+      ejecuta en cada -u y reafirma la membresia.
+    -->
+    <function model="res.users" name="write">
+        <value eval="[ref('base.user_admin')]"/>
+        <value eval="{'group_ids': [
+            (4, ref('pos_reparto_security.group_reparto_adminop')),
+            (4, ref('pos_reparto_security.group_reparto_gerencia')),
+        ]}"/>
+    </function>
+</odoo>

@@ -28,6 +28,19 @@ class TestRepartoSecurity(TransactionCase):
             'group_ids': [(6, 0, [cls.group_internal.id])],
         })
 
+    def test_admin_tiene_roles_de_escritorio(self):
+        # El usuario admin debe ver todas las funcionalidades del proyecto;
+        # entre ellas la pestaña "Descuentos por volumen" del producto, que
+        # esta gateada a adminop/gerencia. Toda feature nueva gateada por
+        # grupo debe seguir cubierta -> este test la protege.
+        admin = self.env.ref('base.user_admin')
+        for xmlid in ('pos_reparto_security.group_reparto_adminop',
+                      'pos_reparto_security.group_reparto_gerencia'):
+            self.assertIn(
+                self.env.ref(xmlid), admin.group_ids,
+                "El usuario admin deberia pertenecer a %s" % xmlid,
+            )
+
     def test_vendedor_ve_solo_sus_propios_clientes(self):
         partner_1 = self.env['res.partner'].create({
             'name': 'Cliente de Vendedor 1',
