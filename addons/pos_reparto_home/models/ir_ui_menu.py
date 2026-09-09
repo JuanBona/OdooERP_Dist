@@ -13,6 +13,20 @@ _BLACKLIST_XMLIDS = [
 class IrUiMenu(models.Model):
     _inherit = 'ir.ui.menu'
 
+    @api.model
+    def _reparto_rename_menu(self, xmlid, new_name):
+        """Reescribe el nombre de un menu en todos los idiomas activos.
+        `name` es un campo traducido: escribir sin fijar `lang` solo tocaria
+        en_US y en la UI (es_AR) seguiria viendose el valor viejo."""
+        menu = self.env.ref(xmlid, raise_if_not_found=False)
+        if not menu:
+            return False
+        codes = set(self.env['res.lang'].search([]).mapped('code'))
+        codes.add('en_US')
+        for code in codes:
+            menu.with_context(lang=code).write({'name': new_name})
+        return True
+
     def _reparto_home_blacklist_ids(self):
         ids = []
         for xmlid in _BLACKLIST_XMLIDS:

@@ -28,15 +28,21 @@ class TestRepartoHomeTiles(TransactionCase):
             ])],
         })
 
-    def test_vendedor_ve_pos_y_contactos(self):
+    def test_vendedor_ve_pos_y_clientes(self):
         tiles = self.env['ir.ui.menu'].with_user(self.vendedor).get_reparto_home_tiles()
         names = {tile['name'] for tile in tiles}
-        self.assertEqual(names, {'Point of Sale', 'Contacts'})
+        self.assertEqual(names, {'Point of Sale', 'Clientes'})
 
-    def test_gerencia_ve_ventas_pos_inventario_contactos(self):
+    def test_gerencia_ve_ventas_pos_inventario_clientes(self):
         tiles = self.env['ir.ui.menu'].with_user(self.gerencia).get_reparto_home_tiles()
         names = {tile['name'] for tile in tiles}
-        self.assertEqual(names, {'Sales', 'Point of Sale', 'Inventory', 'Contacts'})
+        self.assertEqual(names, {'Sales', 'Point of Sale', 'Inventory', 'Clientes'})
+
+    def test_menu_contactos_renombrado_a_clientes(self):
+        for xmlid in ('contacts.menu_contacts', 'contacts.res_partner_menu_contacts'):
+            menu = self.env.ref(xmlid)
+            self.assertEqual(menu.with_context(lang='en_US').name, 'Clientes')
+            self.assertEqual(menu.with_context(lang='es_AR').name, 'Clientes')
 
     def test_discuss_todo_apps_settings_nunca_aparecen(self):
         tiles = self.env['ir.ui.menu'].with_user(self.gerencia).get_reparto_home_tiles()

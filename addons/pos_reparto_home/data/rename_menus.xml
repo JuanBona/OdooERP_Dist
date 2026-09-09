@@ -1,0 +1,17 @@
+<odoo>
+    <!--
+      El negocio llama "Clientes" a lo que Odoo rotula "Contactos" (coincide con
+      el rotulo del contacto al facturar). Renombramos el menu raiz de la app y
+      su item de listado. `ir.ui.menu.name` es un campo traducido (JSONB por
+      idioma); un <field> plano solo pisaria en_US, asi que usamos una funcion
+      que reescribe el nombre en todos los idiomas activos.
+    -->
+    <function model="ir.ui.menu" name="_reparto_rename_menu">
+        <value>contacts.menu_contacts</value>
+        <value>Clientes</value>
+    </function>
+    <function model="ir.ui.menu" name="_reparto_rename_menu">
+        <value>contacts.res_partner_menu_contacts</value>
+        <value>Clientes</value>
+    </function>
+</odoo>

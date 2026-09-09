@@ -3,9 +3,10 @@
     'version': '19.0.1.0.0',
     'category': 'Point of Sale',
     'summary': 'Pantalla de inicio con cuadraditos tactiles por rol, reemplaza el landing de Discuss',
-    'depends': ['web', 'pos_reparto_branding'],
+    'depends': ['web', 'contacts', 'pos_reparto_branding'],
     'data': [
         'data/home_menu.xml',
+        'data/rename_menus.xml',
     ],
     'assets': {
         'web.assets_backend': [
