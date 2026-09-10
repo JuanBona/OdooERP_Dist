@@ -314,6 +314,8 @@ El sistema tiene 4 roles de seguridad, agrupados bajo la categoría **"Reparto"*
 
 Los 4 roles son **mutuamente excluyentes** entre sí (un usuario tiene uno solo), pero se combinan con los grupos estándar de Odoo (por ejemplo, además hay que darle al vendedor el grupo "Point of Sale User" para que pueda abrir el POS).
 
+> **La app "Ventas" no está disponible para ningún rol de negocio** (a propósito). El pedido real siempre se carga desde el Punto de Venta, no desde ahí — dejarla visible solo generaba pantallas vacías y confusión. Tampoco están **Reportes** (dentro de Punto de venta) ni **Para facturar**/**Productos** dentro de Ventas — son nativas de Odoo sin uso en este proyecto. Ninguna se borró: quedan visibles para el `admin` técnico si hace falta reactivarlas.
+
 > **Usuario `admin`:** tiene acceso total a todas las apps y configuraciones del sistema (es el superusuario técnico), más los roles Administración Operativa y Gerencia del negocio — así ve también todo lo que ve Gerencia (Comisiones, Deudores, etc.). Es la cuenta para el equipo técnico, no para uso diario del negocio.
 
 **Alta de un usuario nuevo (vendedor, depósito, etc.):**
