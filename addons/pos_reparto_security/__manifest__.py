@@ -9,6 +9,7 @@
         'security/reparto_admin_user.xml',
         'security/reparto_partner_rules.xml',
         'security/reparto_pos_order_rules.xml',
+        'data/reparto_stock_config.xml',
     ],
     'installable': True,
     'application': False,
