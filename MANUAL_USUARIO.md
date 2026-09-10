@@ -143,15 +143,18 @@ El stock "disponible para vender" en cada punto de venta se calcula **según la 
 
 ### 5.2 Cómo cargar mercadería a un camión (traslado interno)
 
-1. **Inventario** → **Información general** → tarjeta **"Traslados internos"** → botón **Abrir**.
+> ⚠️ **No es "Traslados internos"** — ese tipo de operación genérico no se usa en este proyecto. Cada camión tiene su propio tipo de operación dedicado: **"Carga Camión 1"**, **"Carga Camión 2"**, **"Carga Camión 3"**.
+
+1. **Inventario** → **Información general** → tarjeta **"Carga Camión 1"** (o el camión que corresponda) → botón **Abrir**.
 2. **Nuevo**.
 3. Completar:
-   - **Tipo de operación**: *My Company: Traslados internos*.
    - **Ubicación de origen**: WH/Stock (queda así por defecto).
-   - **Ubicación de destino**: buscar y elegir el camión, por ejemplo *WH/Stock/Camión 1*.
+   - **Ubicación de destino**: Camión 1 (queda así por defecto, es lo que define esta tarjeta).
 4. En la pestaña **Operaciones** → **Agregar un producto** → buscar el producto → cargar la **cantidad** a transferir.
 5. Repetir para cada producto que se suba al camión ese día.
 6. Botón **Validar** (arriba a la izquierda) para confirmar el traslado. El estado pasa de "Borrador" a "Hecho" y el stock se mueve de verdad: baja en WH/Stock y sube en Camión 1.
+
+> Además, **cada camión solo muestra en el POS los productos que tiene cargados** — si un producto no está en el camión, ni siquiera aparece en la grilla de venta (no hace falta esperar a que lo rechace al cobrar).
 
 > **Rutina diaria recomendada:** antes de que el vendedor salga a repartir, un usuario de Depósito hace este traslado con lo que se carga esa mañana. Al final del día, si sobra mercadería en el camión, se puede hacer el traslado inverso (Camión 1 → WH/Stock) para que el stock quede prolijo.
 
