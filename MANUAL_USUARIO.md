@@ -153,11 +153,13 @@ El stock "disponible para vender" en cada punto de venta se calcula **según la 
 
 > Además, **cada camión solo muestra en el POS los productos que tiene cargados** — si un producto no está en el camión, ni siquiera aparece en la grilla de venta (no hace falta esperar a que lo rechace al cobrar).
 
-> **Rutina diaria recomendada:** antes de que el vendedor salga a repartir, un usuario de Depósito hace este traslado con lo que se carga esa mañana. Al final del día, si sobra mercadería en el camión, se puede hacer el traslado inverso (Camión 1 → WH/Stock) para que el stock quede prolijo.
+> **Rutina diaria recomendada:** antes de que el vendedor salga a repartir, un usuario de Depósito hace este traslado con lo que se carga esa mañana. Al final del día, si sobra mercadería en el camión, se hace el traslado inverso con la tarjeta **"Descarga Camión 1"** (mismo mecanismo que Carga, pero de Camión 1 → WH/Stock) para que el stock quede prolijo.
 
-### 5.3 Consultar cuánto stock hay en cada ubicación
+### 5.3 Consultar cuánto stock hay en cada ubicación (incluido el depósito general)
 
-Abrir la ficha del producto → botón **"A la mano"** (arriba) → se lista la cantidad por cada ubicación (WH/Stock, Camión 1, etc.), con acceso al **Historial** de movimientos de cada una.
+Abrir la ficha del producto (**Inventario → Productos**) → botón **"A la mano"** (arriba) → se lista la cantidad por cada ubicación — ahí ves **WH/Stock** (el depósito general), **Camión 1**, **Camión 2**, etc., todo junto — con acceso al **Historial** de movimientos de cada una.
+
+> "PoS Orders" (la tarjeta que ves en Información general) **no es el depósito** — es el tipo de operación de las entregas diferidas (Ship Later) del Punto de Venta Reparto, algo completamente distinto.
 
 ### 5.4 Cómo dar de alta un camión nuevo (paso a paso completo)
 
@@ -183,6 +185,8 @@ Dar de alta un camión (Camión 2, Camión 3, etc.) implica crear **tres cosas e
    - **Ubicación de origen predeterminada**: `WH/Stock/Camión 2` (la ubicación del Paso 1).
    - **Ubicación de destino predeterminada**: `Customers` (igual que Camión 1 — es la ubicación estándar de clientes, no cambia).
 3. Guardar.
+
+> Esto crea solo el tipo de operación de **venta** del camión (usado por el Punto de Venta). Para la **carga/descarga de mercadería** (sección 5.2) hacen falta dos tipos de operación más, mismo patrón: `Carga Camión 2` (interno, origen `WH/Stock`, destino `WH/Stock/Camión 2`) y `Descarga Camión 2` (interno, origen `WH/Stock/Camión 2`, destino `WH/Stock`) — usar `Carga Camión 1`/`Descarga Camión 1` como referencia de cómo quedaron armados.
 
 **Paso 3 — Crear el punto de venta y vincularlo a ese camión**
 
