@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<templates xml:space="preserve">
+
+    <t t-name="pos_reparto_home.SystrayHomeButton">
+        <div class="o_reparto_home_systray_item">
+            <button class="btn o_reparto_home_systray_button" t-on-click="goHome" title="Inicio" aria-label="Inicio">
+                <i class="fa fa-home" role="img"/>
+            </button>
+        </div>
+    </t>
+
+</templates>

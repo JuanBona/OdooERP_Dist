@@ -13,6 +13,8 @@
             'pos_reparto_home/static/src/home_screen.scss',
             'pos_reparto_home/static/src/home_screen.js',
             'pos_reparto_home/static/src/home_screen.xml',
+            'pos_reparto_home/static/src/home_systray.js',
+            'pos_reparto_home/static/src/home_systray.xml',
         ],
     },
     'installable': True,

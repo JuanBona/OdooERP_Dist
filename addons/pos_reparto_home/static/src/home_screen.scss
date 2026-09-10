@@ -62,3 +62,26 @@ $reparto-home-accent: $o-navbar-background;
     text-align: center;
     padding: 24px;
 }
+
+.o_reparto_home_systray_item {
+    display: flex;
+    align-items: center;
+}
+
+.o_reparto_home_systray_button {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 40px;
+    height: 40px;
+    padding: 0;
+    border: none;
+    background: transparent;
+    color: inherit;
+    font-size: 1.1rem;
+
+    &:hover {
+        background: rgba(255, 255, 255, 0.15);
+        border-radius: 6px;
+    }
+}
