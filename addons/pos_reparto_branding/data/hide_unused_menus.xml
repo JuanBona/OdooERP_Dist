@@ -8,4 +8,25 @@
     <record id="utm.menu_link_tracker_root" model="ir.ui.menu">
         <field name="active">False</field>
     </record>
+
+    <!--
+      Estas 4 pantallas nativas no se usan en el flujo real del proyecto
+      (el pedido nace en POS, no en Ventas; no hay facturación fiscal) y
+      generaban ruido/duplicados en la barra de navegación de los 4 roles
+      de negocio. A diferencia de las de arriba, NO se desactivan
+      (active=False las ocultaría también para admin) - se restringen a
+      base.group_system para que el equipo técnico las siga viendo.
+    -->
+    <record id="point_of_sale.menu_point_rep" model="ir.ui.menu">
+        <field name="group_ids" eval="[(6, 0, [ref('base.group_system')])]"/>
+    </record>
+    <record id="sale.sale_order_menu" model="ir.ui.menu">
+        <field name="group_ids" eval="[(6, 0, [ref('base.group_system')])]"/>
+    </record>
+    <record id="sale.menu_sale_invoicing" model="ir.ui.menu">
+        <field name="group_ids" eval="[(6, 0, [ref('base.group_system')])]"/>
+    </record>
+    <record id="sale.product_menu_catalog" model="ir.ui.menu">
+        <field name="group_ids" eval="[(6, 0, [ref('base.group_system')])]"/>
+    </record>
 </odoo>

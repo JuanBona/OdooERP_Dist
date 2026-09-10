@@ -10,7 +10,6 @@ class TestRepartoHomeTiles(TransactionCase):
         cls.group_internal = cls.env.ref('base.group_user')
         cls.group_pos_user = cls.env.ref('point_of_sale.group_pos_user')
         cls.group_stock_user = cls.env.ref('stock.group_stock_user')
-        cls.group_sale_all_leads = cls.env.ref('sales_team.group_sale_salesman_all_leads')
 
         cls.vendedor = cls.env['res.users'].create({
             'name': 'Test Vendedor Tiles',
@@ -24,7 +23,6 @@ class TestRepartoHomeTiles(TransactionCase):
                 cls.group_internal.id,
                 cls.group_pos_user.id,
                 cls.group_stock_user.id,
-                cls.group_sale_all_leads.id,
             ])],
         })
 
@@ -33,10 +31,14 @@ class TestRepartoHomeTiles(TransactionCase):
         names = {tile['name'] for tile in tiles}
         self.assertEqual(names, {'Point of Sale', 'Clientes'})
 
-    def test_gerencia_ve_ventas_pos_inventario_clientes(self):
+    def test_gerencia_ve_pos_inventario_clientes(self):
+        # Sales ya no es tile de ningun rol de negocio (ver reparto_groups.xml
+        # y pos_reparto_branding/data/hide_unused_menus.xml): sin acceso a esa
+        # app, el DFS de get_reparto_home_tiles no encuentra ninguna accion
+        # visible bajo Sales y la excluye sola, sin logica extra en este metodo.
         tiles = self.env['ir.ui.menu'].with_user(self.gerencia).get_reparto_home_tiles()
         names = {tile['name'] for tile in tiles}
-        self.assertEqual(names, {'Sales', 'Point of Sale', 'Inventory', 'Clientes'})
+        self.assertEqual(names, {'Point of Sale', 'Inventory', 'Clientes'})
 
     def test_menu_contactos_renombrado_a_clientes(self):
         for xmlid in ('contacts.menu_contacts', 'contacts.res_partner_menu_contacts'):
