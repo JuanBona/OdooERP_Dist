@@ -271,10 +271,22 @@ Este aviso **no bloquea la venta** — es información para que el vendedor deci
 
 ### 9.2 Pantalla de Deudores
 
-**Punto de venta** → menú **Clientes** → **Deudores** (o el nombre equivalente en el menú, dependiendo de permisos). Muestra la lista completa de clientes con deuda mayor a $0, ordenada por días sin pago (los más urgentes primero), con el mismo semáforo de colores.
+**Punto de venta** → pestaña **Deudores** (arriba, junto a Órdenes/Productos). Muestra la lista completa de clientes con deuda mayor a $0, ordenada por días sin pago (los más urgentes primero), con el mismo semáforo de colores.
 
 - Un **Vendedor** solo ve en esta pantalla a **sus propios clientes**.
 - **Depósito**, **Administración Operativa** y **Administración Privada/Gerencia** ven a **todos** los deudores.
+
+### 9.3 Cómo se salda una deuda (registrar el cobro)
+
+Cuando un comercio paga lo que debía, alguien de **Gerencia** tiene que registrar ese cobro para que desaparezca de Deudores:
+
+1. **Facturación** → **Clientes** → **Pagos** → **Nuevo**.
+2. Elegir el **Cliente**, el **Monto** cobrado y el **Diario** (Efectivo o Banco según cómo pagó).
+3. Confirmar. El sistema concilia el pago contra la deuda pendiente automáticamente.
+
+Apenas se confirma, `credito_monto_adeudado` y `credito_dias_sin_pago` de ese cliente se recalculan solos (no hace falta hacer nada más) y desaparece de la pantalla de Deudores si quedó en $0. Si el pago fue parcial, el monto adeudado baja pero el cliente sigue apareciendo en la lista.
+
+> Solo **Gerencia** (y el `admin` técnico) tienen acceso a Facturación — es la única forma de saldar una cuenta corriente hoy. Vendedor, Depósito y Administración Operativa no pueden registrar cobros.
 
 ---
 
@@ -298,7 +310,7 @@ El sistema tiene 4 roles de seguridad, agrupados bajo la categoría **"Reparto"*
 | **Vendedor** | Solo los propios (según el campo "Vendedor" del cliente) | Solo los propios | No puede crear ni borrar clientes. No puede borrar pedidos. |
 | **Depósito** | Todos | Todos | Sin restricciones propias todavía (se ajustará si el detalle operativo lo requiere) |
 | **Administración Operativa** | Todos | Todos | ídem |
-| **Administración Privada / Gerencia** | Todos | Todos | ídem |
+| **Administración Privada / Gerencia** | Todos | Todos | Además tiene **Facturación** — es quien registra el cobro cuando un cliente salda su cuenta corriente (sección 9) |
 
 Los 4 roles son **mutuamente excluyentes** entre sí (un usuario tiene uno solo), pero se combinan con los grupos estándar de Odoo (por ejemplo, además hay que darle al vendedor el grupo "Point of Sale User" para que pueda abrir el POS).
 
