@@ -1,7 +1,7 @@
 # Manual de Usuario — Sistema de Gestión Reparto (Odoo 19)
 
 **Rincón del Sur — Peyrano**
-Versión del documento: 2026-08-24
+Versión del documento: 2026-09-10
 
 ---
 
@@ -18,10 +18,12 @@ Versión del documento: 2026-08-24
 9. [Alertas de crédito y pantalla de Deudores](#9-alertas-de-crédito-y-pantalla-de-deudores)
 10. [Control de stock por camión](#10-control-de-stock-por-camión)
 11. [Roles y permisos de usuario](#11-roles-y-permisos-de-usuario)
-12. [Facturación](#12-facturación)
+12. [Remito interno (no reemplaza la factura)](#12-remito-interno-no-reemplaza-la-factura)
 13. [Cierre de caja (sesión de POS)](#13-cierre-de-caja-sesión-de-pos)
 14. [Funcionamiento sin conexión (offline)](#14-funcionamiento-sin-conexión-offline)
 15. [Preguntas frecuentes y limitaciones conocidas](#15-preguntas-frecuentes-y-limitaciones-conocidas)
+16. [Hoja de ruta ("Viaje")](#16-hoja-de-ruta-viaje)
+17. [Comisión de vendedor](#17-comisión-de-vendedor)
 
 ---
 
@@ -37,10 +39,11 @@ Cada usuario ve únicamente las aplicaciones y datos que le correspondan según 
 
 La pantalla principal muestra un menú de aplicaciones (grilla de 9 puntos arriba a la izquierda). Las apps relevantes para la operación diaria son:
 
-- **Contactos** — clientes y proveedores.
+- **Clientes** — clientes y proveedores (Odoo la llama internamente "Contactos"; el sistema ya la muestra rotulada "Clientes" en el menú).
 - **Inventario** — stock, ubicaciones, traslados.
 - **Punto de venta** — ventas, sesiones, configuración de tiendas/camiones.
-- **Facturación** — facturas, pagos, listas de precios.
+
+> **Facturación fiscal no forma parte de este sistema** — el negocio sigue facturando con su software externo en PC. Ver sección [12. Remito interno (no reemplaza la factura)](#12-remito-interno-no-reemplaza-la-factura).
 
 ---
 
@@ -88,7 +91,7 @@ Para asignarlo: abrir la ficha del cliente → pestaña **Ventas y compras** →
    - Tildar **Ventas**, **Punto de venta** y **Compras** según corresponda (para que aparezca en el buscador del POS, "Punto de venta" tiene que estar tildado).
 3. Guardar.
 
-> ⚠️ **Nota importante sobre el catálogo actual:** al día de este manual, la mayoría de los ~182 productos importados desde la planilla de precios **no tienen "Rastrear inventario" activado**. Eso significa que hoy el control de stock por camión solo funciona en los productos donde se activó manualmente ese casillero. Antes de depender del bloqueo de sobreventa (sección 10) para todo el catálogo, hay que revisar y activar el rastreo de inventario producto por producto (o en lote).
+> ✅ Los 182 productos del catálogo real ya están cargados con **"Rastrear inventario" activado**, y desde esta versión **todo producto nuevo lo trae tildado por defecto** — así que el bloqueo de sobreventa (sección 10) funciona out-of-the-box sin tener que revisar producto por producto.
 
 ### 3.3 Cargar stock inicial de un producto
 
@@ -211,13 +214,15 @@ Aparte de la apertura de sesión, el control real de "qué ve cada vendedor" ya 
 
 ## 6. Punto de Venta — conceptos generales
 
-Hoy existen dos configuraciones de Punto de Venta, pensadas para dos situaciones de venta distintas:
+Hoy existen cuatro configuraciones de Punto de Venta:
 
-| | **Punto de Venta Reparto** | **POS Camión 1** |
+| | **Punto de Venta Reparto** | **POS Camión 1 / 2 / 3** |
 |---|---|---|
-| Uso | Venta con entrega diferida (se cobra hoy, se entrega otro día) o venta de mostrador/oficina | Venta ambulante desde el camión, cobro y entrega inmediata |
-| Ubicación de stock que controla | WH/Stock (depósito central) | WH/Stock/Camión 1 |
+| Uso | Venta con entrega diferida (se cobra hoy, se entrega otro día) o venta de mostrador/oficina | Venta ambulante desde cada camión, cobro y entrega inmediata |
+| Ubicación de stock que controla | WH/Stock (depósito central) | WH/Stock/Camión N (stock propio de cada camión) |
 | Permite "Enviar más tarde" (Ship Later) | Sí | No |
+
+Los tres camiones funcionan igual — mismo circuito, cada uno con su propia ubicación de stock, caja y tipo de operación (ver sección 5.4 para dar de alta uno nuevo).
 
 Para abrir cualquiera de los dos: **Punto de venta** → tablero de tiendas → botón **"Seguir vendiendo"** (si ya hay una sesión abierta) o **"Nueva sesión"** (si está cerrado).
 
@@ -297,6 +302,8 @@ El sistema tiene 4 roles de seguridad, agrupados bajo la categoría **"Reparto"*
 
 Los 4 roles son **mutuamente excluyentes** entre sí (un usuario tiene uno solo), pero se combinan con los grupos estándar de Odoo (por ejemplo, además hay que darle al vendedor el grupo "Point of Sale User" para que pueda abrir el POS).
 
+> **Usuario `admin`:** tiene acceso total a todas las apps y configuraciones del sistema (es el superusuario técnico), más los roles Administración Operativa y Gerencia del negocio — así ve también todo lo que ve Gerencia (Comisiones, Deudores, etc.). Es la cuenta para el equipo técnico, no para uso diario del negocio.
+
 **Alta de un usuario nuevo (vendedor, depósito, etc.):**
 
 1. **Ajustes** → **Usuarios y compañías** → **Usuarios** → **Nuevo**.
@@ -306,12 +313,15 @@ Los 4 roles son **mutuamente excluyentes** entre sí (un usuario tiene uno solo)
 
 ---
 
-## 12. Facturación
+## 12. Remito interno (no reemplaza la factura)
 
-- Hoy el sistema emite **factura local de Odoo sin timbrar** (Factura A, B o C interna) — no está conectado a los webservices de ARCA/AFIP todavía.
-- El vendedor elige facturar o no cada venta, caso por caso, desde la propia pantalla de cobro del POS (opción "Recibo/Factura").
-- Para poder facturar a un cliente, es obligatorio que tenga cargado el **Tipo de responsabilidad de ARCA** (sección 2.1) — si falta, el sistema avisa "Falta la configuración del contacto" y no deja continuar hasta completarlo.
-- La conexión real con ARCA (para que las facturas sean válidas fiscalmente) es un desarrollo pendiente: requiere CUIT real, certificado digital y punto de venta habilitado en ARCA.
+**Este sistema NO factura.** El negocio sigue facturando con su software externo en la PC, incluida la Factura A — así lo confirmó el cliente por escrito en el relevamiento de requerimientos. No hace falta cargar CUIT, condición de ARCA ni nada fiscal para vender en el POS.
+
+Lo que sí genera el sistema es un **remito interno** (hoja de pedido, sin valor fiscal) por cada venta, para que quede constancia de qué se entregó a cada comercio:
+
+1. Desde el ticket de una venta ya cobrada (Punto de venta → **Órdenes** → abrir la orden), botón **Imprimir remito**.
+2. El remito muestra cliente, productos, cantidades y totales — sirve como comprobante de entrega para el vendedor y el comercio, no como factura.
+3. La facturación fiscal de esa venta se hace aparte, en el software externo del negocio, con los datos del remito como respaldo.
 
 ---
 
@@ -358,6 +368,32 @@ No todavía — hoy el sistema solo evalúa días sin pago. Ese criterio requier
 
 **¿Cómo agrego un camión nuevo (Camión 2, 3, etc.)?**
 Es un patrón repetible: crear la ubicación de stock, el tipo de operación de picking y la configuración de Punto de Venta correspondiente. Pedirle esto al equipo de desarrollo — no es una tarea de uso diario.
+
+---
+
+## 16. Hoja de ruta ("Viaje")
+
+Antes de que un chofer salga a repartir, un usuario de **Administración Operativa** o **Gerencia** arma su hoja de ruta del día:
+
+1. **Punto de venta** → **Viajes** → **Nuevo**.
+2. Elegir **Chofer**, **Fecha** y el **Camión** (punto de venta) que va a usar.
+3. En **Paradas**, agregar los clientes a visitar ese día (sin orden fijo — no es ruta optimizada por geolocalización, es una checklist).
+4. Guardar.
+
+El chofer ve su hoja de ruta como el cuadradito **"Viaje"** en la pantalla de Inicio (grilla táctil): lista de paradas pendientes. Al tocar una parada, abre directamente el POS del camión con ese cliente ya seleccionado. Cuando cobra el pedido, la parada se tilda sola — no hace falta marcarla a mano. Administración/Gerencia ve el progreso de cada chofer (paradas completadas / totales) en el panel **Punto de venta → Viajes**.
+
+> **Limitación conocida:** si el mismo cliente queda cargado en dos viajes de choferes distintos el mismo día, el sistema no lo bloquea (caso raro, carga manual duplicada).
+
+---
+
+## 17. Comisión de vendedor
+
+Cada vendedor tiene un **porcentaje de comisión** (`% Comisión`, editable solo por Gerencia desde su ficha de usuario). La comisión se calcula **al cobrarle al cliente**, no al cargar el pedido:
+
+- **Venta al contado** (efectivo/tarjeta en el momento): la comisión se genera apenas se cobra la orden.
+- **Venta a cuenta corriente** (crédito, sección 9): la comisión se genera recién cuando ese cliente paga — si paga en partes, cada pago genera su parte proporcional de comisión.
+
+Solo **Gerencia** ve el panel de comisiones: **Punto de venta → Comisiones** — una tabla dinámica (vendedor × mes) con el monto cobrado y la comisión resultante, más el detalle línea por línea. Es de **solo lectura**: nadie carga comisiones a mano, las genera el sistema solo a partir de los cobros reales.
 
 ---
 
