@@ -198,3 +198,10 @@ class TestRepartoSecurity(TransactionCase):
             ('id', 'in', [camion_1.id, camion_2.id]),
         ])
         self.assertEqual(found, camion_1 | camion_2)
+
+    def test_campo_camion_asignado_visible_en_formulario_de_usuario(self):
+        admin = self.env.ref('base.user_admin')
+        arch = self.env['res.users'].with_user(admin).get_view(
+            self.env.ref('base.view_users_form').id
+        )['arch']
+        self.assertIn('reparto_camion_asignado_id', arch)

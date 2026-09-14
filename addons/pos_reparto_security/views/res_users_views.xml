@@ -1,0 +1,16 @@
+<odoo>
+    <record id="view_users_form_reparto_camion" model="ir.ui.view">
+        <field name="name">res.users.form.reparto.camion</field>
+        <field name="model">res.users</field>
+        <field name="inherit_id" ref="base.view_users_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//notebook" position="inside">
+                <page string="Camión (Reparto)">
+                    <group>
+                        <field name="reparto_camion_asignado_id"/>
+                    </group>
+                </page>
+            </xpath>
+        </field>
+    </record>
+</odoo>
