@@ -90,3 +90,23 @@ class TestProductStockDisplay(TransactionCase):
         self.assertEqual(
             self._leer(self.producto_servicio.product_tmpl_id, self.camion_1)['reparto_stock_disponible'], 0,
         )
+
+    def test_cache_no_se_reutiliza_entre_camiones_en_la_misma_transaccion(self):
+        # Regresión de dos fixes relacionados: @api.depends_context('location')
+        # en reparto_stock_disponible (fc93f07) y el invalidate_recordset de
+        # qty_available en _load_pos_data_read (qty_available del stock core
+        # sólo particiona su cache por 'warehouse_id', no por 'location' - ver
+        # product.template._compute_quantities en stock/models/product.py).
+        # Sin cualquiera de los dos, leer el mismo template bajo dos camiones
+        # distintos EN LA MISMA transacción (mismo self.env, mismo cache de
+        # campos) devuelve para el segundo camión el valor stale del primero.
+        # Los otros tests de esta clase no lo detectan porque cada uno corre
+        # en su propio TransactionCase con cache propio - acá hace falta leer
+        # ambos camiones dentro del mismo método de test.
+        tmpl = self.producto.product_tmpl_id
+
+        primera_lectura = self._leer(tmpl, self.camion_1)['reparto_stock_disponible']
+        segunda_lectura = self._leer(tmpl, self.camion_2)['reparto_stock_disponible']
+
+        self.assertEqual(primera_lectura, 45)
+        self.assertEqual(segunda_lectura, 0)

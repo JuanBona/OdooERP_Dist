@@ -54,4 +54,15 @@ class ProductTemplate(models.Model):
         location = config.picking_type_id.default_location_src_id
         if location and location.usage == 'internal':
             records = records.with_context(location=location.id)
+            # qty_available (stock core) solo particiona su cache por
+            # 'warehouse_id' (ver product.template._compute_quantities en
+            # stock/models/product.py), no por 'location'. Si dos camiones
+            # comparten warehouse (caso normal: mismo lot_stock_id, distinta
+            # ubicacion interna) y se leen ambos dentro de la misma
+            # transaccion, qty_available devuelve el valor cacheado del
+            # primer camion sin este invalidate - reparto_stock_disponible
+            # recalcula (tiene su propio depends_context('location')) pero
+            # sobre un qty_available stale. Sin esto el cambio de location
+            # no alcanza.
+            records.invalidate_recordset(['qty_available'])
         return super()._load_pos_data_read(records, config)
