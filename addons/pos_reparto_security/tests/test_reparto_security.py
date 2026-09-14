@@ -156,3 +156,11 @@ class TestRepartoSecurity(TransactionCase):
         )
         order_id = self.env.cr.fetchone()[0]
         return self.env['pos.order'].browse(order_id)
+
+    def test_campo_camion_asignado_default_vacio(self):
+        self.assertFalse(self.vendedor_1.reparto_camion_asignado_id)
+
+    def test_campo_camion_asignado_se_puede_setear(self):
+        pos_config = self.env['pos.config'].create({'name': 'Camión Test Bloqueo'})
+        self.vendedor_1.sudo().reparto_camion_asignado_id = pos_config
+        self.assertEqual(self.vendedor_1.reparto_camion_asignado_id, pos_config)
