@@ -321,6 +321,8 @@ Esperado: sin tracebacks en la salida. Revisar en particular que no haya error d
 
 Abrir una sesión de "POS Camion 1" logueado como `vendedor@reparto.local`, confirmar que los productos con stock rastreado muestran el número en la esquina superior izquierda del tile, en naranja si es ≤10 y gris si es mayor. Productos no rastreados no muestran nada.
 
+**Gotcha real encontrado en revisión (verificado 2026-09-14):** cualquier navegador/tablet que ya tenía una sesión de POS abierta antes de instalar/actualizar este módulo sigue sirviendo su caché local de `product.template` (POS es offline-first, ver sección 14 de `MANUAL_USUARIO.md`) — y esa caché no tiene el campo `reparto_stock_disponible` porque agregar un campo nuevo no toca el `write_date` de los productos existentes, que es lo que Odoo usa para decidir qué re-descargar. El resultado es silencioso y peligroso: el patch de `product_card.js` cae a `?? 0`, así que el tile muestra "0u" para todo, indistinguible a simple vista de un camión realmente vacío. Se reprodujo en esta sesión con la sesión de "POS Camion 1" que venía de la implementación de este mismo Task 2 (todo el catálogo en 0u) y se confirmó el arreglo: ☰ → **Volver a cargar datos → Completo** una vez por dispositivo, después de lo cual el grid mostró los números reales (`AGUA MINERAL IVESS 1500CC X 6`: 10u naranja, `BAGGIO FORZA MANZANA 6 X 500CC` / varias gaseosas: 29-30u gris — coinciden exacto con `stock_quant` de la ubicación de Camión 1). No es un bug de código, no requiere fix — es un paso operativo a repetir en cada dispositivo real la primera vez que sincroniza después de este cambio.
+
 - [ ] **Step 6: Commit**
 
 ```bash

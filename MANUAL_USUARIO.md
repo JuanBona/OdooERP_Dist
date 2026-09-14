@@ -402,6 +402,9 @@ No todavía — hoy el sistema solo evalúa días sin pago. Ese criterio requier
 **¿Cómo agrego un camión nuevo (Camión 2, 3, etc.)?**
 Es un patrón repetible: crear la ubicación de stock, el tipo de operación de picking y la configuración de Punto de Venta correspondiente. Pedirle esto al equipo de desarrollo — no es una tarea de uso diario.
 
+**El numerito de stock de un producto en la grilla se quedó en 0 y no parece real, ¿qué hago?**
+Puede pasar en una tablet que no actualizó sus datos desde la última actualización del sistema. Solución: desde el menú ☰ (arriba a la derecha, dentro del POS), elegir **"Volver a cargar datos" → "Completo"** una sola vez. Al terminar, el número vuelve a mostrar el stock real del camión.
+
 ---
 
 ## 16. Hoja de ruta ("Viaje")
