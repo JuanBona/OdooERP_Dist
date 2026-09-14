@@ -221,6 +221,8 @@ git add addons/pos_stock_limit/models/product_template.py addons/pos_stock_limit
 git commit -m "feat(pos_stock_limit): campo reparto_stock_disponible en la carga del POS"
 ```
 
+**Nota post-implementación (revisión de código, commits `fc93f07` y `34c46eb`):** el campo necesitó `@api.depends('qty_available', 'is_storable')` + `@api.depends_context('location')` (faltaban en la Step 4 de arriba) y, además, un `records.invalidate_recordset(['qty_available'])` explícito en `_load_pos_data_read` — el `_compute_quantities` de Odoo core que calcula `qty_available` solo declara `@api.depends_context('warehouse_id')`, no `'location'`, así que dos camiones del mismo depósito comparten cache de `qty_available` dentro de la misma transacción sin el invalidate manual. Se agregó un 5º test (`test_cache_no_se_reutiliza_entre_camiones_en_la_misma_transaccion`) que reproduce el bug y lo cubre. Detalle completo en el diff de esos dos commits, no repetido acá.
+
 ---
 
 ### Task 2: Badge en la grilla del catálogo
