@@ -300,6 +300,7 @@ El sistema bloquea automáticamente cualquier venta en un camión que pida más 
 
 - Se valida **al momento de cobrar** (botón Validar en la pantalla de pago), no mientras se arma el carrito. Es una limitación conocida y aceptada: el vendedor puede armar el pedido tranquilo y recién al cobrar se entera si falta stock.
 - El mensaje de error indica exactamente qué producto, cuánto se pidió y cuánto hay disponible.
+- Para no tener que llegar a cobrar para enterarse: cada producto de la grilla muestra un numerito chico con el stock del camión (ej. "45u"), y al agregarlo al carrito el número baja en vivo mostrando cuánto queda según lo que ya cargaste en ese pedido. Se pone naranja cuando queda poco. Es una foto del momento en que se abrió la sesión de POS — si otra tablet vendió el mismo producto mientras tanto, no se actualiza solo (para eso está el bloqueo real al cobrar, que sí es exacto).
 - **Depende de que el producto tenga "Rastrear inventario" activado** (sección 3.2). Si no lo tiene, el sistema no tiene forma de saber cuánto hay y **no bloquea nada**, sin importar la cantidad pedida.
 - Aplica únicamente en puntos de venta cuya ubicación de origen sea un camión (no aplica, por ejemplo, en Punto de Venta Reparto si su origen es el depósito central, salvo que también se quede sin stock ahí).
 

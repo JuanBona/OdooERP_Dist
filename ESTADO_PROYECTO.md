@@ -93,6 +93,8 @@ Probado: pedir 999 Coca-Colas contra Camión 1 (40 disponibles) → bloqueado co
 
 Limitación conocida (a propósito, YAGNI): valida al cobrar/cerrar la orden, no en tiempo real mientras se arma el carrito en pantalla.
 
+Además, desde el 2026-09-14: cada tile de la grilla y cada renglón del carrito muestran un badge chico con el stock disponible del camión — foto de la sesión (no se sincroniza en vivo entre tablets), naranja si queda poco (≤10u). Si el dato es genuinamente desconocido (dispositivo con cache local viejo de antes de instalar este campo), la grilla muestra "?" en vez de inventar un 0, y el badge del renglón del carrito directamente no se muestra. El renglón del carrito resta en vivo lo que ya se cargó de ese producto en el pedido actual. Puramente informativo, no reemplaza el bloqueo real al cobrar (arriba).
+
 ## 5bis. Módulo custom: `pos_reparto_security`
 
 Ubicación: `addons/pos_reparto_security/`. Instalado.
