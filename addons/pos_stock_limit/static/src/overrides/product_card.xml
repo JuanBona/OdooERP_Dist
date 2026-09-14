@@ -5,7 +5,8 @@
         <xpath expr="//t[@t-slot='quantityButtons']" position="before">
             <span t-if="repartoMostrarStock"
                   t-attf-class="reparto-stock-disponible position-absolute top-0 start-0 m-1 px-2 rounded fs-6 {{ repartoStockClass }}">
-                <t t-esc="repartoStockDisponible"/>u
+                <t t-if="repartoStockConocido"><t t-esc="repartoStockDisponible"/>u</t>
+                <t t-else="">?</t>
             </span>
         </xpath>
     </t>
