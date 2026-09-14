@@ -1,7 +1,7 @@
 # Manual de Usuario — Sistema de Gestión Reparto (Odoo 19)
 
 **Rincón del Sur — Peyrano**
-Versión del documento: 2026-09-10
+Versión del documento: 2026-09-14
 
 ---
 
@@ -322,12 +322,27 @@ Los 4 roles son **mutuamente excluyentes** entre sí (un usuario tiene uno solo)
 
 > **Usuario `admin`:** tiene acceso total a todas las apps y configuraciones del sistema (es el superusuario técnico), más los roles Administración Operativa y Gerencia del negocio — así ve también todo lo que ve Gerencia (Comisiones, Deudores, etc.). Es la cuenta para el equipo técnico, no para uso diario del negocio.
 
+**Cuentas actuales del sistema (quién tiene cada rol):**
+
+| Usuario (login) | Rol Reparto | Notas |
+|---|---|---|
+| `admin` | Administración Operativa + Gerencia | Superusuario técnico (ver nota arriba) |
+| `vendedor@reparto.local` | Vendedor | |
+| `deposito@reparto.local` | Depósito | |
+| `adminop@reparto.local` | Administración Operativa | |
+| `gerencia@reparto.local` | Administración Privada / Gerencia | |
+
+> Las **contraseñas no se documentan acá a propósito** — este archivo queda en el repositorio de git (con historial permanente) y puede circular como PDF. Guardalas en un gestor de contraseñas o entregalas al cliente por un canal separado y seguro (no por este manual). Si en algún momento se compartió una contraseña por acá u otro canal inseguro, cambiarla.
+
+> Además de las 5 cuentas de negocio de arriba, en la base quedaban dos cuentas de prueba (`chofer_viaje_manual_test`, `plain_internal_test`) de testing — ya desactivadas (2026-09-14), no aparecen en la lista de usuarios activos.
+
 **Alta de un usuario nuevo (vendedor, depósito, etc.):**
 
 1. **Ajustes** → **Usuarios y compañías** → **Usuarios** → **Nuevo**.
 2. Cargar nombre, email de acceso, contraseña inicial.
 3. En la pestaña de permisos, asignarle el rol de **Reparto** que corresponda (Vendedor / Depósito / Administración Operativa / Administración Privada) y el o los grupos estándar de la app que va a usar (por ejemplo, *Point of Sale: User*).
-4. Si es vendedor, no te olvides de ir a los clientes que le correspondan y asignarle el campo **Vendedor** (sección 2.2) — si no, no va a ver ningún cliente.
+4. Si es vendedor, no te olvides de ir a los clientes que le correspondan y asignarle el campo **Vendedor** (sección 2.2) — si no, no va a ver ningún cliente, **y si además ese cliente queda como parada de un Viaje (sección 16), el viaje entero se rompe para ese vendedor** (no puede leer el nombre del cliente y la pantalla "Viaje" tira error en vez de mostrar la ruta).
+5. La **zona horaria** (`tz`) ya viene precargada en **America/Argentina/Buenos_Aires** por defecto para cuentas nuevas — no hace falta tocarla. Si alguna vez ves que un Viaje "desaparece" cerca de la medianoche (hora Argentina) sin razón aparente, revisar que el usuario tenga esa zona horaria seteada en su ficha (**Ajustes → Usuarios**, pestaña Preferencias): sin ella, Odoo calcula "hoy" en UTC y un viaje de hoy puede dejar de matchear 3 horas antes de la medianoche real.
 
 ---
 

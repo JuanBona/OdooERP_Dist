@@ -112,7 +112,9 @@ class TestRepartoViaje(TransactionCase):
     def test_admin_operativa_ve_todos_los_viajes(self):
         self._crear_viaje(self.chofer_1, fields.Date.today(), [self.cliente_a])
         self._crear_viaje(self.chofer_2, fields.Date.today(), [self.cliente_b])
-        viajes_vistos = self.env['reparto.viaje'].with_user(self.admin_op).search([])
+        viajes_vistos = self.env['reparto.viaje'].with_user(self.admin_op).search(
+            [('chofer_id', 'in', [self.chofer_1.id, self.chofer_2.id])]
+        )
         self.assertEqual(len(viajes_vistos), 2)
 
     def test_chofer_no_puede_crear_viaje(self):
