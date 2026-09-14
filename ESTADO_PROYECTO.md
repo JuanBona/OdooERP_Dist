@@ -93,6 +93,8 @@ Probado: pedir 999 Coca-Colas contra Camión 1 (40 disponibles) → bloqueado co
 
 Limitación conocida (a propósito, YAGNI): valida al cobrar/cerrar la orden, no en tiempo real mientras se arma el carrito en pantalla.
 
+Además, desde el 2026-09-14: cada tile de la grilla y cada renglón del carrito muestran un badge chico con el stock disponible del camión — foto de la sesión (no se sincroniza en vivo entre tablets), naranja si queda poco (≤10u). Si el dato es genuinamente desconocido (dispositivo con cache local viejo de antes de instalar este campo), la grilla muestra "?" en vez de inventar un 0, y el badge del renglón del carrito directamente no se muestra. El renglón del carrito resta en vivo lo que ya se cargó de ese producto en el pedido actual. Puramente informativo, no reemplaza el bloqueo real al cobrar (arriba).
+
 ## 5bis. Módulo custom: `pos_reparto_security`
 
 Ubicación: `addons/pos_reparto_security/`. Instalado.
@@ -164,6 +166,8 @@ Qué hace: reemplaza el landing post-login (antes caía en Discuss) por una gril
 
 Spec: `docs/superpowers/specs/2026-08-25-pos-reparto-home-design.md`. Plan: `docs/superpowers/plans/2026-08-25-pos-reparto-home.md`.
 
+**Responsive (2026-09-14):** la grilla ya usaba `grid-template-columns: repeat(auto-fit, minmax(...))`, responsive de por sí. Se corrigió que el contenedor cortaba tiles sin scroll en pantallas bajas (tablet apaisada) — ahora hace scroll vertical en vez de recortar contenido. Verificado por razonamiento sobre el CSS (patrón estándar `overflow-y: auto`), no por navegador — la verificación visual en tablet/navegador real quedó pendiente esta sesión (extensión de Chrome inaccesible) y debería hacerse antes de confiar en esto para una demo con cliente.
+
 ## 5septies. Módulo custom: `pos_reparto_descuento_volumen`
 
 Ubicación: `addons/pos_reparto_descuento_volumen/`. Depende de `point_of_sale`, `pos_reparto_security`, `pos_reparto_pricelist`. Cubre **RF-PV-09** (descuentos automáticos por volumen parametrizables por producto + override manual en el renglón, con permisos). Mergeado a `main` vía PR #3 (rama `feature/pos-reparto-descuentos-volumen` ya borrada).
@@ -208,6 +212,8 @@ Dos bugs reales encontrados y arreglados durante la verificación:
 **Nota operativa (encontrada 2026-08-31, importante para cualquiera que retome este proyecto):** los comandos `docker compose` para este proyecto **deben correrse desde el directorio de este worktree**, no desde el checkout principal. El `docker-compose.yml` usa un bind mount relativo (`./addons`), así que si se corre `docker compose -p odooerp_dist up -d odoo` desde otro directorio (aunque se use el mismo `-p` para reusar la base), el mount de `/mnt/extra-addons` se recalcula contra ESE directorio y el container termina sirviendo un `addons/` distinto — silenciosamente, sin error. Eso pasó en esta sesión y causó horas de debugging (el módulo parecía "perder" su ACL/vistas/menú en cada reinstall, cuando en realidad estaba instalando una copia vieja y sin trackear que quedó suelta en `addons/pos_reparto_viaje/` del repo principal). Antes de reinstalar/actualizar cualquier módulo, correr `docker inspect odooerp_dist-odoo-1 --format "{{json .Mounts}}"` y confirmar que el `Source` del bind mount apunta al worktree correcto.
 
 Spec: `docs/superpowers/specs/2026-08-29-pos-reparto-viaje-design.md`. Plan: `docs/superpowers/plans/2026-08-29-pos-reparto-viaje.md`.
+
+**Responsive (2026-09-14):** mismo fix que `pos_reparto_home` — la lista de paradas ahora hace scroll vertical en vez de cortar filas en tablet apaisada, y quedó acotada a un ancho máximo legible en desktop.
 
 ## 5octies. Módulo custom: `pos_reparto_comision`
 

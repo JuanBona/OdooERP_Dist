@@ -7,6 +7,11 @@
     'data': [
         'data/product_defaults.xml',
     ],
+    'assets': {
+        'point_of_sale._assets_pos': [
+            'pos_stock_limit/static/src/**/*',
+        ],
+    },
     'installable': True,
     'application': False,
     'license': 'LGPL-3',

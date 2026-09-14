@@ -221,6 +221,8 @@ git add addons/pos_stock_limit/models/product_template.py addons/pos_stock_limit
 git commit -m "feat(pos_stock_limit): campo reparto_stock_disponible en la carga del POS"
 ```
 
+**Nota post-implementación (revisión de código, commits `fc93f07` y `34c46eb`):** el campo necesitó `@api.depends('qty_available', 'is_storable')` + `@api.depends_context('location')` (faltaban en la Step 4 de arriba) y, además, un `records.invalidate_recordset(['qty_available'])` explícito en `_load_pos_data_read` — el `_compute_quantities` de Odoo core que calcula `qty_available` solo declara `@api.depends_context('warehouse_id')`, no `'location'`, así que dos camiones del mismo depósito comparten cache de `qty_available` dentro de la misma transacción sin el invalidate manual. Se agregó un 5º test (`test_cache_no_se_reutiliza_entre_camiones_en_la_misma_transaccion`) que reproduce el bug y lo cubre. Detalle completo en el diff de esos dos commits, no repetido acá.
+
 ---
 
 ### Task 2: Badge en la grilla del catálogo
@@ -318,6 +320,8 @@ Esperado: sin tracebacks en la salida. Revisar en particular que no haya error d
 - [ ] **Step 5: Verificar visualmente en el navegador**
 
 Abrir una sesión de "POS Camion 1" logueado como `vendedor@reparto.local`, confirmar que los productos con stock rastreado muestran el número en la esquina superior izquierda del tile, en naranja si es ≤10 y gris si es mayor. Productos no rastreados no muestran nada.
+
+**Gotcha real encontrado en revisión (verificado 2026-09-14):** cualquier navegador/tablet que ya tenía una sesión de POS abierta antes de instalar/actualizar este módulo sigue sirviendo su caché local de `product.template` (POS es offline-first, ver sección 14 de `MANUAL_USUARIO.md`) — y esa caché no tiene el campo `reparto_stock_disponible` porque agregar un campo nuevo no toca el `write_date` de los productos existentes, que es lo que Odoo usa para decidir qué re-descargar. El resultado es silencioso y peligroso: el patch de `product_card.js` cae a `?? 0`, así que el tile muestra "0u" para todo, indistinguible a simple vista de un camión realmente vacío. Se reprodujo en esta sesión con la sesión de "POS Camion 1" que venía de la implementación de este mismo Task 2 (todo el catálogo en 0u) y se confirmó el arreglo: ☰ → **Volver a cargar datos → Completo** una vez por dispositivo, después de lo cual el grid mostró los números reales (`AGUA MINERAL IVESS 1500CC X 6`: 10u naranja, `BAGGIO FORZA MANZANA 6 X 500CC` / varias gaseosas: 29-30u gris — coinciden exacto con `stock_quant` de la ubicación de Camión 1). No es un bug de código, no requiere fix — es un paso operativo a repetir en cada dispositivo real la primera vez que sincroniza después de este cambio.
 
 - [ ] **Step 6: Commit**
 

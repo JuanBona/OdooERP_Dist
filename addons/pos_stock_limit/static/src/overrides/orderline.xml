@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<templates id="template" xml:space="preserve">
+    <t t-name="pos_stock_limit.OrderlineStock"
+       t-inherit="point_of_sale.Orderline" t-inherit-mode="extension">
+        <xpath expr="//t[@t-slot='default']" position="before">
+            <li t-if="repartoStockRestante !== null" class="price-per-unit reparto-stock-restante">
+                <i class="fa fa-truck pe-1"/>
+                <span t-attf-class="{{ repartoStockRestanteClass }}">
+                    <t t-esc="repartoStockRestante"/> disponibles
+                </span>
+            </li>
+        </xpath>
+    </t>
+</templates>
