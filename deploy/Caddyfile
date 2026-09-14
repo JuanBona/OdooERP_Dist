@@ -1,0 +1,16 @@
+{
+	email {$ACME_EMAIL}
+}
+
+{$DOMAIN} {
+	encode gzip
+
+	@longpolling path /websocket /longpolling/*
+	handle @longpolling {
+		reverse_proxy odoo:8072
+	}
+
+	handle {
+		reverse_proxy odoo:8069
+	}
+}

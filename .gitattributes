@@ -1,1 +1,2 @@
 backup.sql -text binary
+*.sh text eol=lf

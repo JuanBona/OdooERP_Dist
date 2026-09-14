@@ -16,3 +16,8 @@ Thumbs.db
 
 # Brainstorming visual companion (mockups de sesión, no versionar)
 .superpowers/
+
+# Secretos de producción — nunca versionar, solo los .example
+.env
+deploy/odoo.conf
+deploy/backups/

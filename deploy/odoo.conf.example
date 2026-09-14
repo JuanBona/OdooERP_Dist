@@ -1,0 +1,28 @@
+[options]
+addons_path = /mnt/extra-addons
+data_dir = /var/lib/odoo
+
+; Master password del gestor de bases (/web/database/manager). Generar una
+; fuerte antes de deployar — nunca dejar "admin". Ej: openssl rand -base64 24
+admin_passwd = CAMBIAR_ESTO_POR_UNA_MASTER_PASSWORD_FUERTE
+
+; Oculta el selector/gestor de bases en la URL pública — sin esto cualquiera
+; en internet ve la lista de bases y puede intentar entrar al gestor.
+list_db = False
+
+; Restringe el sistema a una sola base — reemplazar "odoo" por el DB_NAME
+; real que pusiste en .env (anclado con ^...$ para que no matchee de más).
+dbfilter = ^odoo$
+
+; Detrás de Caddy — sin esto Odoo no confía en los headers X-Forwarded-*
+; y genera URLs/redirects http en vez de https.
+proxy_mode = True
+
+; Concurrencia real (no el modo dev de un solo proceso). Ajustar según CPU
+; del VPS: 2 workers anda bien en un plan de 2 vCPU/4GB. Con 1 vCPU/2GB,
+; bajar a 0 (modo threaded, como en dev) para no quedarse sin RAM.
+workers = 2
+max_cron_threads = 1
+
+limit_time_cpu = 120
+limit_time_real = 240
