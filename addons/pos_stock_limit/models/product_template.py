@@ -12,6 +12,8 @@ class ProductTemplate(models.Model):
              "ubicación que setea _load_pos_data_read de este módulo.",
     )
 
+    @api.depends('qty_available', 'is_storable')
+    @api.depends_context('location')
     def _compute_reparto_stock_disponible(self):
         for product in self:
             product.reparto_stock_disponible = product.qty_available if product.is_storable else 0.0
