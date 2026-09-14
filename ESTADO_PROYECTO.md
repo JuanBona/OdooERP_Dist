@@ -166,7 +166,7 @@ Spec: `docs/superpowers/specs/2026-08-25-pos-reparto-home-design.md`. Plan: `doc
 
 ## 5septies. Módulo custom: `pos_reparto_descuento_volumen`
 
-Ubicación: `addons/pos_reparto_descuento_volumen/`. Depende de `point_of_sale`, `pos_reparto_security`, `pos_reparto_pricelist`. Cubre **RF-PV-09** (descuentos automáticos por volumen parametrizables por producto + override manual en el renglón, con permisos). Rama `feature/pos-reparto-descuentos-volumen` (pendiente de merge a `main`).
+Ubicación: `addons/pos_reparto_descuento_volumen/`. Depende de `point_of_sale`, `pos_reparto_security`, `pos_reparto_pricelist`. Cubre **RF-PV-09** (descuentos automáticos por volumen parametrizables por producto + override manual en el renglón, con permisos). Mergeado a `main` vía PR #3 (rama `feature/pos-reparto-descuentos-volumen` ya borrada).
 
 Qué hace:
 
