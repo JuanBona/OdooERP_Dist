@@ -1,0 +1,23 @@
+<odoo>
+    <!--
+      El circuito de reparto necesita mover stock entre ubicaciones internas
+      (WH/Stock -> WH/Stock/Camion N) para cargar cada camion. Eso requiere
+      la opcion "Ubicaciones de almacenamiento" de Inventario
+      (stock.group_stock_multi_locations); sin ella el menu
+      Inventario > Operaciones > Traslados > "Interno" (stock.int_picking)
+      no aparece para ningun rol y no se puede cargar un camion.
+
+      Es exactamente lo que hace el toggle de Ajustes de Inventario:
+      declarar stock.group_stock_multi_locations como implied de
+      base.group_user (asi lo heredan todos los usuarios internos).
+
+      Se usa <function> y no <record id="base.group_user">: la fila
+      ir_model_data de base.group_user tiene noupdate=True, con lo que un
+      <record> sobre ese xmlid se saltea siempre. La funcion corre en cada
+      -u y reafirma la implicacion.
+    -->
+    <function model="res.groups" name="write">
+        <value eval="[ref('base.group_user')]"/>
+        <value eval="{'implied_ids': [(4, ref('stock.group_stock_multi_locations'))]}"/>
+    </function>
+</odoo>
