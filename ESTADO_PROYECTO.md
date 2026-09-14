@@ -108,7 +108,11 @@ No se creó ningún campo nuevo — ambas reglas reutilizan el campo `user_id` q
 
 Pendiente manual (fuera de este módulo): crear los usuarios reales de cada vendedor/depósito/administración y asignarles el grupo `Reparto` que corresponda + el/los grupo(s) estándar de Odoo de la app que vayan a usar (ej. Point of Sale User), y asignar el campo "Salesperson" (`user_id`) en cada cliente real al vendedor que le corresponde.
 
-Ver spec: `docs/superpowers/specs/2026-08-23-pos-reparto-security-design.md`.
+**Bloqueo duro de camión por vendedor (agregado 2026-09-14):** un vendedor solo ve/puede abrir el `pos.config` (POS de camión) asignado en el campo nuevo `res.users.reparto_camion_asignado_id` (pestaña "Camión (Reparto)" del formulario de usuario) — filtrado por una `ir.rule` sobre `pos.config`, mismo patrón que las reglas de `res.partner`/`pos.order` de arriba. Sin asignación, el vendedor no ve ningún camión (domain imposible, no un "ve todos" por default). No reemplaza el control operativo de "una tablet por vendedor" ya en uso, lo complementa. Se descartó el módulo estándar `pos_hr` — resuelve login multi-cajero dentro de una sesión ya abierta, no cuál `pos.config` puede abrir un usuario del backend (ver spec).
+
+> ⚠️ **Gap conocido, verificado 2026-09-14:** el bloqueo esconde la tarjeta del camión ajeno en el dashboard de Punto de Venta (confirmado vía RPC: `pos.config.web_search_read` devuelve 0 registros sin asignación). Pero si **ya existe una sesión abierta** en ese camión (dejada por otro usuario), un vendedor puede igual entrar a la terminal de venta navegando directo a `/pos/ui/<config_id>/...` y unirse a esa sesión — la ruta de la terminal valida contra `pos.session` (que permite que cualquier usuario con "Punto de venta: Usuario" se una a una sesión ya abierta, comportamiento nativo de Odoo para multi-cajero), no contra la `ir.rule` de `pos.config`. Decisión: no cerrar este gap ahora — el caso real del negocio es una sesión por camión por día sin superposición entre vendedores. Si aparece un caso real de superposición, extender la `ir.rule` (o equivalente) a `pos.session`.
+
+Ver spec: `docs/superpowers/specs/2026-08-23-pos-reparto-security-design.md` y `docs/superpowers/specs/2026-09-14-pos-bloqueo-camion-vendedor-design.md`.
 
 ## 5ter. Módulo custom: `pos_reparto_credito`
 
