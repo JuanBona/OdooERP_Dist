@@ -156,3 +156,52 @@ class TestRepartoSecurity(TransactionCase):
         )
         order_id = self.env.cr.fetchone()[0]
         return self.env['pos.order'].browse(order_id)
+
+    def test_campo_camion_asignado_default_vacio(self):
+        self.assertFalse(self.vendedor_1.reparto_camion_asignado_id)
+
+    def test_campo_camion_asignado_se_puede_setear(self):
+        pos_config = self.env['pos.config'].create({'name': 'Camión Test Bloqueo'})
+        self.vendedor_1.sudo().reparto_camion_asignado_id = pos_config
+        self.assertEqual(self.vendedor_1.reparto_camion_asignado_id, pos_config)
+
+    def test_vendedor_sin_camion_asignado_no_ve_ningun_pos_config(self):
+        camion_1 = self.env['pos.config'].create({'name': 'Camión 1 Test Bloqueo'})
+        camion_2 = self.env['pos.config'].create({'name': 'Camión 2 Test Bloqueo'})
+
+        found = self.env['pos.config'].with_user(self.vendedor_1).search([
+            ('id', 'in', [camion_1.id, camion_2.id]),
+        ])
+        self.assertFalse(found)
+
+    def test_vendedor_con_camion_asignado_ve_solo_ese(self):
+        camion_1 = self.env['pos.config'].create({'name': 'Camión 1 Test Bloqueo'})
+        camion_2 = self.env['pos.config'].create({'name': 'Camión 2 Test Bloqueo'})
+        camion_3 = self.env['pos.config'].create({'name': 'Camión 3 Test Bloqueo'})
+        self.vendedor_1.sudo().reparto_camion_asignado_id = camion_2
+
+        found = self.env['pos.config'].with_user(self.vendedor_1).search([
+            ('id', 'in', [camion_1.id, camion_2.id, camion_3.id]),
+        ])
+        self.assertEqual(found, camion_2)
+
+    def test_usuario_sin_grupo_vendedor_ve_todos_los_pos_config(self):
+        usuario_pos_sin_vendedor = self.env['res.users'].create({
+            'name': 'Usuario POS Sin Rol Vendedor',
+            'login': 'usuario_pos_sin_vendedor_test',
+            'group_ids': [(6, 0, [self.group_internal.id, self.group_pos_user.id])],
+        })
+        camion_1 = self.env['pos.config'].create({'name': 'Camión 1 Test Bloqueo'})
+        camion_2 = self.env['pos.config'].create({'name': 'Camión 2 Test Bloqueo'})
+
+        found = self.env['pos.config'].with_user(usuario_pos_sin_vendedor).search([
+            ('id', 'in', [camion_1.id, camion_2.id]),
+        ])
+        self.assertEqual(found, camion_1 | camion_2)
+
+    def test_campo_camion_asignado_visible_en_formulario_de_usuario(self):
+        admin = self.env.ref('base.user_admin')
+        arch = self.env['res.users'].with_user(admin).get_view(
+            self.env.ref('base.view_users_form').id
+        )['arch']
+        self.assertIn('reparto_camion_asignado_id', arch)
