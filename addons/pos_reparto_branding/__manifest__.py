@@ -3,7 +3,7 @@
     'version': '19.0.1.0.0',
     'category': 'Point of Sale',
     'summary': 'Oculta apps sin uso y aplica el color de marca a la barra superior del backend',
-    'depends': ['web', 'project', 'spreadsheet_dashboard', 'utm'],
+    'depends': ['web', 'project', 'spreadsheet_dashboard', 'utm', 'point_of_sale', 'sale'],
     'data': [
         'data/hide_unused_menus.xml',
     ],

@@ -1,7 +1,19 @@
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "5"
+
 services:
   db:
-    image: postgres:16
+    image: ${POSTGRES_IMAGE:-postgres:16}
     restart: unless-stopped
+    logging: *logging
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER} -d ${DB_NAME}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
     environment:
       POSTGRES_DB: ${DB_NAME}
       POSTGRES_USER: ${DB_USER}
@@ -10,10 +22,12 @@ services:
       - odoo-db-data:/var/lib/postgresql/data
 
   odoo:
-    image: odoo:19.0
+    image: ${ODOO_IMAGE:-odoo:19.0}
     restart: unless-stopped
+    logging: *logging
     depends_on:
-      - db
+      db:
+        condition: service_healthy
     environment:
       HOST: db
       USER: ${DB_USER}
@@ -30,6 +44,7 @@ services:
   caddy:
     image: caddy:2-alpine
     restart: unless-stopped
+    logging: *logging
     depends_on:
       - odoo
     environment:

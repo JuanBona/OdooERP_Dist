@@ -280,6 +280,8 @@ Configurado servidor MCP `odoo` en Claude Code (`claude mcp add odoo ...`), modo
 
 ## 9. Pendiente / próximos pasos
 
+**Paquete de producción (`deploy/`, 2026-09-23)**: `docker-compose.prod.yml` (imágenes fijadas por digest, healthcheck, logs rotados), `deploy/init_db.sh` (base limpia es_AR + AR + módulos; probado en base descartable), `deploy/backup.sh` (base + filestore, cada 4 hs, off-site con rclone, alerta healthchecks), `deploy/restore.sh` (probado: revierte cambios, UTF-8 OK) y `deploy/DEPLOY.md` (runbook). Al probar `init_db.sh` apareció un bug de instalación limpia: `pos_reparto_branding` no declaraba `point_of_sale`/`sale` en `depends` (corregido). **Falta**: contratar VPS/dominio, configurar rclone+healthchecks, simulacro de restore en el servidor real.
+
 **Hecho hasta ahora** (relevamiento v2.0, `Relevamiento_Requerimientos_Odoo_Reparto.docx`): `pos_reparto_security` (4 roles + reglas de acceso, sección 5bis), `pos_reparto_credito` (alerta 15 días, sección 5ter), `pos_reparto_branding` (personalización visual, 5quater), `pos_reparto_home` (pantalla de inicio táctil, 5quinquies), `pos_reparto_remito` (remito interno QWeb), `pos_reparto_viaje` (hoja de ruta, sección 5sexies), `pos_reparto_descuento_volumen` (RF-PV-09, sección 5septies). Todo mergeado a `main`. `pos_reparto_comision` (comisión de vendedor, sección 5octies) también mergeado a `main`.
 
 **Gaps Must/Should que quedan del relevamiento v2.0** (ver detalle y justificación en memoria `project-reparto-v2-requirements`, o repreguntar al cliente si hace falta el docx):
