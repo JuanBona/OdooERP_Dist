@@ -230,7 +230,7 @@ Qué hace:
 - **Seguridad**: `pos.reparto.comision.linea` es de **solo lectura para Gerencia** (`perm_read=1`, resto en `0`) — nadie edita/crea/borra líneas a mano, ni siquiera Gerencia, porque las crean los hooks vía `.sudo()`.
 - **Panel para Gerencia**: vista pivot (vendedor × mes, medidas monto cobrado/comisión) + lista de detalle de solo lectura, menú "Comisiones" bajo Punto de Venta, visible solo para `group_reparto_gerencia`.
 
-**Deuda técnica aceptada (no bloqueante, evaluar antes de producción)**:
+**Deuda técnica — RESUELTA el 2026-09-23** (rama `fix/comision-deuda-tecnica`: ambos hooks corren en savepoint con try/except+log, y la línea se resincroniza al cambiar monto/cliente/fecha del pago; 3 tests nuevos). Descripción original:
 1. El hook de `pos_order.py` envuelve la creación de la línea en `try/except Exception: log y sigue` (mismo patrón que `pos_reparto_remito`) — puede tragarse silenciosamente un fallo real de comisión de un pedido ya cobrado.
 2. El guard de `write()` en `account_payment.py` (`{'state','amount','partner_id'} & vals.keys()`) no re-sincroniza una línea ya creada si cambia `amount`/`partner_id` sin cambiar `state` — queda desactualizada sin error ni log.
 3. A diferencia de `pos_order.py`, el hook de `account_payment.py` **no** aísla errores — una excepción ahí aborta el `create()`/`write()`/`action_post()` real del pago en Contabilidad (más grave que bloquear una venta POS).
@@ -280,13 +280,13 @@ Configurado servidor MCP `odoo` en Claude Code (`claude mcp add odoo ...`), modo
 
 ## 9. Pendiente / próximos pasos
 
-**Hecho hasta ahora** (relevamiento v2.0, `Relevamiento_Requerimientos_Odoo_Reparto.docx`): `pos_reparto_security` (4 roles + reglas de acceso, sección 5bis), `pos_reparto_credito` (alerta 15 días, sección 5ter), `pos_reparto_branding` (personalización visual, 5quater), `pos_reparto_home` (pantalla de inicio táctil, 5quinquies), `pos_reparto_remito` (remito interno QWeb), `pos_reparto_viaje` (hoja de ruta, sección 5sexies), `pos_reparto_descuento_volumen` (RF-PV-09, sección 5septies). Todo mergeado a `main`. `pos_reparto_comision` (comisión de vendedor, sección 5octies) completo y testeado, falta merge.
+**Hecho hasta ahora** (relevamiento v2.0, `Relevamiento_Requerimientos_Odoo_Reparto.docx`): `pos_reparto_security` (4 roles + reglas de acceso, sección 5bis), `pos_reparto_credito` (alerta 15 días, sección 5ter), `pos_reparto_branding` (personalización visual, 5quater), `pos_reparto_home` (pantalla de inicio táctil, 5quinquies), `pos_reparto_remito` (remito interno QWeb), `pos_reparto_viaje` (hoja de ruta, sección 5sexies), `pos_reparto_descuento_volumen` (RF-PV-09, sección 5septies). Todo mergeado a `main`. `pos_reparto_comision` (comisión de vendedor, sección 5octies) también mergeado a `main`.
 
 **Gaps Must/Should que quedan del relevamiento v2.0** (ver detalle y justificación en memoria `project-reparto-v2-requirements`, o repreguntar al cliente si hace falta el docx):
 
 1. ~~Remito interno QWeb~~ — hecho, mergeado a `main` (módulo `pos_reparto_remito`).
 2. ~~Descuentos por volumen parametrizables por producto (ej. 4%/8%/12% según cantidad) + override manual en el renglón (RF-PV-09).~~ — hecho, mergeado a `main` (módulo `pos_reparto_descuento_volumen`, sección 5septies).
-3. ~~Comisión de vendedor (RF-GV-03)~~ — hecho, ver sección 5octies. Falta solo el merge a `main`. **Corrección importante**: el cliente aclaró el 2026-09-02 que la comisión se devenga al cobrarle al cliente, no al generar el pedido — al revés de lo que decía esta misma línea hasta la resolución del 2026-08-24.
+3. ~~Comisión de vendedor (RF-GV-03)~~ — hecho, ver sección 5octies. Ya mergeado a `main`. **Corrección importante**: el cliente aclaró el 2026-09-02 que la comisión se devenga al cobrarle al cliente, no al generar el pedido — al revés de lo que decía esta misma línea hasta la resolución del 2026-08-24.
 4. ~~Feature "Viaje"~~ — hecho, mergeado a `main`, ver sección 5sexies.
 5. Criterio "2 visitas consecutivas sin cobro" de `pos_reparto_credito` (hoy solo días sin pago, ver deuda técnica en 5ter). **Próximo ítem a tomar.**
 6. Productos habituales por cliente / venta sugerida (Should).

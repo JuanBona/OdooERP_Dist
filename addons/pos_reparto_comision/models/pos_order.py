@@ -13,7 +13,8 @@ class PosOrder(models.Model):
         if vals.get('state') in ('paid', 'done'):
             for order in self:
                 try:
-                    order._crear_lineas_comision_venta_directa()
+                    with self.env.cr.savepoint():
+                        order._crear_lineas_comision_venta_directa()
                 except Exception:
                     _logger.exception(
                         "Failed to create comision lines for order %s", order.name
