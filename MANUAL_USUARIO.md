@@ -123,7 +123,7 @@ En la ficha del cliente, pestaña **Ventas y compras**, campo **Vendedor**: eleg
 
 **Por qué importa:** cada chofer ve **solamente** los clientes que tiene asignados. Si un cliente no tiene vendedor, el chofer no lo encuentra en el punto de venta. Si además ese cliente queda como parada de un viaje, la pantalla **Viaje** del chofer da error en vez de mostrar la ruta.
 
-Para asignar muchos clientes de una vez, pedile al equipo técnico que cargue una planilla con dos columnas: `codigo` del cliente y `camion` (1, 2 o 3).
+**Cómo hacerlo:** abrí cada cliente desde **Inicio → Clientes** y elegí el **Vendedor**, como se explicó arriba. Hacelo **antes** de que el chofer salga a repartir, porque un cliente sin vendedor no aparece en su punto de venta ni en su viaje.
 
 ### 5.4 Clientes con el CUIT en la nota
 Al cargar el listado inicial, 29 clientes tenían un número que no es un CUIT válido (por ejemplo un DNI de 8 dígitos). Quedaron sin CUIT, y el número original está guardado en la **nota** de la ficha. Si hace falta, se corrige a mano. Este sistema no factura, así que no impide vender.
