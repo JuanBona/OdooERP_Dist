@@ -1,437 +1,393 @@
-# Manual de Usuario — Sistema de Gestión Reparto (Odoo 19)
+# Guía de Usuario — Sistema de Reparto
 
 **Rincón del Sur — Peyrano**
-Versión del documento: 2026-09-14
+Versión: 2026-09-23
 
 ---
 
 ## Índice
 
-1. [Acceso al sistema](#1-acceso-al-sistema)
-2. [Gestión de clientes](#2-gestión-de-clientes)
-3. [Catálogo de productos](#3-catálogo-de-productos)
-4. [Descuentos por cantidad (listas de precios)](#4-descuentos-por-cantidad-listas-de-precios)
-5. [Inventario y carga de camiones](#5-inventario-y-carga-de-camiones)
-6. [Punto de Venta — conceptos generales](#6-punto-de-venta--conceptos-generales)
-7. [Venta desde mostrador / oficina (Punto de Venta Reparto)](#7-venta-desde-mostrador--oficina-punto-de-venta-reparto)
-8. [Venta desde el camión (POS Camión 1)](#8-venta-desde-el-camión-pos-camión-1)
-9. [Alertas de crédito y pantalla de Deudores](#9-alertas-de-crédito-y-pantalla-de-deudores)
-10. [Control de stock por camión](#10-control-de-stock-por-camión)
-11. [Roles y permisos de usuario](#11-roles-y-permisos-de-usuario)
-12. [Remito interno (no reemplaza la factura)](#12-remito-interno-no-reemplaza-la-factura)
-13. [Cierre de caja (sesión de POS)](#13-cierre-de-caja-sesión-de-pos)
-14. [Funcionamiento sin conexión (offline)](#14-funcionamiento-sin-conexión-offline)
-15. [Preguntas frecuentes y limitaciones conocidas](#15-preguntas-frecuentes-y-limitaciones-conocidas)
-16. [Hoja de ruta ("Viaje")](#16-hoja-de-ruta-viaje)
-17. [Comisión de vendedor](#17-comisión-de-vendedor)
+1. [Cómo entrar al sistema](#1-cómo-entrar-al-sistema)
+2. [La pantalla de Inicio y cómo moverse](#2-la-pantalla-de-inicio-y-cómo-moverse)
+3. [Quién puede hacer qué (roles)](#3-quién-puede-hacer-qué-roles)
+4. [Un día de trabajo, de punta a punta](#4-un-día-de-trabajo-de-punta-a-punta)
+5. [Clientes](#5-clientes)
+6. [Productos, precios y descuentos por cantidad](#6-productos-precios-y-descuentos-por-cantidad)
+7. [Stock: cargar y descargar el camión](#7-stock-cargar-y-descargar-el-camión)
+8. [Armar el viaje del día](#8-armar-el-viaje-del-día)
+9. [Cuando un cliente llama y hace un pedido](#9-cuando-un-cliente-llama-y-hace-un-pedido)
+10. [Vender desde el camión (chofer)](#10-vender-desde-el-camión-chofer)
+11. [Si se corta la señal](#11-si-se-corta-la-señal)
+12. [Cuentas corrientes y cobros](#12-cuentas-corrientes-y-cobros)
+13. [Comisiones de los vendedores](#13-comisiones-de-los-vendedores)
+14. [Remito interno](#14-remito-interno)
+15. [Cierre de caja](#15-cierre-de-caja)
+16. [Preguntas frecuentes](#16-preguntas-frecuentes)
+17. [Para el administrador: usuarios y camiones](#17-para-el-administrador-usuarios-y-camiones)
 
 ---
 
-## 1. Acceso al sistema
+## 1. Cómo entrar al sistema
 
-El sistema corre en un servidor local (Odoo 19 Community). Para acceder:
+1. Abrí el navegador e ingresá a la dirección del sistema (hoy: `https://rincondelsur.duckdns.org`). Tiene que verse un **candado** en la barra de direcciones.
+2. Escribí tu **usuario** y tu **contraseña**. Te las entrega el administrador por separado; nunca se comparten por este documento.
+3. **La primera vez, cambiá tu contraseña:** tu nombre (arriba a la derecha) → **Preferencias** → **Seguridad de la cuenta** → **Cambiar contraseña**.
 
-1. Abrir el navegador (Chrome, Edge o similar).
-2. Ir a la dirección que te indique el administrador (por ejemplo `http://localhost:8069` en el entorno de prueba, o la URL del servidor en producción).
-3. Ingresar usuario y contraseña.
+**Qué navegador usar:**
 
-Cada usuario ve únicamente las aplicaciones y datos que le correspondan según su rol (ver sección [11. Roles y permisos](#11-roles-y-permisos-de-usuario)).
+| Dispositivo | Navegador recomendado |
+|---|---|
+| iPhone / iPad | **Safari** |
+| Android | **Chrome** |
+| Computadora | Chrome o Edge |
 
-La pantalla principal muestra un menú de aplicaciones (grilla de 9 puntos arriba a la izquierda). Las apps relevantes para la operación diaria son:
+> En iPhone **no uses Brave ni Firefox**: muestran un cartel de error de JavaScript que no es del sistema y molesta. En Safari anda perfecto.
 
-- **Clientes** — clientes y proveedores (Odoo la llama internamente "Contactos"; el sistema ya la muestra rotulada "Clientes" en el menú).
-- **Inventario** — stock, ubicaciones, traslados.
-- **Punto de venta** — ventas, sesiones, configuración de tiendas/camiones.
+**Para usarlo como una aplicación** (pantalla completa, sin barra de direcciones):
 
-> **Facturación fiscal no forma parte de este sistema** — el negocio sigue facturando con su software externo en PC. Ver sección [12. Remito interno (no reemplaza la factura)](#12-remito-interno-no-reemplaza-la-factura).
-
----
-
-## 2. Gestión de clientes
-
-### 2.1 Crear un cliente nuevo
-
-1. Ir a **Contactos** → botón **Nuevo**.
-2. Elegir tipo: **Empresa** (comercio/negocio) o **Persona** (individuo).
-3. Completar:
-   - **Nombre** del comercio o persona.
-   - **Dirección** (calle, ciudad — importante para que el vendedor lo ubique en la ruta de reparto).
-   - **Teléfono / Correo electrónico** (opcional pero recomendado).
-   - **Tipo de responsabilidad de ARCA** (pestaña de datos fiscales): elegir entre *Consumidor Final*, *Responsable Inscripto*, *Monotributo*, etc. **Este campo es obligatorio** para poder facturarle luego — si no se completa, el sistema bloqueará la facturación con el aviso "Falta la configuración del contacto".
-4. Click en el ícono de nube (guardar) en la barra superior.
-
-### 2.2 Asignar un cliente a un vendedor
-
-Cada cliente tiene un campo **Vendedor** (*Salesperson*, visible en la pestaña "Ventas y compras"). Este campo determina:
-
-- Qué vendedor puede ver y editar ese cliente (ver [Roles y permisos](#11-roles-y-permisos-de-usuario)).
-- A quién se le atribuye la venta en los reportes.
-
-Para asignarlo: abrir la ficha del cliente → pestaña **Ventas y compras** → campo **Vendedor** → elegir el usuario correspondiente.
-
-> **Importante:** un usuario con rol *Vendedor* **no puede crear ni borrar clientes** — solo puede ver y editar los que tiene asignados. Si hace falta dar de alta un cliente nuevo para un vendedor, debe hacerlo un usuario de Administración (Operativa o Privada).
+- **iPhone (Safari):** botón Compartir → **Añadir a pantalla de inicio**.
+- **Android (Chrome):** menú ⋮ → **Instalar aplicación** (o **Añadir a pantalla de inicio**).
 
 ---
 
-## 3. Catálogo de productos
+## 2. La pantalla de Inicio y cómo moverse
 
-### 3.1 Ver o buscar un producto
+Al entrar ves **Inicio**: cuadraditos grandes, uno por cada cosa que tu rol puede usar. Tocás uno y se abre.
 
-**Inventario** → **Productos** → **Productos**. Se puede buscar por nombre, filtrar por categoría, o cambiar entre vista de tarjetas y vista de lista.
+| Rol | Cuadraditos que ve |
+|---|---|
+| Chofer / Vendedor | Viaje, Clientes, Punto de venta |
+| Administración Operativa | Clientes, Punto de venta, Inventario |
+| Depósito | Clientes, Inventario |
+| Gerencia | Clientes, Punto de venta, Facturación, Inventario |
 
-### 3.2 Crear un producto nuevo
+**Cómo volver a Inicio desde cualquier pantalla:** tocá el botón de la **casita** en la barra de arriba. En el POS también hay una casita al lado del nombre del cajero.
 
-1. **Inventario** → **Productos** → **Nuevo**.
-2. Completar:
-   - **Nombre del producto**.
-   - **Tipo de producto**: dejar en *Bienes*.
-   - **Rastrear inventario**: **activar este casillero siempre** que el producto tenga stock físico que controlar (ver nota abajo). Si queda desactivado, el sistema nunca sabrá cuánto stock hay y **no van a funcionar ni los traslados a camión ni el bloqueo de sobreventa**.
-   - **Precio de venta**.
-   - **Categoría** (Gaseosas, Cervezas, Aguas, Licores, etc.).
-   - Tildar **Ventas**, **Punto de venta** y **Compras** según corresponda (para que aparezca en el buscador del POS, "Punto de venta" tiene que estar tildado).
-3. Guardar.
-
-> ✅ Los 182 productos del catálogo real ya están cargados con **"Rastrear inventario" activado**, y desde esta versión **todo producto nuevo lo trae tildado por defecto** — así que el bloqueo de sobreventa (sección 10) funciona out-of-the-box sin tener que revisar producto por producto.
-
-### 3.3 Cargar stock inicial de un producto
-
-1. Abrir la ficha del producto.
-2. Click en el número que aparece junto a **"Cantidad a la mano"** (o ir a **Inventario** → **Productos** → abrir el producto → botón **"A la mano"** en la barra superior).
-3. **Nuevo** → elegir la ubicación (normalmente **WH/Stock**, el depósito central) → cargar la cantidad → **Guardar**.
+> A propósito, no hay un botón de "todas las aplicaciones" ni acceso a la tienda de aplicaciones de Odoo: cada persona ve solo lo suyo.
 
 ---
 
-## 4. Descuentos por cantidad (listas de precios)
+## 3. Quién puede hacer qué (roles)
 
-El sistema permite configurar precios distintos según la cantidad comprada (ej: "a partir de 6 unidades, 10% de descuento" — para vender por caja más barato que por unidad suelta).
+Cada persona tiene **un** rol. Los cuatro roles del negocio son:
 
-### 4.1 Habilitar listas de precios (ya no hace falta tocar nada)
-
-Esto **ya viene activado solo**, en Reparto, en Camión 1 y en cualquier punto de venta que se cree de acá en adelante (Camión 2, 3, etc.). Se corrigió a nivel Odoo (módulo `pos_reparto_pricelist`) para que no haya que repetir el mismo ajuste manual en cada tienda nueva — antes había que ir a Ajustes y tildar "Listas de precios flexibles" tienda por tienda; ahora todo punto de venta nace con eso ya tildado y apuntando a la lista **Default**.
-
-Si alguna vez lo ves destildado en una tienda puntual (alguien lo tocó a mano), se puede volver a activar en **Punto de venta** → **Configuración** → **Ajustes** → elegir la tienda arriba → sección **Precios** → tildar **"Listas de precios flexibles"**.
-
-> **La lista de precios en sí (Default) es una sola y es compartida.** No hay una lista distinta por camión ni por Reparto: las reglas de descuento que cargues en la sección 4.2 aplican igual para venta de mostrador/oficina y para venta en cualquier camión, porque todos apuntan a la misma lista "Default". Cualquier regla nueva que agregues ahí se ve reflejada en todos los puntos de venta automáticamente, sin configuración adicional.
-
-### 4.2 Crear una regla de descuento por cantidad
-
-1. **Punto de venta** → **Configuración** → **Ajustes** → sección Precios → link **"Listas de precios"**.
-2. Abrir la lista **Default**.
-3. En la pestaña **Precios de venta** → **Agregar una línea**.
-4. Completar:
-   - **Aplicar a**: Producto (o Categoría, si querés que aplique a todos los productos de una categoría).
-   - **Producto**: elegir el producto.
-   - **Cantidad mínima**: por ejemplo `6` (una caja).
-   - **Tipo de precio**: **Descuento**.
-   - **Descuento**: el porcentaje, por ejemplo `10` (%).
-5. **Guardar y cerrar**.
-
-A partir de ese momento, cuando el vendedor cargue 6 unidades o más de ese producto en el POS, el precio unitario baja automáticamente ese porcentaje — sin que el vendedor tenga que hacer nada manual.
-
----
-
-## 5. Inventario y carga de camiones
-
-### 5.1 Concepto de ubicaciones
-
-El sistema maneja el stock por **ubicación física**, no como un número único por producto. Las ubicaciones actuales son:
-
-- **WH/Stock** — el depósito central.
-- **WH/Stock/Camión 1** — el stock que físicamente está arriba del camión 1 (y así, un **Camión 2**, **Camión 3**, etc. si se suman más adelante).
-
-El stock "disponible para vender" en cada punto de venta se calcula **según la ubicación de ese punto de venta**, no contra el total de la empresa. Por eso es fundamental transferir mercadería del depósito al camión antes de salir a repartir — si no se hace el traslado, el sistema entiende que el camión no tiene nada cargado.
-
-### 5.2 Cómo cargar mercadería a un camión (traslado interno)
-
-> ⚠️ **No es "Traslados internos"** — ese tipo de operación genérico no se usa en este proyecto. Cada camión tiene su propio tipo de operación dedicado: **"Carga Camión 1"**, **"Carga Camión 2"**, **"Carga Camión 3"**.
-
-1. **Inventario** → **Información general** → tarjeta **"Carga Camión 1"** (o el camión que corresponda) → botón **Abrir**.
-2. **Nuevo**. El formulario **no muestra "Ubicación de origen/destino"** — no hace falta elegirlas, quedan fijas automáticamente en WH/Stock → Camión 1 por la tarjeta que abriste en el paso 1 (por eso cada camión tiene su propia tarjeta, en vez de una genérica donde elegirías el destino a mano).
-3. Pestaña **Operaciones** → **Agregar un producto** → buscar el producto → cargar la **cantidad** a transferir.
-4. Repetir para cada producto que se suba al camión ese día.
-5. Botón **Validar** (arriba a la izquierda) para confirmar el traslado. El estado pasa de "Borrador" a "Hecho" y el stock se mueve de verdad: baja en WH/Stock y sube en Camión 1.
-
-> Además, **cada camión solo muestra en el POS los productos que tiene cargados** — si un producto no está en el camión, ni siquiera aparece en la grilla de venta (no hace falta esperar a que lo rechace al cobrar).
-
-> **Rutina diaria recomendada:** antes de que el vendedor salga a repartir, un usuario de Depósito hace este traslado con lo que se carga esa mañana. Al final del día, si sobra mercadería en el camión, se hace el traslado inverso con la tarjeta **"Descarga Camión 1"** (mismo mecanismo que Carga, pero de Camión 1 → WH/Stock) para que el stock quede prolijo.
-
-### 5.3 Consultar cuánto stock hay en cada ubicación (incluido el depósito general)
-
-Abrir la ficha del producto (**Inventario → Productos**) → botón **"A la mano"** (arriba) → se lista la cantidad por cada ubicación — ahí ves **WH/Stock** (el depósito general), **Camión 1**, **Camión 2**, etc., todo junto — con acceso al **Historial** de movimientos de cada una.
-
-> "PoS Orders" (la tarjeta que ves en Información general) **no es el depósito** — es el tipo de operación de las entregas diferidas (Ship Later) del Punto de Venta Reparto, algo completamente distinto.
-
-### 5.4 Cómo dar de alta un camión nuevo (paso a paso completo)
-
-Dar de alta un camión (Camión 2, Camión 3, etc.) implica crear **tres cosas encadenadas**: una ubicación de stock, un tipo de operación, y un punto de venta. Es tarea de un usuario Administrador — no es un uso diario. Estos son los pasos exactos, usando **Camión 1** como referencia real de cómo quedó armado (podés copiar los mismos valores cambiando "1" por "2"):
-
-**Paso 1 — Crear la ubicación de stock del camión**
-
-1. **Inventario** → **Configuración** → **Ubicaciones** → **Nuevo**.
-2. Completar:
-   - **Nombre de la ubicación**: `Camión 2`.
-   - **Ubicación superior**: `WH/Stock` (así queda anidada como `WH/Stock/Camión 2`, al mismo nivel que Camión 1).
-   - **Tipo de ubicación**: *Ubicación interna* (queda así por defecto).
-3. Guardar.
-
-**Paso 2 — Crear el tipo de operación (picking type) del camión**
-
-1. **Inventario** → **Configuración** → **Tipos de operación** → **Nuevo**.
-2. Completar (referencia real de Camión 1 entre paréntesis):
-   - **Nombre**: `POS Camión 2 Orders` (Camión 1 usa *"POS Camión 1 Orders"*).
-   - **Tipo de operación**: *Salida* / *outgoing* (Camión 1: `outgoing`).
-   - **Almacén**: `My Company` (el mismo almacén que usan los demás).
-   - **Código de secuencia**: algo corto y único, ej. `POSCAM2` (Camión 1 usa `POSCAM1`).
-   - **Ubicación de origen predeterminada**: `WH/Stock/Camión 2` (la ubicación del Paso 1).
-   - **Ubicación de destino predeterminada**: `Customers` (igual que Camión 1 — es la ubicación estándar de clientes, no cambia).
-3. Guardar.
-
-> Esto crea solo el tipo de operación de **venta** del camión (usado por el Punto de Venta). Para la **carga/descarga de mercadería** (sección 5.2) hacen falta dos tipos de operación más, mismo patrón: `Carga Camión 2` (interno, origen `WH/Stock`, destino `WH/Stock/Camión 2`) y `Descarga Camión 2` (interno, origen `WH/Stock/Camión 2`, destino `WH/Stock`) — usar `Carga Camión 1`/`Descarga Camión 1` como referencia de cómo quedaron armados.
-
-**Paso 3 — Crear el punto de venta y vincularlo a ese camión**
-
-1. **Punto de venta** → **Configuración** → **Punto de venta** → **Nuevo** (o el botón **"+ Nueva tienda"** que aparece arriba en la pantalla de Ajustes).
-2. Completar:
-   - **Nombre**: `POS Camión 2`.
-   - **Tipo de operación**: elegir el que creaste en el Paso 2 (`POS Camión 2 Orders`). **Este es el vínculo real entre el punto de venta y el camión** — a través de este campo, el sistema sabe que las ventas de este POS tienen que descontar stock de `WH/Stock/Camión 2`, y el módulo de bloqueo de sobreventa (sección 10) usa esta misma ubicación para calcular el disponible.
-   - **Métodos de pago**: agregar los que corresponda (Card, Cash, Customer Account según necesites — revisar contra Camión 1 como referencia).
-   - **Diario de POS** / **Diario de facturas**: dejar los que sugiere el sistema por defecto, salvo que Facturación te pida uno específico.
-3. Guardar.
-4. La lista de precios con descuentos por cantidad (sección 4) **ya viene activada sola** en este POS nuevo — no hay que tocar nada ahí, gracias a la corrección que se hizo a nivel Odoo.
-
-**Paso 4 — Cargar mercadería inicial en el camión nuevo**
-
-Hacer el traslado interno de WH/Stock → WH/Stock/Camión 2 como se explica en la sección 5.2, para que el camión salga con stock cargado desde el primer día.
-
-**Paso 5 — Asignar un vendedor a ese punto de venta (si hace falta restringirlo)**
-
-Por defecto, **cualquier usuario con el grupo "Punto de venta: Usuario" puede abrir sesión en cualquier POS**, incluido el nuevo Camión 2 — no hay una restricción automática de "este camión es solo para Fulano". En la práctica, alcanza con que cada vendedor use la tablet/usuario que tiene asignado, sin necesidad de bloquear nada a nivel sistema.
-
-Si en algún momento hace falta un bloqueo **duro** (que un vendedor físicamente no pueda ni ver un camión que no es el suyo), hay dos caminos:
-
-- **Camino simple (recomendado primero):** darle a ese vendedor únicamente el usuario y las credenciales de la tablet de su camión, sin acceso a las otras. Es control operativo, no técnico, pero es el que ya usa el negocio hoy.
-- **Camino técnico:** instalar el módulo estándar de Odoo **`pos_hr`** ("Empleados en PdV"). Una vez instalado, en cada punto de venta aparece un casillero **"Iniciar sesión como empleado"** (Ajustes del POS → sección "Interfaz de PdV") — al activarlo, se puede elegir exactamente qué empleados pueden loguearse en ese punto de venta puntual. Este módulo no está instalado hoy en el sistema; es un paso adicional a pedir si el negocio necesita ese nivel de control.
-
-Aparte de la apertura de sesión, el control real de "qué ve cada vendedor" ya está resuelto por el rol **Vendedor** (sección 11): sin importar en qué camión inicie sesión, solo va a poder ver y vender a los clientes que tiene asignados como "Vendedor" en su ficha de contacto.
-
----
-
-## 6. Punto de Venta — conceptos generales
-
-Hoy existen cuatro configuraciones de Punto de Venta:
-
-| | **Punto de Venta Reparto** | **POS Camión 1 / 2 / 3** |
+| Rol | Qué hace | Qué ve |
 |---|---|---|
-| Uso | Venta con entrega diferida (se cobra hoy, se entrega otro día) o venta de mostrador/oficina | Venta ambulante desde cada camión, cobro y entrega inmediata |
-| Ubicación de stock que controla | WH/Stock (depósito central) | WH/Stock/Camión N (stock propio de cada camión) |
-| Permite "Enviar más tarde" (Ship Later) | Sí | No |
+| **Vendedor / Chofer** | Reparte y vende desde **su** camión | Solo **su** punto de venta y **sus** clientes. No crea ni borra clientes ni pedidos. |
+| **Depósito** | Carga y descarga los camiones, controla stock | Inventario y clientes. No usa el punto de venta. |
+| **Administración Operativa** | Arma los viajes, carga clientes nuevos, imprime remitos, define descuentos por cantidad | Todos los puntos de venta y todos los clientes. |
+| **Gerencia** | Todo lo de Administración, más **cobros de cuentas corrientes** y **comisiones** | Todo el negocio. Es la única que ve el panel de Comisiones. |
 
-Los tres camiones funcionan igual — mismo circuito, cada uno con su propia ubicación de stock, caja y tipo de operación (ver sección 5.4 para dar de alta uno nuevo).
+Además existe el usuario **admin**, que es solo para el equipo técnico (instalaciones y configuración), no para el trabajo diario.
 
-Para abrir cualquiera de los dos: **Punto de venta** → tablero de tiendas → botón **"Seguir vendiendo"** (si ya hay una sesión abierta) o **"Nueva sesión"** (si está cerrado).
+**Los usuarios actuales:**
 
----
-
-## 7. Venta desde mostrador / oficina (Punto de Venta Reparto)
-
-1. **Punto de venta** → tarjeta **Punto de Venta Reparto** → **Seguir vendiendo** / **Nueva sesión**.
-2. (Opcional) Click en **"Consumidor Final Anónimo"** abajo a la izquierda para asociar la venta a un cliente puntual — buscar por nombre.
-3. Click en los productos para agregarlos al carrito. Para cambiar la cantidad de una línea: click en la línea del carrito para seleccionarla → click en **"Cant."** en el teclado numérico → tipear la cantidad.
-4. Si la venta es con **entrega diferida**: click en los tres puntos (⋮) junto al cliente → **"Ship Later"** → elegir fecha de entrega. Esto deja pendiente un remito de entrega en Inventario para el día indicado, y no descuenta stock hasta que se valide esa entrega.
-5. Click en **Pago**.
-6. Elegir el medio de pago (Efectivo, Tarjeta, Cuenta Corriente del cliente, etc.) y confirmar el monto.
-7. Click en **Validar**. Se genera el ticket y, si corresponde, la factura.
-
----
-
-## 8. Venta desde el camión (POS Camión 1)
-
-Este es el flujo que usa el vendedor en la tablet, comercio por comercio.
-
-1. **Punto de venta** → tarjeta **POS Camión 1** → **Seguir vendiendo**.
-2. Click en el nombre del cliente (o "Consumidor Final Anónimo") abajo a la izquierda → buscar y seleccionar el comercio.
-   - **Si el cliente tiene deuda vencida**, aparece automáticamente un aviso: *"¡Cliente con deuda vencida! Debe $X desde hace N días."* Este aviso es solo informativo — **no impide** continuar la venta. Ver sección 9 para el detalle del semáforo de colores.
-3. Agregar los productos que pide el comercio, tocando cada uno en la grilla. Si el comercio compra una cantidad grande de un producto con descuento por caja configurado (sección 4), el precio se ajusta solo.
-4. Click en **Pago** → elegir medio de pago → **Validar**.
-   - Si se pidió **más cantidad de la que hay físicamente en el camión**, el sistema **bloquea la venta** con un mensaje del tipo: *"Stock insuficiente: [producto]: pediste X, hay Y disponibles en WH/Stock/Camión 1"*. Hay que corregir la cantidad (o avisar que no hay más de ese producto) antes de poder cobrar. Ver sección 10.
-5. El ticket se imprime/genera. Si el vendedor pierde señal en el medio de la venta, ver sección 14.
-
----
-
-## 9. Alertas de crédito y pantalla de Deudores
-
-### 9.1 Aviso automático al vender
-
-Al seleccionar en el POS (Reparto o Camión) un cliente que tiene facturas vencidas sin cobrar, aparece automáticamente un cartel con:
-
-- El monto total adeudado.
-- Los días transcurridos desde la fecha de referencia (el pedido más viejo sin cobrar, o el último pago si hubo alguno).
-
-El color de fondo funciona como semáforo:
-- 🟠 **Naranja**: 10 días o más sin pagar.
-- 🔴 **Rojo**: 15 días o más sin pagar (ese es el límite de crédito máximo del negocio).
-
-Este aviso **no bloquea la venta** — es información para que el vendedor decida (cobrar en efectivo, avisar al comercio, etc.).
-
-### 9.2 Pantalla de Deudores
-
-**Punto de venta** → pestaña **Deudores** (arriba, junto a Órdenes/Productos). Muestra la lista completa de clientes con deuda mayor a $0, ordenada por días sin pago (los más urgentes primero), con el mismo semáforo de colores.
-
-- Un **Vendedor** solo ve en esta pantalla a **sus propios clientes**.
-- **Depósito**, **Administración Operativa** y **Administración Privada/Gerencia** ven a **todos** los deudores.
-
-### 9.3 Cómo se salda una deuda (registrar el cobro)
-
-Cuando un comercio paga lo que debía, alguien de **Gerencia** tiene que registrar ese cobro para que desaparezca de Deudores:
-
-1. **Facturación** → **Clientes** → **Pagos** → **Nuevo**.
-2. Elegir el **Cliente**, el **Monto** cobrado y el **Diario** (Efectivo o Banco según cómo pagó).
-3. Confirmar. El sistema concilia el pago contra la deuda pendiente automáticamente.
-
-Apenas se confirma, `credito_monto_adeudado` y `credito_dias_sin_pago` de ese cliente se recalculan solos (no hace falta hacer nada más) y desaparece de la pantalla de Deudores si quedó en $0. Si el pago fue parcial, el monto adeudado baja pero el cliente sigue apareciendo en la lista.
-
-> Solo **Gerencia** (y el `admin` técnico) tienen acceso a Facturación — es la única forma de saldar una cuenta corriente hoy. Vendedor, Depósito y Administración Operativa no pueden registrar cobros.
-
----
-
-## 10. Control de stock por camión
-
-El sistema bloquea automáticamente cualquier venta en un camión que pida más unidades de un producto que las que hay cargadas físicamente en ese camión (según los traslados hechos, sección 5).
-
-- Se valida **al momento de cobrar** (botón Validar en la pantalla de pago), no mientras se arma el carrito. Es una limitación conocida y aceptada: el vendedor puede armar el pedido tranquilo y recién al cobrar se entera si falta stock.
-- El mensaje de error indica exactamente qué producto, cuánto se pidió y cuánto hay disponible.
-- Para no tener que llegar a cobrar para enterarse: cada producto de la grilla muestra un numerito chico con el stock del camión (ej. "45u"), y al agregarlo al carrito el número baja en vivo mostrando cuánto queda según lo que ya cargaste en ese pedido. Se pone naranja cuando queda poco. Es una foto del momento en que se abrió la sesión de POS — si otra tablet vendió el mismo producto mientras tanto, no se actualiza solo (para eso está el bloqueo real al cobrar, que sí es exacto).
-- **Depende de que el producto tenga "Rastrear inventario" activado** (sección 3.2). Si no lo tiene, el sistema no tiene forma de saber cuánto hay y **no bloquea nada**, sin importar la cantidad pedida.
-- Aplica únicamente en puntos de venta cuya ubicación de origen sea un camión (no aplica, por ejemplo, en Punto de Venta Reparto si su origen es el depósito central, salvo que también se quede sin stock ahí).
-
----
-
-## 11. Roles y permisos de usuario
-
-El sistema tiene 4 roles de seguridad, agrupados bajo la categoría **"Reparto"** (se asignan al usuario desde **Ajustes → Usuarios y compañías → Usuarios**, pestaña de permisos):
-
-| Rol | Puede ver clientes | Puede ver pedidos POS | Notas |
-|---|---|---|---|
-| **Vendedor** | Solo los propios (según el campo "Vendedor" del cliente) | Solo los propios | No puede crear ni borrar clientes. No puede borrar pedidos. |
-| **Depósito** | Todos | Todos | Sin restricciones propias todavía (se ajustará si el detalle operativo lo requiere) |
-| **Administración Operativa** | Todos | Todos | ídem |
-| **Administración Privada / Gerencia** | Todos | Todos | Además tiene **Facturación** — es quien registra el cobro cuando un cliente salda su cuenta corriente (sección 9) |
-
-Los 4 roles son **mutuamente excluyentes** entre sí (un usuario tiene uno solo), pero se combinan con los grupos estándar de Odoo (por ejemplo, además hay que darle al vendedor el grupo "Point of Sale User" para que pueda abrir el POS).
-
-> **La app "Ventas" no está disponible para ningún rol de negocio** (a propósito). El pedido real siempre se carga desde el Punto de Venta, no desde ahí — dejarla visible solo generaba pantallas vacías y confusión. Tampoco están **Reportes** (dentro de Punto de venta) ni **Para facturar**/**Productos** dentro de Ventas — son nativas de Odoo sin uso en este proyecto. Ninguna se borró: quedan visibles para el `admin` técnico si hace falta reactivarlas.
-
-> **Usuario `admin`:** tiene acceso total a todas las apps y configuraciones del sistema (es el superusuario técnico), más los roles Administración Operativa y Gerencia del negocio — así ve también todo lo que ve Gerencia (Comisiones, Deudores, etc.). Es la cuenta para el equipo técnico, no para uso diario del negocio.
-
-**Cuentas actuales del sistema (quién tiene cada rol):**
-
-| Usuario (login) | Rol Reparto | Notas |
+| Usuario | Rol | Camión |
 |---|---|---|
-| `admin` | Administración Operativa + Gerencia | Superusuario técnico (ver nota arriba) |
-| `vendedor@reparto.local` | Vendedor | |
-| `deposito@reparto.local` | Depósito | |
-| `adminop@reparto.local` | Administración Operativa | |
-| `gerencia@reparto.local` | Administración Privada / Gerencia | |
+| `camion1` | Vendedor / Chofer | POS Camion 1 |
+| `camion2` | Vendedor / Chofer | POS Camion 2 |
+| `camion3` | Vendedor / Chofer | POS Camion 3 |
+| `administracion` | Administración Operativa | — |
+| `deposito` | Depósito | — |
+| `gerencia` | Gerencia | — |
 
-> Las **contraseñas no se documentan acá a propósito** — este archivo queda en el repositorio de git (con historial permanente) y puede circular como PDF. Guardalas en un gestor de contraseñas o entregalas al cliente por un canal separado y seguro (no por este manual). Si en algún momento se compartió una contraseña por acá u otro canal inseguro, cambiarla.
-
-> Además de las 5 cuentas de negocio de arriba, en la base quedaban dos cuentas de prueba (`chofer_viaje_manual_test`, `plain_internal_test`) de testing — ya desactivadas (2026-09-14), no aparecen en la lista de usuarios activos.
-
-**Alta de un usuario nuevo (vendedor, depósito, etc.):**
-
-1. **Ajustes** → **Usuarios y compañías** → **Usuarios** → **Nuevo**.
-2. Cargar nombre, email de acceso, contraseña inicial.
-3. En la pestaña de permisos, asignarle el rol de **Reparto** que corresponda (Vendedor / Depósito / Administración Operativa / Administración Privada) y el o los grupos estándar de la app que va a usar (por ejemplo, *Point of Sale: User*).
-4. Si es vendedor, no te olvides de ir a los clientes que le correspondan y asignarle el campo **Vendedor** (sección 2.2) — si no, no va a ver ningún cliente, **y si además ese cliente queda como parada de un Viaje (sección 16), el viaje entero se rompe para ese vendedor** (no puede leer el nombre del cliente y la pantalla "Viaje" tira error en vez de mostrar la ruta).
-5. La **zona horaria** (`tz`) ya viene precargada en **America/Argentina/Buenos_Aires** por defecto para cuentas nuevas — no hace falta tocarla. Si alguna vez ves que un Viaje "desaparece" cerca de la medianoche (hora Argentina) sin razón aparente, revisar que el usuario tenga esa zona horaria seteada en su ficha (**Ajustes → Usuarios**, pestaña Preferencias): sin ella, Odoo calcula "hoy" en UTC y un viaje de hoy puede dejar de matchear 3 horas antes de la medianoche real.
+> Los nombres de usuario se pueden cambiar por los de las personas reales (ver sección 17). Las contraseñas se entregan aparte y cada persona debe cambiarla al entrar.
 
 ---
 
-## 12. Remito interno (no reemplaza la factura)
+## 4. Un día de trabajo, de punta a punta
 
-**Este sistema NO factura.** El negocio sigue facturando con su software externo en la PC, incluida la Factura A — así lo confirmó el cliente por escrito en el relevamiento de requerimientos. No hace falta cargar CUIT, condición de ARCA ni nada fiscal para vender en el POS.
-
-Lo que sí genera el sistema es un **remito interno** (hoja de pedido, sin valor fiscal) por cada venta, para que quede constancia de qué se entregó a cada comercio:
-
-1. Desde el ticket de una venta ya cobrada (Punto de venta → **Órdenes** → abrir la orden), botón **Imprimir remito**.
-2. El remito muestra cliente, productos, cantidades y totales — sirve como comprobante de entrega para el vendedor y el comercio, no como factura.
-3. La facturación fiscal de esa venta se hace aparte, en el software externo del negocio, con los datos del remito como respaldo.
-
----
-
-## 13. Cierre de caja (sesión de POS)
-
-Al terminar el turno o el día:
-
-1. Dentro del POS, click en el ícono de menú (☰, arriba a la derecha) → **Cerrar sesión de PdV** (o "Cerrar sesión" según la versión).
-2. El sistema muestra un resumen: total vendido, desglose por medio de pago, efectivo esperado vs. efectivo contado.
-3. Contar el efectivo físico y cargarlo si hay diferencia.
-4. Confirmar el cierre.
-
-Una vez cerrada la sesión, para volver a vender hay que abrir una **sesión nueva** desde el tablero de Punto de venta.
+1. **Mañana, en el depósito:** se carga mercadería a cada camión (sección 7).
+2. **Administración** arma el **viaje** de cada chofer: qué clientes visita ese día (sección 8). Si un cliente llamó y pidió algo, se lo suma como parada (sección 9).
+3. **El chofer** abre **Viaje** en Inicio, toca la parada, y el punto de venta se abre con el cliente ya elegido (sección 10). Carga el pedido y cobra.
+4. Cada vez que cobra, **la parada se tilda sola** en el viaje.
+5. **Gerencia** ve el progreso, las deudas y las comisiones (secciones 12 y 13).
+6. **Al final del día:** el chofer cierra la caja (sección 15) y, si sobró mercadería, el depósito la descarga del camión (sección 7).
 
 ---
 
-## 14. Funcionamiento sin conexión (offline)
+## 5. Clientes
 
-El POS de Odoo está diseñado para seguir funcionando aunque se corte la conexión a internet/servidor en el medio de una venta (típico en reparto, dentro de un camión sin buena señal):
+### 5.1 Ver o buscar un cliente
+**Inicio → Clientes.** Se busca por nombre, código o CUIT. Cada cliente tiene su **código** en el campo *Referencia*.
 
-- Se puede seguir cargando productos y **cobrar** una venta sin conexión — el sistema guarda todo localmente en el navegador/tablet y muestra un aviso de "Conexión perdida" pero no impide cerrar la venta.
-- **Importante:** al recuperar señal, la venta **no se sincroniza sola automáticamente** con el servidor. Hasta que no se **recargue o se vuelva a entrar a la sesión de POS**, esa venta existe solo en el dispositivo (no se ve stock actualizado ni la ve nadie más), aunque el ticket ya se haya cobrado e impreso.
-- **Recomendación de uso:** si el vendedor perdió señal en un comercio, al llegar al siguiente (con señal) conviene **refrescar la pantalla** antes de arrancar el próximo pedido, para asegurar que lo anterior sincronizó.
-- No hay riesgo de perder la venta ni la plata cobrada — el dato queda guardado en el dispositivo hasta que sincronice.
+### 5.2 Crear un cliente nuevo
+Solo lo hace **Administración** o **Gerencia** (un Vendedor no puede).
+1. **Clientes → Nuevo**.
+2. Completá **Nombre**, **Dirección** (importante para ubicarlo en la ruta), **Teléfono** y **Correo** si los tiene.
+3. Si conocés el **CUIT**, cargalo.
+4. **Asignale el vendedor** (sección 5.3) y guardá.
 
----
+### 5.3 Asignar un cliente a un camión — importante
+En la ficha del cliente, pestaña **Ventas y compras**, campo **Vendedor**: elegí el usuario del camión que lo atiende (`camion1`, `camion2` o `camion3`).
 
-## 15. Preguntas frecuentes y limitaciones conocidas
+**Por qué importa:** cada chofer ve **solamente** los clientes que tiene asignados. Si un cliente no tiene vendedor, el chofer no lo encuentra en el punto de venta. Si además ese cliente queda como parada de un viaje, la pantalla **Viaje** del chofer da error en vez de mostrar la ruta.
 
-**¿Por qué un producto no se descuenta del stock cuando lo vendo?**
-Porque no tiene activado "Rastrear inventario" (sección 3.2). Revisar la ficha del producto.
+Para asignar muchos clientes de una vez, pedile al equipo técnico que cargue una planilla con dos columnas: `codigo` del cliente y `camion` (1, 2 o 3).
 
-**¿Por qué el sistema no me bloqueó una venta que superaba el stock del camión?**
-Revisar que: (1) el producto tenga "Rastrear inventario" activado, y (2) se haya hecho el traslado de stock al camión correspondiente (sección 5.2). Sin esos dos pasos, no hay nada contra qué comparar.
-
-**El aviso de deuda vencida, ¿me impide cobrar?**
-No. Es solo informativo. La venta se puede completar igual.
-
-**¿Puedo ver los clientes de otro vendedor?**
-No, si tu usuario tiene el rol Vendedor. Solo ves los que tenés asignados como "Vendedor" en la ficha del cliente. Los roles de Depósito y Administración sí ven todos los clientes.
-
-**¿El criterio de "2 visitas consecutivas sin cobro" del relevamiento está implementado?**
-No todavía — hoy el sistema solo evalúa días sin pago. Ese criterio requiere trackear visitas independientemente de si generaron deuda, que es una funcionalidad pendiente de desarrollo.
-
-**¿Cómo agrego un camión nuevo (Camión 2, 3, etc.)?**
-Es un patrón repetible: crear la ubicación de stock, el tipo de operación de picking y la configuración de Punto de Venta correspondiente. Pedirle esto al equipo de desarrollo — no es una tarea de uso diario.
-
-**El numerito de stock de un producto en la grilla se quedó en 0 y no parece real, ¿qué hago?**
-Puede pasar en una tablet que no actualizó sus datos desde la última actualización del sistema. Solución: desde el menú ☰ (arriba a la derecha, dentro del POS), elegir **"Volver a cargar datos" → "Completo"** una sola vez. Al terminar, el número vuelve a mostrar el stock real del camión.
+### 5.4 Clientes con el CUIT en la nota
+Al cargar el listado inicial, 29 clientes tenían un número que no es un CUIT válido (por ejemplo un DNI de 8 dígitos). Quedaron sin CUIT, y el número original está guardado en la **nota** de la ficha. Si hace falta, se corrige a mano. Este sistema no factura, así que no impide vender.
 
 ---
 
-## 16. Hoja de ruta ("Viaje")
+## 6. Productos, precios y descuentos por cantidad
 
-Antes de que un chofer salga a repartir, un usuario de **Administración Operativa** o **Gerencia** arma su hoja de ruta del día:
+### 6.1 Ver un producto
+**Inventario → Productos.** Están los 182 productos de la lista de precios, agrupados en categorías (Almacén y General, Bebidas y Gaseosas, Vinos Comunes y Licores, Lista Vinos Finos, Destilados y Varios).
 
-1. **Punto de venta** → **Viajes** → **Nuevo**.
-2. Elegir **Chofer**, **Fecha** y el **Camión** (punto de venta) que va a usar.
-3. En **Paradas**, agregar los clientes a visitar ese día (sin orden fijo — no es ruta optimizada por geolocalización, es una checklist).
-4. Guardar.
+El **precio de venta** de cada producto es el del **pack o caja** de la lista (por ejemplo "GASEOSA COCA COLA 500CC X 12").
 
-El chofer ve su hoja de ruta como el cuadradito **"Viaje"** en la pantalla de Inicio (grilla táctil): lista de paradas pendientes. Al tocar una parada, abre directamente el POS del camión con ese cliente ya seleccionado. Cuando cobra el pedido, la parada se tilda sola — no hace falta marcarla a mano. Administración/Gerencia ve el progreso de cada chofer (paradas completadas / totales) en el panel **Punto de venta → Viajes**.
+### 6.2 Crear un producto nuevo
+1. **Inventario → Productos → Nuevo**.
+2. Completá el **Nombre**, el **Precio de venta** y la **Categoría**.
+3. Dejá tildado **Rastrear inventario** (viene tildado por defecto): si no, el sistema no sabe cuánto stock hay y no puede controlar la sobreventa.
+4. Tildá **Punto de venta** para que aparezca en la grilla de los camiones.
+5. Guardá.
 
-> **Limitación conocida:** si el mismo cliente queda cargado en dos viajes de choferes distintos el mismo día, el sistema no lo bloquea (caso raro, carga manual duplicada).
+### 6.3 Cambiar un precio
+Abrí el producto, cambiá **Precio de venta** y guardá. Vale para todos los camiones desde ese momento.
+
+### 6.4 Descuentos automáticos por cantidad
+Los define **Administración** o **Gerencia**. Por ejemplo: "de 10 unidades en adelante 4%, de 20 en adelante 8%".
+
+1. Abrí el producto → pestaña **Descuentos por volumen**.
+2. Agregá una línea por tramo: **Cantidad mínima** y **% descuento**.
+3. Guardá.
+
+Para revisar todos los productos que tienen descuentos: **Punto de venta → Configuración → Descuentos por volumen**.
+
+**En el camión:** el precio baja solo cuando el chofer llega a la cantidad. Bajo cada renglón del pedido se ven **todos los tramos** y queda resaltado el que aplica. Cuando falta poco para el siguiente tramo, aparece un aviso.
+
+**Descuentos manuales:** el chofer **no puede** cambiar precios ni poner descuentos a mano (esos botones están ocultos y el sistema los rechaza igual). Solo Administración y Gerencia pueden.
 
 ---
 
-## 17. Comisión de vendedor
+## 7. Stock: cargar y descargar el camión
 
-Cada vendedor tiene un **porcentaje de comisión** (`% Comisión`, editable solo por Gerencia desde su ficha de usuario). La comisión se calcula **al cobrarle al cliente**, no al cargar el pedido:
+El stock se maneja **por ubicación**: el depósito central (**WH/Existencias**) y cada camión (**Camion 1**, **Camion 2**, **Camion 3**). El punto de venta de un camión **solo vende lo que ese camión tiene cargado**. Si un producto no está en el camión, no aparece; si se pide más de lo que hay, el sistema bloquea la venta al cobrar.
 
-- **Venta al contado** (efectivo/tarjeta en el momento): la comisión se genera apenas se cobra la orden.
-- **Venta a cuenta corriente** (crédito, sección 9): la comisión se genera recién cuando ese cliente paga — si paga en partes, cada pago genera su parte proporcional de comisión.
+### 7.1 Poner el stock inicial en el depósito (una sola vez)
+1. **Inventario → Productos →** abrí el producto.
+2. Botón **A la mano** → **Nuevo**.
+3. Ubicación **WH/Existencias**, cargá la cantidad y guardá.
 
-Solo **Gerencia** ve el panel de comisiones: **Punto de venta → Comisiones** — una tabla dinámica (vendedor × mes) con el monto cobrado y la comisión resultante, más el detalle línea por línea. Es de **solo lectura**: nadie carga comisiones a mano, las genera el sistema solo a partir de los cobros reales.
+### 7.2 Cargar mercadería a un camión (cada mañana)
+Lo hace **Depósito**. Cada camión tiene su propia tarjeta: **Carga Camion 1**, **Carga Camion 2**, **Carga Camion 3**.
+1. **Inventario → Información general →** tarjeta **Carga Camion N → Abrir**.
+2. **Nuevo**.
+3. Pestaña **Operaciones → Agregar un producto:** elegí el producto y la **cantidad**. Repetí por cada producto.
+4. **Validar.** El stock baja del depósito y sube en el camión.
+
+> No uses "Traslados internos" ni ningún otro tipo de operación: para los camiones existen solo las tarjetas de Carga y Descarga.
+
+### 7.3 Descargar lo que sobró (al final del día)
+Igual que la carga, pero con la tarjeta **Descarga Camion N**: devuelve la mercadería del camión al depósito.
+
+### 7.4 Ver cuánto hay en cada lugar
+Producto → botón **A la mano**: muestra la cantidad en el depósito y en cada camión, con el historial de movimientos.
+
+### 7.5 El número de stock en el punto de venta
+En la grilla y en el carrito, cada producto muestra el stock del camión. Es una **foto** del momento en que se abrió la sesión: si otro dispositivo vendió el mismo producto, no se actualiza solo. Para eso está el bloqueo real al cobrar, que sí es exacto.
 
 ---
 
-*Documento vivo — actualizar cada vez que se sume o cambie una funcionalidad relevante.*
+## 8. Armar el viaje del día
+
+Lo hace **Administración Operativa** o **Gerencia**. Un **viaje** es la hoja de ruta de un chofer para un día: la lista de clientes que tiene que visitar.
+
+1. **Inicio → Punto de venta → Viajes → Nuevo**.
+2. Elegí el **Chofer**, la **Fecha** y el **Punto de venta** (su camión).
+3. En **Paradas**, agregá un cliente por línea. No hay orden fijo: es una lista de tareas, no una ruta optimizada por mapa.
+4. Guardá.
+
+**Reglas a tener en cuenta:**
+- Cada chofer tiene **un solo viaje por día**. Si ya existe, se abre y se le suman paradas.
+- Los clientes de un viaje tienen que estar **asignados a ese chofer** (sección 5.3); si no, la pantalla del chofer da error.
+- Un mismo cliente en viajes de dos choferes el mismo día no se bloquea: revisalo a mano para no duplicar visitas.
+
+**Cómo lo ve el chofer:** en Inicio, el cuadradito **Viaje** muestra sus paradas del día. Tocando una, se abre el punto de venta con ese cliente **ya seleccionado**.
+
+**Cómo se sigue el avance:** en **Punto de venta → Viajes** se ve, por cada chofer, cuántas paradas se completaron sobre el total. **La parada se tilda sola** cuando el chofer cobra un pedido a ese cliente ese día: no hay que marcar nada a mano.
+
+---
+
+## 9. Cuando un cliente llama y hace un pedido
+
+Cuando un comercio llama para pedir mercadería, Administración lo suma al viaje del chofer que lo va a atender, así la visita y el pedido quedan registrados en **Viajes**.
+
+1. Confirmá qué **chofer y qué día** van a atender a ese cliente.
+2. **Punto de venta → Viajes** y abrí el **viaje de ese chofer para esa fecha**. Si todavía no existe, creá uno nuevo (sección 8).
+3. En **Paradas → Agregar una línea**, elegí el **cliente** y guardá.
+4. El chofer ve la parada nueva en su cuadradito **Viaje** (puede que tenga que **recargar la pantalla** si ya la tenía abierta).
+5. Al llegar al cliente, el chofer toca la parada, carga el pedido (que ya viene con el cliente elegido) y cobra. En ese momento la parada se **tilda sola** y queda **vinculada al pedido**.
+
+> **Importante:** la parada se agrega a mano; el sistema **no** la crea solo por el llamado. Lo que sí hace solo es marcarla como visitada y asociarle el pedido cuando el chofer cobra.
+>
+> Antes de sumarlo, chequeá que el cliente tenga **vendedor asignado** (sección 5.3) y, si es un cliente con deuda, mirá la sección 12: al elegirlo, el sistema avisa cuánto debe.
+
+---
+
+## 10. Vender desde el camión (chofer)
+
+1. **Inicio → Viaje** y tocá la parada del cliente. Se abre el punto de venta con el cliente ya elegido.
+   *(Si el cliente no está en el viaje: **Inicio → Punto de venta →** tu camión → **Seguir vendiendo** o **Nueva sesión**, y elegí el cliente arriba a la izquierda.)*
+2. **Si el cliente tiene deuda vencida**, aparece un aviso con el monto y los días. Es solo informativo: **no impide vender** (sección 12).
+3. Tocá los **productos** en la grilla. Para cambiar la cantidad: tocá la línea → **Cant.** → escribí el número.
+4. Los **descuentos por cantidad** se aplican solos.
+5. Tocá **Pago**, elegí el medio y **Validar**:
+   - **Efectivo Camion N:** cobra en el momento.
+   - **Tarjeta.**
+   - **Cuenta corriente:** el cliente queda debiendo (sección 12).
+6. Se genera el ticket y, si querés, el **remito** (sección 14).
+
+**Si sale "Stock insuficiente":** pediste más de lo que hay en el camión. El cartel dice cuánto hay disponible; corregí la cantidad, o avisá a Depósito que falta ese producto.
+
+---
+
+## 11. Si se corta la señal
+
+El punto de venta sigue funcionando sin internet:
+- Podés **seguir cargando y cobrando**. Aparece un aviso de "Conexión perdida" y se puede continuar.
+- La venta queda guardada **en el dispositivo**.
+- **Cuando vuelve la señal, se envía sola** en unos segundos (hasta ~15 segundos). No hace falta hacer nada.
+
+**Recomendaciones:**
+- Después de recuperar señal, esperá unos segundos antes de cerrar el navegador o la aplicación.
+- **No borres los datos del navegador** ni cierres sesión mientras haya ventas sin enviar.
+- Podés comprobarlo en **Punto de venta → Órdenes**: las ventas enviadas figuran ahí.
+
+Mientras una venta no llegó al servidor, tampoco se descuenta el stock ni la ve nadie más. No se pierde la venta ni el dinero cobrado.
+
+---
+
+## 12. Cuentas corrientes y cobros
+
+### 12.1 El aviso al vender
+Al elegir en el punto de venta un cliente con deuda vencida, aparece un cartel con el **monto adeudado** y los **días sin pagar**, con colores:
+
+- 🟠 **Naranja:** 10 días o más.
+- 🔴 **Rojo:** 15 días o más (es el máximo de crédito del negocio).
+
+Es solo información: la venta se puede hacer igual.
+
+### 12.2 Lista de deudores
+**Punto de venta → Deudores.** Muestra los clientes con deuda, con los más atrasados primero. Un **Vendedor** ve solo a **sus** clientes; los demás roles ven a todos.
+
+### 12.3 Registrar el cobro de una deuda
+Lo hace **Gerencia**:
+1. **Inicio → Facturación → Clientes → Pagos → Nuevo**.
+2. Elegí el **Cliente**, el **Monto** y el **Diario** (Efectivo o Banco).
+3. Confirmá. El pago se aplica solo a la deuda y el cliente se actualiza en Deudores (si pagó todo, desaparece de la lista).
+
+Este cobro es también el que **genera la comisión** del vendedor (sección 13).
+
+---
+
+## 13. Comisiones de los vendedores
+
+### 13.1 Cargar el porcentaje de cada vendedor
+Solo **Gerencia** puede hacerlo.
+1. **Ajustes → Usuarios y compañías → Usuarios** y abrí el usuario del vendedor (`camion1`, `camion2`, `camion3`).
+2. Pestaña **Comisión (Reparto)**.
+3. Escribí el **% Comisión** y guardá.
+
+**Un cambio de porcentaje vale para lo que se cobre de ahí en adelante**: las comisiones que ya se generaron **no se modifican**.
+
+### 13.2 Cuándo se genera la comisión
+La comisión se genera **cuando se le cobra al cliente**, no cuando se carga el pedido:
+
+| Tipo de venta | Cuándo se genera |
+|---|---|
+| **Contado** (efectivo o tarjeta) | Al cobrar la venta en el camión. |
+| **Cuenta corriente** | Cuando el cliente **paga** esa deuda (sección 12.3). Si paga en partes, cada pago genera su parte proporcional. |
+
+Solo cuenta si el cliente tiene **vendedor asignado** (sección 5.3): la comisión va para ese vendedor.
+
+### 13.3 Ver las comisiones
+**Punto de venta → Comisiones** (solo Gerencia). Es una tabla por **vendedor y mes** con lo cobrado y la comisión resultante, más el detalle línea por línea. Es de **solo lectura**: nadie carga comisiones a mano; las genera el sistema con cada cobro real.
+
+---
+
+## 14. Remito interno
+
+**Este sistema no factura.** El negocio sigue facturando con su programa en la PC, incluida la Factura A. Lo que genera el sistema es un **remito interno**, sin valor fiscal, como constancia de lo entregado.
+
+1. **Punto de venta → Órdenes** y abrí la venta.
+2. Botón **Imprimir remito**.
+
+El remito muestra cliente, productos, cantidades y totales. La factura se hace aparte, con el remito como respaldo.
+
+---
+
+## 15. Cierre de caja
+
+Al terminar el turno o el día, el chofer:
+1. Dentro del punto de venta, menú **☰** (arriba a la derecha) → **Cerrar sesión de PdV**.
+2. Revisa el resumen: total vendido, por medio de pago, efectivo esperado y contado.
+3. Cuenta el efectivo, carga la diferencia si la hay y **confirma el cierre**.
+
+Antes de cerrar, **asegurate de que todas las ventas estén enviadas** (sección 11). Para volver a vender hay que abrir una **sesión nueva**.
+
+---
+
+## 16. Preguntas frecuentes
+
+**No veo ningún cliente en el punto de venta.**
+El cliente no tiene tu usuario como **Vendedor** (sección 5.3). Pedile a Administración que se lo asigne.
+
+**El botón de Viaje da error.**
+Probablemente un cliente de la lista no está asignado a ese chofer. Revisá el viaje y asigná el cliente.
+
+**El sistema no me deja vender por "Stock insuficiente".**
+El camión no tiene cargada esa cantidad (sección 7). Depósito tiene que cargarla o hay que bajar la cantidad del pedido.
+
+**Un producto no aparece en el punto de venta.**
+No está cargado en el camión, o no tiene tildado **Punto de venta** (sección 6.2).
+
+**El aviso de deuda, ¿me impide vender?**
+No, es informativo.
+
+**Cambié un descuento pero el camión no lo toma.**
+En la tablet: menú **☰** → **Volver a cargar datos**. Si no, cerrá y abrí el punto de venta.
+
+**La pantalla queda cargando y no abre (después de una actualización).**
+Es una copia vieja guardada en el navegador. Probá en una pestaña privada; si anda, borrá los **datos del sitio** en la configuración del navegador.
+
+**Salió un cartel de error de JavaScript en el celular.**
+Es del navegador (Brave o Firefox en iPhone), no del sistema. Usá **Safari**.
+
+**Me olvidé la contraseña.**
+Pedile al administrador que te genere una nueva.
+
+**Limitaciones actuales:**
+- No hay facturación fiscal (se hace con el programa externo).
+- El viaje es una lista de paradas, no una ruta optimizada por mapa.
+- La comisión evalúa solo lo cobrado; el criterio de "2 visitas consecutivas sin cobro" no está implementado.
+- Las paradas se agregan a mano (sección 9).
+
+---
+
+## 17. Para el administrador: usuarios y camiones
+
+### 17.1 Cambiar el nombre de un usuario
+**Ajustes → Usuarios y compañías → Usuarios →** abrí el usuario → cambiá **Nombre** y, si querés, el **login**. No se pierde ninguna configuración.
+
+### 17.2 Cambiar o resetear una contraseña
+Abrí el usuario → **Acción → Cambiar contraseña**. Entregala por un canal privado y pedí que la cambie al primer ingreso.
+
+### 17.3 Crear un usuario nuevo
+1. **Ajustes → Usuarios y compañías → Usuarios → Nuevo**.
+2. Nombre, login y contraseña inicial.
+3. En permisos, elegí **un** rol de **Reparto** (Vendedor, Depósito, Administración Operativa o Gerencia).
+4. Si es **vendedor**, en la pestaña **Camión (Reparto)** elegí su punto de venta: **solo verá ese camión**.
+5. Asignale sus **clientes** (sección 5.3); si no, no verá ninguno.
+
+### 17.4 Camiones
+Hoy hay **3 camiones**. Cada uno tiene: una ubicación de stock, un tipo de operación de venta, de carga y de descarga, su caja, su método de pago en efectivo y su punto de venta. Para sumar un camión nuevo, pedilo al equipo técnico.
+
+### 17.5 Problemas con los datos
+Ante cualquier problema con los datos (algo que desapareció, un número que no cierra), **no borres ni corrijas nada a mano**: avisá al equipo técnico para revisarlo antes.
+
+---
+
+*Documento vivo: se actualiza cuando cambia o se suma una funcionalidad.*

@@ -27,20 +27,17 @@ def leer(nombre):
 # --- Productos ---------------------------------------------------------------
 Cat, Prod = env["product.category"], env["product.template"]
 cats = {c.name: c for c in Cat.search([])}
-creados = actualizados = 0
+creados = existentes = 0
 for r in leer("productos.csv"):
+    if Prod.search_count([("name", "=", r["nombre"])]):  # no se pisa nada de lo ya cargado/editado
+        existentes += 1
+        continue
     cat = cats.get(r["categoria"]) or Cat.create({"name": r["categoria"]})
     cats[r["categoria"]] = cat
-    vals = {"list_price": float(r["precio"]), "categ_id": cat.id}
-    p = Prod.search([("name", "=", r["nombre"])], limit=1)
-    if p:
-        p.write(vals)
-        actualizados += 1
-    else:
-        Prod.create({**vals, "name": r["nombre"], "type": "consu", "is_storable": True,
-                     "available_in_pos": True, "sale_ok": True})
-        creados += 1
-print(f"Productos: {creados} creados, {actualizados} actualizados")
+    Prod.create({"name": r["nombre"], "list_price": float(r["precio"]), "categ_id": cat.id,
+                 "type": "consu", "is_storable": True, "available_in_pos": True, "sale_ok": True})
+    creados += 1
+print(f"Productos: {creados} creados, {existentes} ya existían (no se modifican)")
 
 # --- Clientes ----------------------------------------------------------------
 Partner = env["res.partner"]
@@ -92,6 +89,14 @@ for n in range(1, N_CAMIONES + 1):
             "name": f"Venta Camion {n}", "code": "outgoing", "sequence_code": f"VCAM{n}",
             "warehouse_id": wh.id, "default_location_src_id": loc.id,
             "default_location_dest_id": clientes_dest.id})
+    # Carga (depósito -> camión) y Descarga (camión -> depósito): rutina diaria de stock
+    for prefijo, codigo, origen, destino in (
+            ("Carga", "CAM", wh.lot_stock_id, loc), ("Descarga", "DCAM", loc, wh.lot_stock_id)):
+        if not env["stock.picking.type"].search_count([("sequence_code", "=", f"{codigo}{n}"), ("warehouse_id", "=", wh.id)]):
+            env["stock.picking.type"].create({
+                "name": f"{prefijo} Camion {n}", "code": "internal", "sequence_code": f"{codigo}{n}",
+                "warehouse_id": wh.id, "default_location_src_id": origen.id,
+                "default_location_dest_id": destino.id})
     jrn = env["account.journal"].search([("code", "=", f"CJ{n}"), ("type", "=", "cash")], limit=1) \
         or env["account.journal"].create({"name": f"Caja Camion {n}", "code": f"CJ{n}", "type": "cash"})
     efectivo = env["pos.payment.method"].search([("name", "=", f"Efectivo Camion {n}")], limit=1) \
@@ -101,7 +106,7 @@ for n in range(1, N_CAMIONES + 1):
             "name": f"POS Camion {n}", "picking_type_id": ptype.id,
             "payment_method_ids": [(6, 0, [card.id, cta_cte.id, efectivo.id])]})
     pos_por_camion[n] = cfg
-print(f"Camiones: {N_CAMIONES} POS listos ({', '.join(c.name for c in pos_por_camion.values())})")
+print(f"Camiones: {N_CAMIONES} POS + tipos Carga/Descarga listos ({', '.join(c.name for c in pos_por_camion.values())})")
 
 # --- Usuarios por rol --------------------------------------------------------
 G = "pos_reparto_security."
