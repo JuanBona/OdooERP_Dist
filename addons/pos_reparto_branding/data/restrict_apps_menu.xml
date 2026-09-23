@@ -1,0 +1,10 @@
+<odoo>
+    <!--
+      "Apps" (la tienda/lista de módulos de Odoo) no es para los roles de negocio:
+      se restringe al administrador técnico. Sin noupdate a propósito, así un
+      `-u pos_reparto_branding` lo aplica también en bases ya creadas.
+    -->
+    <record id="base.menu_management" model="ir.ui.menu">
+        <field name="group_ids" eval="[(6, 0, [ref('base.group_system')])]"/>
+    </record>
+</odoo>

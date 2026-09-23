@@ -6,6 +6,7 @@
     'depends': ['web', 'project', 'spreadsheet_dashboard', 'utm', 'point_of_sale', 'sale'],
     'data': [
         'data/hide_unused_menus.xml',
+        'data/restrict_apps_menu.xml',
     ],
     'assets': {
         'web._assets_primary_variables': [

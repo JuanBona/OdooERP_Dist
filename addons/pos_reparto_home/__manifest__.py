@@ -15,6 +15,8 @@
             'pos_reparto_home/static/src/home_screen.xml',
             'pos_reparto_home/static/src/home_systray.js',
             'pos_reparto_home/static/src/home_systray.xml',
+            'pos_reparto_home/static/src/navbar_apps.js',
+            'pos_reparto_home/static/src/navbar_apps.xml',
         ],
         'point_of_sale._assets_pos': [
             'pos_reparto_home/static/src/app/components/navbar/navbar_home_button.js',
