@@ -88,7 +88,8 @@ nano .env   # DB_PASSWORD (openssl rand -base64 24), DOMAIN, ACME_EMAIL,
             # RCLONE_REMOTE, HC_PING_URL. Las imágenes vienen fijadas por digest.
 cp deploy/odoo.conf.example deploy/odoo.conf
 nano deploy/odoo.conf   # admin_passwd fuerte (NO "admin") y dbfilter = ^<DB_NAME>$
-chmod 600 .env deploy/odoo.conf
+chmod 600 .env
+chmod 644 deploy/odoo.conf   # el contenedor corre con otro usuario: con 600 no puede leerlo y Odoo entra en bucle de reinicios
 ```
 
 `.env` y `deploy/odoo.conf` están en `.gitignore`: viven solo en el servidor.
