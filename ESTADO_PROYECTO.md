@@ -291,7 +291,7 @@ Configurado servidor MCP `odoo` en Claude Code (`claude mcp add odoo ...`), modo
 5. Criterio "2 visitas consecutivas sin cobro" de `pos_reparto_credito` (hoy solo días sin pago, ver deuda técnica en 5ter). **Próximo ítem a tomar.**
 6. Productos habituales por cliente / venta sugerida (Should).
 7. Integración Google Maps para secuenciar recorrido (Should, requiere API paga).
-8. Reconexión automática de sync offline en POS — listener del evento `online` del navegador (ver sección 7, estimado una tarde, no bloqueante).
+8. ~~Reconexión automática de sync offline en POS~~ — hecho el 2026-09-23. El core de Odoo `19.0-20260817` ya reintenta al recibir el evento `online`, pero no si cae el servidor/señal sin que el navegador se declare offline; `pos_stock_limit/static/src/overrides/pos_store_sync_retry.js` reintenta cada 15 s mientras haya órdenes pendientes. Verificado en navegador: orden cobrada offline sincroniza sola ~11 s tras volver el servidor, sin recargar.
 
 **Datos maestros pendientes** (no es código, es carga manual — **ampliado tras el incidente del 2026-08-29, ver sección 5sexies**: el catálogo de 182 productos, clientes reales, 2 pos.config originales y los 4 usuarios placeholder se perdieron y hay que recargarlos de cero, no solo completar lo que faltaba):
 - Recargar el excel `Lista_Precios_Rincon_Del_Sur_Peyrano.xlsx` (productos, ver convención de carga en memoria `project-reparto-catalogo-productos`) — se perdió con el reset.
