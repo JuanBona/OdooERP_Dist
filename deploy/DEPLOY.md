@@ -153,7 +153,30 @@ y correr:
 Verificar login, un POS abierto, ventas históricas y acentos. Anotar cuánto
 tardó: ese es el RTO real.
 
-## 9. Después del primer deploy
+## 9. Carga inicial de datos (productos, clientes, camiones, usuarios)
+
+`deploy/carga_inicial.sh` carga de una vez los productos y clientes del cliente, los
+3 POS de camión (con su ubicación, tipo de operación, caja y método de efectivo) y un
+usuario por rol (3 transportistas, Administración, Depósito, Gerencia). Es repetible
+(no duplica) y por defecto es un **ensayo que no guarda nada**.
+
+```bash
+# En tu PC: Excel -> CSV (los CSV tienen datos de clientes: NO subirlos a git)
+python deploy/xlsx_a_csv.py Clientes.xlsx ListaPrecios.xlsx carga_cliente
+# Copiarlos al servidor (PuTTY: pscp, con Pageant cargado)
+pscp -P 5922 -r carga_cliente deploy@IP:/home/deploy/
+# En el servidor:
+cd /opt/reparto && ./deploy/backup.sh                      # backup antes de tocar datos
+./deploy/carga_inicial.sh /home/deploy/carga_cliente         # ensayo
+./deploy/carga_inicial.sh /home/deploy/carga_cliente --guardar
+```
+
+Al guardar imprime **una sola vez** las contraseñas iniciales de los usuarios: anotarlas
+en un gestor de contraseñas. Si existe `asignacion.csv` (columnas `codigo,camion`) en esa
+carpeta, asigna cada cliente a un camión. **Un transportista solo ve los clientes que
+tiene asignados**: sin esa asignación no verá ninguno en el POS.
+
+## 10. Después del primer deploy
 
 - Crear los usuarios reales (Ajustes → Usuarios): cada uno con su grupo
   *Reparto* (Vendedor / Depósito / Administración Operativa / Gerencia) más el
