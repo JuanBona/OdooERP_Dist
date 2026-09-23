@@ -38,6 +38,15 @@ emitir el certificado si el DNS no resolvió).
 
 ## 3. Preparar el VPS
 
+> **Antes de activar `ufw`, verificá en qué puerto escucha el SSH**: `ss -tlnp | grep sshd`.
+> En el VPS de DonWeb es el **5922**, no el 22 (el 22 no es alcanzable desde afuera). Abrí
+> ese puerto en `ufw` y usalo en PuTTY. En Ubuntu 24.04 el SSH arranca por `ssh.socket`,
+> que solo escucha el 22: para usar otro puerto hay que fijarlo con
+> `echo "Port 5922" > /etc/ssh/sshd_config.d/10-ports.conf` y correr
+> `systemctl disable --now ssh.socket && systemctl enable --now ssh.service`.
+> Con `fail2ban`, poné ese puerto en `/etc/fail2ban/jail.local` (`[sshd]` → `port = 5922`).
+> Dejá abierta la consola web del panel del proveedor (VNC) hasta comprobar el acceso nuevo.
+
 Por SSH, como root:
 
 ```bash
@@ -52,8 +61,9 @@ mkdir -p /home/deploy/.ssh && cp ~/.ssh/authorized_keys /home/deploy/.ssh/ \
   && chown -R deploy:deploy /home/deploy/.ssh
 
 # SSH solo por clave, sin root (probá entrar como `deploy` ANTES de cerrar esta sesión)
-sed -i 's/^#\?PermitRootLogin.*/PermitRootLogin no/; s/^#\?PasswordAuthentication.*/PasswordAuthentication no/' /etc/ssh/sshd_config
-systemctl restart ssh
+sed -i 's/^#\?PermitRootLogin.*/PermitRootLogin no/; s/^#\?PasswordAuthentication.*/PasswordAuthentication no/' /etc/ssh/sshd_config /etc/ssh/sshd_config.d/*.conf
+sshd -t && systemctl restart ssh
+sshd -T | grep -Ei 'permitrootlogin|passwordauthentication'   # ambos deben decir "no"
 
 # Firewall: solo SSH, HTTP y HTTPS
 ufw allow 22/tcp && ufw allow 80/tcp && ufw allow 443/tcp && ufw --force enable
