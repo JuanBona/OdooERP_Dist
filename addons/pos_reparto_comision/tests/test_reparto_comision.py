@@ -367,6 +367,47 @@ class TestRepartoComision(TransactionCase):
             len(self.env['pos.reparto.comision.linea'].search([('account_payment_id', '=', pago.id)])), 0
         )
 
+    def test_editar_monto_del_pago_resincroniza_la_linea(self):
+        vendedor = self._crear_vendedor('Vendedor Comision Resync', pct=10.0)
+        partner = self._crear_partner('Cliente Comision Resync', vendedor)
+        linea_deuda = self._crear_linea_por_cobrar(partner, 1000.0, fields.Date.today() - timedelta(days=3))
+        pago = self._crear_y_conciliar_pago(partner, linea_deuda, 500.0, fields.Date.today())
+
+        pago.action_draft()
+        pago.amount = 600.0
+        pago.action_post()
+
+        linea = self.env['pos.reparto.comision.linea'].search([('account_payment_id', '=', pago.id)])
+        self.assertEqual(len(linea), 1)
+        self.assertEqual(linea.monto_cobrado, 600.0)
+        self.assertEqual(linea.comision_monto, 60.0)
+
+    def test_cambiar_cliente_del_pago_sin_vendedor_borra_la_linea(self):
+        vendedor = self._crear_vendedor('Vendedor Comision Resync 2', pct=10.0)
+        partner = self._crear_partner('Cliente Comision Resync 2', vendedor)
+        otro = self._crear_partner('Cliente Sin Vendedor Resync')
+        linea_deuda = self._crear_linea_por_cobrar(partner, 500.0, fields.Date.today() - timedelta(days=3))
+        pago = self._crear_y_conciliar_pago(partner, linea_deuda, 500.0, fields.Date.today())
+
+        pago.write({'partner_id': otro.id})
+
+        self.assertFalse(self.env['pos.reparto.comision.linea'].search([('account_payment_id', '=', pago.id)]))
+
+    def test_fallo_de_comision_no_aborta_el_pago(self):
+        vendedor = self._crear_vendedor('Vendedor Comision Falla', pct=10.0)
+        partner = self._crear_partner('Cliente Comision Falla', vendedor)
+        linea_deuda = self._crear_linea_por_cobrar(partner, 500.0, fields.Date.today() - timedelta(days=3))
+
+        with patch(
+            'odoo.addons.pos_reparto_comision.models.account_payment.AccountPayment.'
+            '_crear_linea_comision_cobro_credito',
+            side_effect=ValueError('boom'),
+        ):
+            pago = self._crear_y_conciliar_pago(partner, linea_deuda, 500.0, fields.Date.today())
+
+        self.assertIn(pago.state, ('in_process', 'paid'))
+        self.assertFalse(self.env['pos.reparto.comision.linea'].search([('account_payment_id', '=', pago.id)]))
+
     def test_vendedor_no_puede_leer_lineas_de_comision(self):
         vendedor = self._crear_vendedor('Vendedor Comision Sin Acceso Modelo', pct=10.0)
         partner = self._crear_partner('Cliente Comision Sin Acceso Modelo', vendedor)

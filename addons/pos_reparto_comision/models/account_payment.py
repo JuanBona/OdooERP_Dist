@@ -1,4 +1,8 @@
+import logging
+
 from odoo import api, models
+
+_logger = logging.getLogger(__name__)
 
 ESTADOS_COBRADOS = ('in_process', 'paid')
 
@@ -11,10 +15,19 @@ class AccountPayment(models.Model):
         if self.payment_type != 'inbound' or not self.partner_id:
             return
         vendedor = self.partner_id.user_id
-        if not vendedor:
-            return
         Linea = self.env['pos.reparto.comision.linea'].sudo()
-        if Linea.search_count([('account_payment_id', '=', self.id)]):
+        existente = Linea.search([('account_payment_id', '=', self.id)])
+        if not vendedor:
+            existente.unlink()
+            return
+        if existente:
+            # El % de comisión queda congelado; solo se re-sincronizan los datos del cobro.
+            existente.write({
+                'vendedor_id': vendedor.id,
+                'partner_id': self.partner_id.id,
+                'fecha': self.date,
+                'monto_cobrado': self.amount,
+            })
             return
         Linea.create({
             'vendedor_id': vendedor.id,
@@ -27,13 +40,20 @@ class AccountPayment(models.Model):
         })
 
     def _sincronizar_lineas_comision(self):
+        # Un fallo de comisión nunca debe abortar el pago en Contabilidad.
         for payment in self:
-            if payment.state in ESTADOS_COBRADOS:
-                payment._crear_linea_comision_cobro_credito()
-            else:
-                self.env['pos.reparto.comision.linea'].sudo().search([
-                    ('account_payment_id', '=', payment.id),
-                ]).unlink()
+            try:
+                with self.env.cr.savepoint():
+                    if payment.state in ESTADOS_COBRADOS:
+                        payment._crear_linea_comision_cobro_credito()
+                    else:
+                        self.env['pos.reparto.comision.linea'].sudo().search([
+                            ('account_payment_id', '=', payment.id),
+                        ]).unlink()
+            except Exception:
+                _logger.exception(
+                    "Failed to sync comision line for payment %s", payment.id
+                )
 
     @api.model_create_multi
     def create(self, vals_list):
@@ -43,7 +63,7 @@ class AccountPayment(models.Model):
 
     def write(self, vals):
         result = super().write(vals)
-        if {'state', 'amount', 'partner_id'} & vals.keys():
+        if {'state', 'amount', 'partner_id', 'date'} & vals.keys():
             self._sincronizar_lineas_comision()
         return result
 
