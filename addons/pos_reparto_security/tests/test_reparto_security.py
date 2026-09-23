@@ -205,3 +205,106 @@ class TestRepartoSecurity(TransactionCase):
             self.env.ref('base.view_users_form').id
         )['arch']
         self.assertIn('reparto_camion_asignado_id', arch)
+
+    def test_vendedor_no_puede_leer_sesion_de_camion_ajeno(self):
+        camion_1 = self.env['pos.config'].create({'name': 'Camión 1 Test Sesión'})
+        camion_2 = self.env['pos.config'].create({'name': 'Camión 2 Test Sesión'})
+        self.vendedor_1.sudo().reparto_camion_asignado_id = camion_1
+
+        sesion_camion_2 = self.env['pos.session'].sudo().create({
+            'config_id': camion_2.id,
+            'user_id': self.vendedor_2.id,
+        })
+
+        with self.assertRaises(AccessError):
+            sesion_camion_2.with_user(self.vendedor_1).read(['id'])
+
+    def test_vendedor_puede_leer_sesion_de_su_propio_camion(self):
+        camion_1 = self.env['pos.config'].create({'name': 'Camión 1 Test Sesión'})
+        self.vendedor_1.sudo().reparto_camion_asignado_id = camion_1
+
+        sesion_propia = self.env['pos.session'].sudo().create({
+            'config_id': camion_1.id,
+            'user_id': self.vendedor_1.id,
+        })
+
+        leida = sesion_propia.with_user(self.vendedor_1).read(['id'])
+        self.assertEqual(leida[0]['id'], sesion_propia.id)
+
+    def test_vendedor_sin_camion_asignado_no_ve_ninguna_sesion(self):
+        camion_1 = self.env['pos.config'].create({'name': 'Camión 1 Test Sesión'})
+        sesion = self.env['pos.session'].sudo().create({
+            'config_id': camion_1.id,
+            'user_id': self.vendedor_2.id,
+        })
+
+        with self.assertRaises(AccessError):
+            sesion.with_user(self.vendedor_1).read(['id'])
+
+    def test_usuario_sin_grupo_vendedor_ve_todas_las_sesiones(self):
+        usuario_pos_sin_vendedor = self.env['res.users'].create({
+            'name': 'Usuario POS Sin Rol Vendedor Sesión',
+            'login': 'usuario_pos_sin_vendedor_sesion_test',
+            'group_ids': [(6, 0, [self.group_internal.id, self.group_pos_user.id])],
+        })
+        camion_1 = self.env['pos.config'].create({'name': 'Camión 1 Test Sesión'})
+        camion_2 = self.env['pos.config'].create({'name': 'Camión 2 Test Sesión'})
+        sesion_1 = self.env['pos.session'].sudo().create({
+            'config_id': camion_1.id,
+            'user_id': self.vendedor_1.id,
+        })
+        sesion_2 = self.env['pos.session'].sudo().create({
+            'config_id': camion_2.id,
+            'user_id': self.vendedor_2.id,
+        })
+
+        found = self.env['pos.session'].with_user(usuario_pos_sin_vendedor).search([
+            ('id', 'in', [sesion_1.id, sesion_2.id]),
+        ])
+        self.assertEqual(found, sesion_1 | sesion_2)
+
+    def test_vendedor_no_puede_escribir_sesion_de_camion_ajeno(self):
+        camion_1 = self.env['pos.config'].create({'name': 'Camión 1 Test Sesión Write'})
+        camion_2 = self.env['pos.config'].create({'name': 'Camión 2 Test Sesión Write'})
+        self.vendedor_1.sudo().reparto_camion_asignado_id = camion_1
+
+        sesion_camion_2 = self.env['pos.session'].sudo().create({
+            'config_id': camion_2.id,
+            'user_id': self.vendedor_2.id,
+        })
+
+        with self.assertRaises(AccessError):
+            sesion_camion_2.with_user(self.vendedor_1).write({'state': 'closed'})
+
+    def test_vendedor_puede_escribir_sesion_de_su_propio_camion(self):
+        camion_1 = self.env['pos.config'].create({'name': 'Camión 1 Test Sesión Write'})
+        self.vendedor_1.sudo().reparto_camion_asignado_id = camion_1
+
+        sesion_propia = self.env['pos.session'].sudo().create({
+            'config_id': camion_1.id,
+            'user_id': self.vendedor_1.id,
+        })
+
+        sesion_propia.with_user(self.vendedor_1).write({'state': 'closed'})
+        self.assertEqual(sesion_propia.state, 'closed')
+
+    def test_vendedor_no_puede_crear_sesion_de_camion_ajeno(self):
+        camion_1 = self.env['pos.config'].create({'name': 'Camión 1 Test Sesión Create'})
+        camion_2 = self.env['pos.config'].create({'name': 'Camión 2 Test Sesión Create'})
+        self.vendedor_1.sudo().reparto_camion_asignado_id = camion_1
+
+        with self.assertRaises(AccessError):
+            self.env['pos.session'].with_user(self.vendedor_1).create({
+                'config_id': camion_2.id,
+                'user_id': self.vendedor_1.id,
+            })
+
+    def test_vendedor_puede_crear_sesion_de_su_propio_camion(self):
+        camion_1 = self.env['pos.config'].create({'name': 'Camión 1 Test Sesión Create'})
+        self.vendedor_1.sudo().reparto_camion_asignado_id = camion_1
+
+        sesion = self.env['pos.session'].with_user(self.vendedor_1).create({
+            'config_id': camion_1.id,
+            'user_id': self.vendedor_1.id,
+        })
+        self.assertEqual(sesion.config_id, camion_1)
