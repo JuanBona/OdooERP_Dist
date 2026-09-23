@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<templates xml:space="preserve">
+
+    <!-- Escritorio: desplegable de apps de la barra. El t-else (espaciador) sigue valiendo. -->
+    <t t-inherit="web.NavBar.AppsMenu" t-inherit-mode="extension">
+        <xpath expr="//div[hasclass('o_navbar_apps_menu')]" position="attributes">
+            <attribute name="t-if">!isScopedApp and canSeeAllApps</attribute>
+        </xpath>
+    </t>
+
+    <!-- Celular: botón "All Apps" del menú lateral. Se conserva el menú de la app actual. -->
+    <t t-inherit="web.NavBar.AppsMenu.Sidebar" t-inherit-mode="extension">
+        <xpath expr="//a[@t-on-click.prevent='onAllAppsBtnClick']" position="attributes">
+            <attribute name="t-if">canSeeAllApps</attribute>
+        </xpath>
+    </t>
+
+</templates>

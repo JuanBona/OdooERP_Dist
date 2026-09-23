@@ -1,2 +1,3 @@
 backup.sql -text binary
 *.sh text eol=lf
+deploy/Caddyfile text eol=lf
