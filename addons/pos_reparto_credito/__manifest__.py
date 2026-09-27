@@ -8,6 +8,7 @@
         'security/ir.model.access.csv',
         'security/reparto_cuenta_corriente_rules.xml',
         'views/res_partner_deudores_views.xml',
+        'views/reparto_cuenta_corriente_views.xml',
     ],
     'assets': {
         'point_of_sale._assets_pos': [

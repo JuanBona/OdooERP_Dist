@@ -206,3 +206,7 @@ class TestRepartoCuentaCorriente(TransactionCase):
             ('vendedor_id', '=', vendedor_1.id),
         ])
         self.assertEqual(filtrado.mapped('partner_id'), cliente_1)
+
+    def test_accion_cuenta_corriente_existe_y_apunta_al_modelo_correcto(self):
+        action = self.env.ref('pos_reparto_credito.action_reparto_cuenta_corriente')
+        self.assertEqual(action.res_model, 'reparto.cuenta.corriente.movimiento')
