@@ -151,6 +151,9 @@ class TestRepartoComision(TransactionCase):
         return move.line_ids.filtered(lambda l: l.account_id == self.receivable_account)
 
     def _crear_y_conciliar_pago(self, partner, receivable_line, monto, fecha):
+        # pos_reparto_credito ya concilia el pago contra receivable_line
+        # solo, dentro de account.payment.action_post() -- no hace falta
+        # (y ahora rompe) llamar reconcile() de nuevo a mano aca.
         payment = self.env['account.payment'].create({
             'payment_type': 'inbound',
             'partner_type': 'customer',
@@ -160,10 +163,6 @@ class TestRepartoComision(TransactionCase):
             'journal_id': self.bank_journal.id,
         })
         payment.action_post()
-        payment_line = payment.move_id.line_ids.filtered(
-            lambda l: l.account_id == self.receivable_account
-        )
-        (payment_line + receivable_line).reconcile()
         return payment
 
     def test_campo_comision_no_visible_para_vendedor(self):

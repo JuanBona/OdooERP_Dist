@@ -56,6 +56,10 @@ class TestRepartoCredito(TransactionCase):
         return move.line_ids.filtered(lambda l: l.account_id == self.receivable_account)
 
     def _crear_y_conciliar_pago(self, partner, receivable_line, monto, fecha):
+        # La conciliacion contra receivable_line ya la hace sola
+        # account.payment.action_post() (ver models/account_payment.py,
+        # _reparto_conciliar_deuda) -- este helper ya no necesita
+        # reconciliar a mano, solo crear y postear el pago.
         payment = self.env['account.payment'].create({
             'payment_type': 'inbound',
             'partner_type': 'customer',
@@ -65,10 +69,6 @@ class TestRepartoCredito(TransactionCase):
             'journal_id': self.bank_journal.id,
         })
         payment.action_post()
-        payment_line = payment.move_id.line_ids.filtered(
-            lambda l: l.account_id == self.receivable_account
-        )
-        (payment_line + receivable_line).reconcile()
         return payment
 
     def test_monto_adeudado_suma_lineas_sin_conciliar(self):
@@ -116,6 +116,43 @@ class TestRepartoCredito(TransactionCase):
 
         self.assertEqual(partner.credito_monto_adeudado, 0.0)
         self.assertEqual(partner.credito_dias_sin_pago, 0)
+
+    def test_pago_concilia_automaticamente_contra_la_deuda_mas_vieja(self):
+        partner = self._crear_partner_credito('Cliente Reconciliacion Auto')
+        linea_vieja = self._crear_linea_por_cobrar(partner, 300.0, fields.Date.today() - timedelta(days=10))
+        linea_nueva = self._crear_linea_por_cobrar(partner, 200.0, fields.Date.today())
+
+        payment = self.env['account.payment'].create({
+            'payment_type': 'inbound',
+            'partner_type': 'customer',
+            'partner_id': partner.id,
+            'amount': 300.0,
+            'date': fields.Date.today(),
+            'journal_id': self.bank_journal.id,
+        })
+        payment.action_post()
+
+        self.assertTrue(linea_vieja.reconciled)
+        self.assertFalse(linea_nueva.reconciled)
+        self.assertEqual(partner.credito_monto_adeudado, 200.0)
+
+    def test_pago_parcial_concilia_parcialmente_la_linea_mas_vieja(self):
+        partner = self._crear_partner_credito('Cliente Reconciliacion Parcial Auto')
+        linea = self._crear_linea_por_cobrar(partner, 1000.0, fields.Date.today())
+
+        payment = self.env['account.payment'].create({
+            'payment_type': 'inbound',
+            'partner_type': 'customer',
+            'partner_id': partner.id,
+            'amount': 400.0,
+            'date': fields.Date.today(),
+            'journal_id': self.bank_journal.id,
+        })
+        payment.action_post()
+
+        self.assertFalse(linea.reconciled)
+        self.assertEqual(linea.amount_residual, 600.0)
+        self.assertEqual(partner.credito_monto_adeudado, 600.0)
 
     def test_accion_deudores_solo_lista_clientes_con_saldo(self):
         deudor = self._crear_partner_credito('Cliente Con Saldo')
