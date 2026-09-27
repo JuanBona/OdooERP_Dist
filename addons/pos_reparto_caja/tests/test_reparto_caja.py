@@ -323,3 +323,20 @@ class TestRepartoCaja(TransactionCase):
         self.assertEqual(leida.vendedor_id, vendedor)
         with self.assertRaises(AccessError):
             leida.write({'monto_recibido_efectivo': 10.0})
+
+    def test_gerencia_no_puede_ejecutar_action_rendir(self):
+        vendedor = self._crear_vendedor('Vendedor Rendir Gerencia Accion')
+        partner = self._crear_partner('Cliente Rendir Gerencia Accion', vendedor)
+        orden = self._crear_orden_pagada(partner, self.metodo_efectivo, 100.0)
+        gerente = self._crear_gerente('Gerente Rendir Accion')
+        rendicion = self.env['reparto.caja.rendicion'].create({'vendedor_id': vendedor.id})
+        rendicion.write({'monto_recibido_efectivo': 100.0, 'monto_recibido_transferencia': 0.0})
+
+        with self.assertRaises(AccessError):
+            rendicion.with_user(gerente).action_rendir()
+
+        linea = self.env['pos.reparto.comision.linea'].search([
+            ('pos_payment_id', '=', orden.payment_ids[0].id),
+        ])
+        self.assertFalse(linea.rendicion_id)
+        self.assertEqual(rendicion.state, 'borrador')

@@ -1,5 +1,5 @@
 from odoo import api, fields, models
-from odoo.exceptions import UserError
+from odoo.exceptions import AccessError, UserError
 
 
 class RepartoCajaRendicion(models.Model):
@@ -74,6 +74,8 @@ class RepartoCajaRendicion(models.Model):
         return super().create(vals_list)
 
     def action_rendir(self):
+        if not self.env.su and not self.env.user.has_group('pos_reparto_security.group_reparto_adminop'):
+            raise AccessError('Solo Administración puede confirmar una rendición.')
         Linea = self.env['pos.reparto.comision.linea'].sudo()
         for rendicion in self:
             if rendicion.state != 'borrador':
