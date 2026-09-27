@@ -1,0 +1,4 @@
+id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
+access_reparto_cuenta_corriente_vendedor,reparto.cuenta.corriente.movimiento vendedor,model_reparto_cuenta_corriente_movimiento,pos_reparto_security.group_reparto_vendedor,1,0,0,0
+access_reparto_cuenta_corriente_adminop,reparto.cuenta.corriente.movimiento adminop,model_reparto_cuenta_corriente_movimiento,pos_reparto_security.group_reparto_adminop,1,0,0,0
+access_reparto_cuenta_corriente_gerencia,reparto.cuenta.corriente.movimiento gerencia,model_reparto_cuenta_corriente_movimiento,pos_reparto_security.group_reparto_gerencia,1,0,0,0

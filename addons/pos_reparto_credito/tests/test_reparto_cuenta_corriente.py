@@ -132,3 +132,77 @@ class TestRepartoCuentaCorriente(TransactionCase):
             ('partner_id', '=', partner.id),
         ])
         self.assertEqual(movimiento.vendedor_id, vendedor)
+
+    def test_vendedor_solo_ve_movimientos_de_sus_clientes(self):
+        group_vendedor = self.env.ref('pos_reparto_security.group_reparto_vendedor')
+        group_internal = self.env.ref('base.group_user')
+        vendedor_1 = self.env['res.users'].create({
+            'name': 'Vendedor Extracto Uno',
+            'login': 'vendedor_extracto_uno_test',
+            'group_ids': [(6, 0, [group_internal.id, group_vendedor.id])],
+        })
+        vendedor_2 = self.env['res.users'].create({
+            'name': 'Vendedor Extracto Dos',
+            'login': 'vendedor_extracto_dos_test',
+            'group_ids': [(6, 0, [group_internal.id, group_vendedor.id])],
+        })
+        cliente_1 = self._crear_partner_credito('Cliente De Vendedor Extracto 1')
+        cliente_1.user_id = vendedor_1
+        self._crear_linea_por_cobrar(cliente_1, 100.0, fields.Date.today())
+        cliente_2 = self._crear_partner_credito('Cliente De Vendedor Extracto 2')
+        cliente_2.user_id = vendedor_2
+        self._crear_linea_por_cobrar(cliente_2, 100.0, fields.Date.today())
+
+        vistos_por_vendedor_1 = self.env['reparto.cuenta.corriente.movimiento'].with_user(
+            vendedor_1
+        ).search([])
+        self.assertIn(cliente_1, vistos_por_vendedor_1.mapped('partner_id'))
+        self.assertNotIn(cliente_2, vistos_por_vendedor_1.mapped('partner_id'))
+
+    def test_gerencia_ve_movimientos_de_todos_los_clientes(self):
+        group_gerencia = self.env.ref('pos_reparto_security.group_reparto_gerencia')
+        group_internal = self.env.ref('base.group_user')
+        gerente = self.env['res.users'].create({
+            'name': 'Gerente Extracto',
+            'login': 'gerente_extracto_test',
+            'group_ids': [(6, 0, [group_internal.id, group_gerencia.id])],
+        })
+        vendedor = self.env['res.users'].create({
+            'name': 'Vendedor Extracto Tres',
+            'login': 'vendedor_extracto_tres_test',
+            'group_ids': [(6, 0, [group_internal.id])],
+        })
+        cliente_1 = self._crear_partner_credito('Cliente Extracto Seis')
+        cliente_1.user_id = vendedor
+        self._crear_linea_por_cobrar(cliente_1, 100.0, fields.Date.today())
+        cliente_2 = self._crear_partner_credito('Cliente Extracto Siete')
+        self._crear_linea_por_cobrar(cliente_2, 100.0, fields.Date.today())
+
+        vistos_por_gerencia = self.env['reparto.cuenta.corriente.movimiento'].with_user(
+            gerente
+        ).search([])
+        self.assertIn(cliente_1, vistos_por_gerencia.mapped('partner_id'))
+        self.assertIn(cliente_2, vistos_por_gerencia.mapped('partner_id'))
+
+    def test_filtro_por_vendedor_devuelve_solo_sus_clientes(self):
+        vendedor_1 = self.env['res.users'].create({
+            'name': 'Vendedor Extracto Cuatro',
+            'login': 'vendedor_extracto_cuatro_test',
+            'group_ids': [(6, 0, [self.env.ref('base.group_user').id])],
+        })
+        vendedor_2 = self.env['res.users'].create({
+            'name': 'Vendedor Extracto Cinco',
+            'login': 'vendedor_extracto_cinco_test',
+            'group_ids': [(6, 0, [self.env.ref('base.group_user').id])],
+        })
+        cliente_1 = self._crear_partner_credito('Cliente Extracto Ocho')
+        cliente_1.user_id = vendedor_1
+        self._crear_linea_por_cobrar(cliente_1, 100.0, fields.Date.today())
+        cliente_2 = self._crear_partner_credito('Cliente Extracto Nueve')
+        cliente_2.user_id = vendedor_2
+        self._crear_linea_por_cobrar(cliente_2, 100.0, fields.Date.today())
+
+        filtrado = self.env['reparto.cuenta.corriente.movimiento'].search([
+            ('vendedor_id', '=', vendedor_1.id),
+        ])
+        self.assertEqual(filtrado.mapped('partner_id'), cliente_1)
