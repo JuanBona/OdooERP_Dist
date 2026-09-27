@@ -50,5 +50,5 @@
         parent="point_of_sale.menu_point_root"
         action="action_reparto_cuenta_corriente"
         groups="pos_reparto_security.group_reparto_vendedor,pos_reparto_security.group_reparto_adminop,pos_reparto_security.group_reparto_gerencia"
-        sequence="16"/>
+        sequence="18"/>
 </odoo>

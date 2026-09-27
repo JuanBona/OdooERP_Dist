@@ -29,6 +29,15 @@ class RepartoCuentaCorrienteMovimiento(models.Model):
             movimiento.currency_id = currency
 
     def init(self):
+        # Esta vista asume que toda liquidacion de una linea a cobrar pasa
+        # por un account.payment (igual que _compute_credito_fields en
+        # res_partner.py). Si alguna vez se registra una nota de credito u
+        # otro ajuste directamente contra la cuenta corriente sin pasar por
+        # account.payment, va a aparecer aca como una fila 'pedido' con
+        # debe negativo en vez de algo etiquetado como ajuste -- el saldo
+        # sigue siendo aritmeticamente correcto, pero el tipo puede
+        # confundir. Gerencia tiene account.group_account_invoice y puede
+        # generar notas de credito, asi que este caso es alcanzable.
         tools.drop_view_if_exists(self.env.cr, self._table)
         query = """
             CREATE VIEW %s AS (
