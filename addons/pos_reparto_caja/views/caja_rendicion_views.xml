@@ -24,7 +24,8 @@
             <form string="Rendición">
                 <header>
                     <button name="action_rendir" type="object" string="Rendir"
-                        class="oe_highlight" invisible="state == 'rendido'"/>
+                        class="oe_highlight" invisible="state == 'rendido'"
+                        groups="pos_reparto_security.group_reparto_adminop"/>
                     <field name="state" widget="statusbar"/>
                 </header>
                 <sheet>
