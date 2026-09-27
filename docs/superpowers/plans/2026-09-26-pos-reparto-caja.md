@@ -63,9 +63,6 @@ from . import models
     'depends': ['point_of_sale', 'account', 'pos_reparto_security', 'pos_reparto_comision'],
     'data': [
         'security/ir.model.access.csv',
-        'views/caja_rendicion_views.xml',
-        'views/caja_gasto_views.xml',
-        'views/caja_dashboard_views.xml',
     ],
     'installable': True,
     'application': False,
@@ -931,6 +928,17 @@ access_reparto_caja_dashboard_gerencia,reparto.caja.dashboard.gerencia,model_rep
 </odoo>
 ```
 
+- [ ] **Step 6b: Register the new view file in the manifest**
+
+**Important:** the module's `data` list currently only has `security/ir.model.access.csv` (Task 1 deliberately left it that way — the module must never reference a `data` file that doesn't exist yet on disk, or `-u` fails with `FileNotFoundError`; `-i` on an already-installed module can mask this, so don't trust a passing `-i`/`-u` from before this step as proof the list was safe). Edit `addons/pos_reparto_caja/__manifest__.py` so `data` becomes:
+
+```python
+    'data': [
+        'security/ir.model.access.csv',
+        'views/caja_dashboard_views.xml',
+    ],
+```
+
 - [ ] **Step 7: Run tests to verify they pass**
 
 Run: `docker compose -p odooerp_dist run --rm odoo odoo -d odoo -u pos_reparto_caja --test-enable --stop-after-init --log-level=test`
@@ -1062,6 +1070,19 @@ No new tests in this task — `test_administracion_puede_crear_y_rendir` (Task 3
         groups="pos_reparto_security.group_reparto_gerencia,pos_reparto_security.group_reparto_adminop"
         sequence="17"/>
 </odoo>
+```
+
+- [ ] **Step 2b: Register both new view files in the manifest**
+
+Edit `addons/pos_reparto_caja/__manifest__.py` so `data` becomes:
+
+```python
+    'data': [
+        'security/ir.model.access.csv',
+        'views/caja_dashboard_views.xml',
+        'views/caja_rendicion_views.xml',
+        'views/caja_gasto_views.xml',
+    ],
 ```
 
 - [ ] **Step 3: Install/verify the full module including views**
