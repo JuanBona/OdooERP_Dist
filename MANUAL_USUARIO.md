@@ -1,7 +1,7 @@
 # Guía de Usuario — Sistema de Reparto
 
 **Rincón del Sur — Peyrano**
-Versión: 2026-09-26
+Versión: 2026-09-27
 
 ---
 
@@ -25,6 +25,7 @@ Versión: 2026-09-26
 16. [Cierre de caja (sesión de POS)](#16-cierre-de-caja-sesión-de-pos)
 17. [Preguntas frecuentes](#17-preguntas-frecuentes)
 18. [Para el administrador: usuarios y camiones](#18-para-el-administrador-usuarios-y-camiones)
+19. [Un día típico en Rincón del Sur](#19-un-día-típico-en-rincón-del-sur)
 
 ---
 
@@ -271,6 +272,17 @@ Lo hace **Gerencia**:
 
 Este cobro es también el que **genera la comisión** del vendedor (sección 13) y el que suma al **saldo de Cajas** una vez que Administración lo rinda (sección 15).
 
+### 12.4 Ver el historial completo de un cliente (extracto de Cuenta Corriente)
+Esto es nuevo. Mientras que **Deudores** (12.2) es una lista corta de quién debe hoy, **Cuenta Corriente** es el detalle completo: cada pedido a crédito y cada pago de cada cliente, uno debajo del otro, con el saldo que va quedando después de cada movimiento — como un resumen de cuenta bancario.
+
+**Inicio → Punto de venta → Cuenta Corriente.**
+
+- Columnas: **Cliente**, **Vendedor**, **Fecha**, **Tipo** (Pedido o Pago), **Referencia**, **Debe**, **Haber**, **Saldo**.
+- Las filas en rojo son las que dejan al cliente debiendo (saldo a favor de la empresa).
+- Se puede **agrupar** por Cliente o por Vendedor, y **filtrar** por fecha. Por defecto aparece agrupado por Cliente.
+- Un **Vendedor** ve solo el historial de **sus propios** clientes. **Administración** y **Gerencia** ven el de todos, y pueden filtrar por Vendedor para mirar la cartera de uno solo.
+- Es de **solo lectura**: no se edita ni se borra nada desde acá. Para registrar un cobro nuevo, seguí usando la sección 12.3 — el pago aparece solo en el extracto una vez registrado.
+
 ---
 
 ## 13. Comisiones de los vendedores
@@ -406,6 +418,34 @@ Hoy hay **3 camiones**, cada uno con su propio punto de venta. Pero **el stock y
 
 ### 18.5 Problemas con los datos
 Ante cualquier problema con los datos (algo que desapareció, un número que no cierra), **no borres ni corrijas nada a mano**: avisá al equipo técnico para revisarlo antes.
+
+---
+
+## 19. Un día típico en Rincón del Sur
+
+Para que quede más claro cómo se usa todo junto, así se ve un día normal de trabajo.
+
+**7:30 — Oficina.** Marina, de Administración, entra al sistema y abre **Punto de venta → Viajes**. Para cada uno de los 3 camiones arma (o revisa) el viaje del día: la lista de clientes a visitar (sección 8). Ayer a la tarde el almacén "Lo de Beto" llamó pidiendo mercadería, así que Marina lo agrega como parada extra al viaje de `camion2` (sección 9). Antes de cerrar la pantalla, chequea en **Cuenta Corriente** (sección 12.4) si alguno de los clientes del día tiene deuda vieja, para avisarle al chofer que insista con el cobro.
+
+**8:00 — Depósito.** Julián, de Depósito, entra a **Inventario → Productos** y carga la mercadería que llegó del proveedor en **WH/Existencias** (sección 7.1): ahora es un solo pozo de stock para los 3 camiones, no hace falta repartirlo entre camiones.
+
+**8:15 — Salen los camiones.** Cada chofer abre **Inicio → Viaje** en su tablet y ve sus paradas del día. `camion1` toca la primera parada: se abre el punto de venta con el cliente ya elegido (sección 10).
+
+**9:40 — Una venta de contado.** En el almacén "Don Aníbal", el chofer carga 15 cajones de gaseosa: el descuento por cantidad se aplica solo al llegar al tramo (sección 6.4). Cobra en **efectivo**, así que esa plata va, apenas cobra, a quedar "pendiente de rendir" a nombre del chofer — todavía no es plata de la caja de la empresa (sección 15).
+
+**10:15 — Un cliente con deuda.** En la parada siguiente, "Almacén Rossi", al elegir el cliente aparece el cartel 🔴 de deuda vencida (sección 12.1): debe hace 18 días. El chofer igual puede vender —es solo un aviso—, y esta vez logra que le paguen una parte de lo viejo además de la venta del día. Ese cobro parcial también genera su comisión (sección 13.2) y va a quedar registrado como una fila más en la **Cuenta Corriente** de ese cliente (sección 12.4), con el saldo bajando.
+
+**11:30 — Falta stock.** Un cliente pide 30 unidades de un producto y el sistema avisa "Stock insuficiente" (sección 10): en el depósito general solo quedan 18. El chofer vende lo que hay y avisa por WhatsApp a Julián para reponer.
+
+**13:00 — Se corta la señal.** En una zona sin cobertura, el chofer sigue vendiendo tranquilo: las ventas quedan guardadas en la tablet y se mandan solas apenas vuelve la señal (sección 11).
+
+**17:30 — Vuelven los camiones.** Cada chofer cuenta su efectivo y cierra su **sesión de POS** (sección 16). Esto es un control interno del dispositivo, todavía no mueve la caja de la empresa.
+
+**18:00 — Oficina, rendición.** Marina abre **Punto de venta → Rendiciones** (sección 15.2) y rinde a cada chofer: el sistema le muestra cuánto debería traer en Efectivo y en Transferencia según lo que cobró, ella cuenta la plata real y la carga. Si un chofer había sacado unos pesos de la caja para nafta, ese gasto ya estaba anotado en **Gastos** (sección 15.3) y se descuenta solo del cálculo.
+
+**18:15 — Gerencia mira el panorama.** Desde su casa, Gerencia entra al sistema y en un rato chequea tres pantallas: **Cajas** (sección 15.1) para ver cuánta plata real hay disponible hoy en Efectivo y Transferencia, **Comisiones** (sección 13.3) para ver cuánto generó cada vendedor en el mes, y **Cuenta Corriente** (sección 12.4) filtrando por un vendedor puntual para revisar cómo viene la cobranza de su cartera de clientes.
+
+Al otro día, todo vuelve a empezar desde el paso 1 — con la Cuenta Corriente y las Cajas ya actualizadas con lo de ayer.
 
 ---
 
