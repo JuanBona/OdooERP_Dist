@@ -7,6 +7,8 @@
     'data': [
         'security/ir.model.access.csv',
         'views/caja_dashboard_views.xml',
+        'views/caja_rendicion_views.xml',
+        'views/caja_gasto_views.xml',
     ],
     'installable': True,
     'application': False,

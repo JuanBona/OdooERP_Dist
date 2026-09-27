@@ -1,0 +1,68 @@
+<odoo>
+    <record id="view_reparto_caja_rendicion_list" model="ir.ui.view">
+        <field name="name">reparto.caja.rendicion.list</field>
+        <field name="model">reparto.caja.rendicion</field>
+        <field name="arch" type="xml">
+            <list string="Rendiciones" default_order="fecha desc">
+                <field name="fecha"/>
+                <field name="vendedor_id"/>
+                <field name="monto_esperado_efectivo"/>
+                <field name="monto_recibido_efectivo"/>
+                <field name="diferencia_efectivo"/>
+                <field name="monto_esperado_transferencia"/>
+                <field name="monto_recibido_transferencia"/>
+                <field name="diferencia_transferencia"/>
+                <field name="state"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="view_reparto_caja_rendicion_form" model="ir.ui.view">
+        <field name="name">reparto.caja.rendicion.form</field>
+        <field name="model">reparto.caja.rendicion</field>
+        <field name="arch" type="xml">
+            <form string="Rendición">
+                <header>
+                    <button name="action_rendir" type="object" string="Rendir"
+                        class="oe_highlight" invisible="state == 'rendido'"/>
+                    <field name="state" widget="statusbar"/>
+                </header>
+                <sheet>
+                    <group>
+                        <group>
+                            <field name="vendedor_id" readonly="state == 'rendido'"/>
+                            <field name="fecha" readonly="state == 'rendido'"/>
+                        </group>
+                    </group>
+                    <group string="Efectivo">
+                        <field name="monto_esperado_efectivo"/>
+                        <field name="monto_recibido_efectivo" readonly="state == 'rendido'"/>
+                        <field name="diferencia_efectivo"/>
+                    </group>
+                    <group string="Transferencia">
+                        <field name="monto_esperado_transferencia"/>
+                        <field name="monto_recibido_transferencia" readonly="state == 'rendido'"/>
+                        <field name="diferencia_transferencia"/>
+                    </group>
+                    <group string="Confirmación" invisible="state != 'rendido'">
+                        <field name="rendido_uid"/>
+                        <field name="rendido_fecha"/>
+                    </group>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <record id="action_reparto_caja_rendicion" model="ir.actions.act_window">
+        <field name="name">Rendiciones</field>
+        <field name="res_model">reparto.caja.rendicion</field>
+        <field name="view_mode">list,form</field>
+    </record>
+
+    <menuitem id="menu_reparto_caja_rendicion"
+        name="Rendiciones"
+        parent="point_of_sale.menu_point_root"
+        action="action_reparto_caja_rendicion"
+        groups="pos_reparto_security.group_reparto_gerencia,pos_reparto_security.group_reparto_adminop"
+        sequence="16"/>
+</odoo>
