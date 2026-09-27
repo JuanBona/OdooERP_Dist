@@ -1,1 +1,3 @@
 id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
+access_reparto_caja_rendicion_adminop,reparto.caja.rendicion.adminop,model_reparto_caja_rendicion,pos_reparto_security.group_reparto_adminop,1,1,1,0
+access_reparto_caja_rendicion_gerencia,reparto.caja.rendicion.gerencia,model_reparto_caja_rendicion,pos_reparto_security.group_reparto_gerencia,1,0,0,0
