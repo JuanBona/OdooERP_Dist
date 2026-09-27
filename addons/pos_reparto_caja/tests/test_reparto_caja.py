@@ -340,3 +340,44 @@ class TestRepartoCaja(TransactionCase):
         ])
         self.assertFalse(linea.rendicion_id)
         self.assertEqual(rendicion.state, 'borrador')
+
+    def test_gasto_requiere_monto_positivo(self):
+        vendedor = self._crear_vendedor('Vendedor Gasto Invalido')
+        with self.assertRaises(Exception):
+            self.env['reparto.caja.gasto'].create({
+                'caja': 'efectivo',
+                'monto': -50.0,
+                'vendedor_id': vendedor.id,
+                'motivo': 'Prueba monto invalido',
+            })
+
+    def test_gasto_se_crea_con_motivo_y_vendedor(self):
+        vendedor = self._crear_vendedor('Vendedor Gasto Valido')
+        gasto = self.env['reparto.caja.gasto'].create({
+            'caja': 'efectivo',
+            'monto': 100.0,
+            'vendedor_id': vendedor.id,
+            'motivo': 'Compra personal en la calle',
+        })
+        self.assertEqual(gasto.registrado_uid, self.env.user)
+
+    def test_vendedor_no_puede_crear_gasto(self):
+        vendedor = self._crear_vendedor('Vendedor Gasto Sin Acceso')
+        with self.assertRaises(AccessError):
+            self.env['reparto.caja.gasto'].with_user(vendedor).create({
+                'caja': 'efectivo',
+                'monto': 100.0,
+                'vendedor_id': vendedor.id,
+                'motivo': 'Intento no autorizado',
+            })
+
+    def test_gerencia_puede_crear_gasto(self):
+        vendedor = self._crear_vendedor('Vendedor Gasto Gerencia')
+        gerente = self._crear_gerente('Gerente Gasto Crea')
+        gasto = self.env['reparto.caja.gasto'].with_user(gerente).create({
+            'caja': 'transferencia',
+            'monto': 250.0,
+            'vendedor_id': vendedor.id,
+            'motivo': 'Adelanto de gerencia',
+        })
+        self.assertEqual(gasto.caja, 'transferencia')
