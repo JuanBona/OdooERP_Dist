@@ -1,7 +1,7 @@
 # Guía de Usuario — Sistema de Reparto
 
 **Rincón del Sur — Peyrano**
-Versión: 2026-09-23
+Versión: 2026-09-26
 
 ---
 
@@ -13,7 +13,7 @@ Versión: 2026-09-23
 4. [Un día de trabajo, de punta a punta](#4-un-día-de-trabajo-de-punta-a-punta)
 5. [Clientes](#5-clientes)
 6. [Productos, precios y descuentos por cantidad](#6-productos-precios-y-descuentos-por-cantidad)
-7. [Stock: cargar y descargar el camión](#7-stock-cargar-y-descargar-el-camión)
+7. [Stock: es un solo pozo general](#7-stock-es-un-solo-pozo-general)
 8. [Armar el viaje del día](#8-armar-el-viaje-del-día)
 9. [Cuando un cliente llama y hace un pedido](#9-cuando-un-cliente-llama-y-hace-un-pedido)
 10. [Vender desde el camión (chofer)](#10-vender-desde-el-camión-chofer)
@@ -21,9 +21,10 @@ Versión: 2026-09-23
 12. [Cuentas corrientes y cobros](#12-cuentas-corrientes-y-cobros)
 13. [Comisiones de los vendedores](#13-comisiones-de-los-vendedores)
 14. [Remito interno](#14-remito-interno)
-15. [Cierre de caja](#15-cierre-de-caja)
-16. [Preguntas frecuentes](#16-preguntas-frecuentes)
-17. [Para el administrador: usuarios y camiones](#17-para-el-administrador-usuarios-y-camiones)
+15. [Cajas de la empresa, Rendición y Gastos](#15-cajas-de-la-empresa-rendición-y-gastos)
+16. [Cierre de caja (sesión de POS)](#16-cierre-de-caja-sesión-de-pos)
+17. [Preguntas frecuentes](#17-preguntas-frecuentes)
+18. [Para el administrador: usuarios y camiones](#18-para-el-administrador-usuarios-y-camiones)
 
 ---
 
@@ -75,8 +76,8 @@ Cada persona tiene **un** rol. Los cuatro roles del negocio son:
 |---|---|---|
 | **Vendedor / Chofer** | Reparte y vende desde **su** camión | Solo **su** punto de venta y **sus** clientes. No crea ni borra clientes ni pedidos. |
 | **Depósito** | Carga y descarga los camiones, controla stock | Inventario y clientes. No usa el punto de venta. |
-| **Administración Operativa** | Arma los viajes, carga clientes nuevos, imprime remitos, define descuentos por cantidad | Todos los puntos de venta y todos los clientes. |
-| **Gerencia** | Todo lo de Administración, más **cobros de cuentas corrientes** y **comisiones** | Todo el negocio. Es la única que ve el panel de Comisiones. |
+| **Administración Operativa** | Arma los viajes, carga clientes nuevos, imprime remitos, define descuentos por cantidad, **confirma rendiciones** y anota gastos | Todos los puntos de venta y todos los clientes. |
+| **Gerencia** | Todo lo de Administración (menos confirmar rendiciones — solo las ve), más **cobros de cuentas corrientes** y **comisiones** | Todo el negocio. Es la única que ve el panel de Comisiones. |
 
 Además existe el usuario **admin**, que es solo para el equipo técnico (instalaciones y configuración), no para el trabajo diario.
 
@@ -97,12 +98,11 @@ Además existe el usuario **admin**, que es solo para el equipo técnico (instal
 
 ## 4. Un día de trabajo, de punta a punta
 
-1. **Mañana, en el depósito:** se carga mercadería a cada camión (sección 7).
-2. **Administración** arma el **viaje** de cada chofer: qué clientes visita ese día (sección 8). Si un cliente llamó y pidió algo, se lo suma como parada (sección 9).
-3. **El chofer** abre **Viaje** en Inicio, toca la parada, y el punto de venta se abre con el cliente ya elegido (sección 10). Carga el pedido y cobra.
-4. Cada vez que cobra, **la parada se tilda sola** en el viaje.
-5. **Gerencia** ve el progreso, las deudas y las comisiones (secciones 12 y 13).
-6. **Al final del día:** el chofer cierra la caja (sección 15) y, si sobró mercadería, el depósito la descarga del camión (sección 7).
+1. **Administración** arma el **viaje** de cada chofer: qué clientes visita ese día (sección 8). Si un cliente llamó y pidió algo, se lo suma como parada (sección 9).
+2. **El chofer** abre **Viaje** en Inicio, toca la parada, y el punto de venta se abre con el cliente ya elegido (sección 10). Carga el pedido contra el stock general (sección 7) y cobra.
+3. Cada vez que cobra, **la parada se tilda sola** en el viaje.
+4. **Gerencia** ve el progreso, las deudas y las comisiones (secciones 12 y 13).
+5. **Al final del día:** el chofer cierra su sesión de POS (sección 16), y **Administración rinde** a cada vendedor lo que cobró (sección 15).
 
 ---
 
@@ -162,32 +162,22 @@ Para revisar todos los productos que tienen descuentos: **Punto de venta → Con
 
 ---
 
-## 7. Stock: cargar y descargar el camión
+## 7. Stock: es un solo pozo general
 
-El stock se maneja **por ubicación**: el depósito central (**WH/Existencias**) y cada camión (**Camion 1**, **Camion 2**, **Camion 3**). El punto de venta de un camión **solo vende lo que ese camión tiene cargado**. Si un producto no está en el camión, no aparece; si se pide más de lo que hay, el sistema bloquea la venta al cobrar.
+El stock **ya no es por camión**: los 3 camiones venden contra el **mismo stock general de la empresa** (**WH/Existencias**). Ningún camión "tiene cargado" nada propio — el vendedor toma el pedido contra ese pozo común, y después Depósito arma la entrega física (sección 8 en adelante).
 
-### 7.1 Poner el stock inicial en el depósito (una sola vez)
+> Si te acordás de una época en que cada camión tenía su propia ubicación de stock (Camion 1/2/3): eso se sacó. Fue un error de diseño inicial — se confundía el rol de vendedor (toma el pedido) con el de despachante (entrega la mercadería). Ahora todo sale de un solo lugar.
+
+### 7.1 Poner el stock en el depósito
 1. **Inventario → Productos →** abrí el producto.
 2. Botón **A la mano** → **Nuevo**.
 3. Ubicación **WH/Existencias**, cargá la cantidad y guardá.
 
-### 7.2 Cargar mercadería a un camión (cada mañana)
-Lo hace **Depósito**. Cada camión tiene su propia tarjeta: **Carga Camion 1**, **Carga Camion 2**, **Carga Camion 3**.
-1. **Inventario → Información general →** tarjeta **Carga Camion N → Abrir**.
-2. **Nuevo**.
-3. Pestaña **Operaciones → Agregar un producto:** elegí el producto y la **cantidad**. Repetí por cada producto.
-4. **Validar.** El stock baja del depósito y sube en el camión.
+### 7.2 Ver cuánto hay
+Producto → botón **A la mano**: muestra la cantidad disponible, con el historial de movimientos. Ya no hay "carga" ni "descarga" de camión: el stock se ajusta directo en **WH/Existencias**.
 
-> No uses "Traslados internos" ni ningún otro tipo de operación: para los camiones existen solo las tarjetas de Carga y Descarga.
-
-### 7.3 Descargar lo que sobró (al final del día)
-Igual que la carga, pero con la tarjeta **Descarga Camion N**: devuelve la mercadería del camión al depósito.
-
-### 7.4 Ver cuánto hay en cada lugar
-Producto → botón **A la mano**: muestra la cantidad en el depósito y en cada camión, con el historial de movimientos.
-
-### 7.5 El número de stock en el punto de venta
-En la grilla y en el carrito, cada producto muestra el stock del camión. Es una **foto** del momento en que se abrió la sesión: si otro dispositivo vendió el mismo producto, no se actualiza solo. Para eso está el bloqueo real al cobrar, que sí es exacto.
+### 7.3 El número de stock en el punto de venta
+En la grilla y en el carrito, cada producto muestra el stock general disponible. Es una **foto** del momento en que se abrió la sesión: si otro camión vendió el mismo producto mientras tanto, no se actualiza solo. Para eso está el bloqueo real al cobrar, que sí es exacto y compara contra el stock general, no contra ningún camión.
 
 ---
 
@@ -235,12 +225,12 @@ Cuando un comercio llama para pedir mercadería, Administración lo suma al viaj
 3. Tocá los **productos** en la grilla. Para cambiar la cantidad: tocá la línea → **Cant.** → escribí el número.
 4. Los **descuentos por cantidad** se aplican solos.
 5. Tocá **Pago**, elegí el medio y **Validar**:
-   - **Efectivo Camion N:** cobra en el momento.
-   - **Tarjeta.**
+   - **Efectivo:** cobra en el momento, va a la **Caja Efectivo** de la empresa.
+   - **Débito:** cobra en el momento, va a la **Caja Transferencia** de la empresa.
    - **Cuenta corriente:** el cliente queda debiendo (sección 12).
 6. Se genera el ticket y, si querés, el **remito** (sección 14).
 
-**Si sale "Stock insuficiente":** pediste más de lo que hay en el camión. El cartel dice cuánto hay disponible; corregí la cantidad, o avisá a Depósito que falta ese producto.
+**Si sale "Stock insuficiente":** pediste más de lo que hay en el stock general (sección 7). El cartel dice cuánto hay disponible; corregí la cantidad, o avisá a Depósito que falta ese producto.
 
 ---
 
@@ -276,10 +266,10 @@ Es solo información: la venta se puede hacer igual.
 ### 12.3 Registrar el cobro de una deuda
 Lo hace **Gerencia**:
 1. **Inicio → Facturación → Clientes → Pagos → Nuevo**.
-2. Elegí el **Cliente**, el **Monto** y el **Diario** (Efectivo o Banco).
+2. Elegí el **Cliente**, el **Monto** y el **Diario** (**Caja Efectivo** o **Caja Transferencia**).
 3. Confirmá. El pago se aplica solo a la deuda y el cliente se actualiza en Deudores (si pagó todo, desaparece de la lista).
 
-Este cobro es también el que **genera la comisión** del vendedor (sección 13).
+Este cobro es también el que **genera la comisión** del vendedor (sección 13) y el que suma al **saldo de Cajas** una vez que Administración lo rinda (sección 15).
 
 ---
 
@@ -319,7 +309,34 @@ El remito muestra cliente, productos, cantidades y totales. La factura se hace a
 
 ---
 
-## 15. Cierre de caja
+## 15. Cajas de la empresa, Rendición y Gastos
+
+Esto es nuevo: la plata que cobran los vendedores en la calle **no se ve reflejada en la caja de la empresa al toque** — queda "pendiente de rendir" a nombre de cada uno, hasta que Administración confirma la rendición del día.
+
+### 15.1 El saldo de Cajas
+**Inicio → Punto de venta → Cajas** (Gerencia y Administración). Muestra 2 números: cuánto hay disponible en **Caja Efectivo** y cuánto en **Caja Transferencia**. Es el saldo real y actual de la empresa — solo sube cuando se confirma una rendición, y baja con los gastos (sección 15.3).
+
+### 15.2 Rendir a un vendedor
+Lo hace **Administración** (Gerencia solo puede consultar, no confirmar):
+1. **Inicio → Punto de venta → Rendiciones → Nuevo**.
+2. Elegí el **Vendedor**. El sistema calcula solo cuánto **debería** traer en Efectivo y en Transferencia (todo lo que cobró y todavía no rindió).
+3. Contá la plata real que te entrega y cargala en **Recibido Efectivo** / **Recibido Transferencia**. Si no coincide con lo esperado, la **diferencia** se calcula y queda guardada igual (sirve para detectar faltantes en el momento).
+4. Botón **Rendir**. Ya no se puede editar ni volver a rendir esa rendición.
+
+Un vendedor puede rendirse más de una vez si hace falta (por ejemplo, a mitad de tarde y de nuevo a la noche) — cada rendición junta todo lo que esté pendiente hasta ese momento.
+
+### 15.3 Gastos
+**Inicio → Punto de venta → Gastos** (Gerencia y Administración). Sirve para anotar un egreso de una de las 2 cajas — por ejemplo, si un vendedor sacó plata de la caja en efectivo para algo puntual.
+
+1. **Nuevo.**
+2. Elegí la **caja** (Efectivo o Transferencia), el **monto**, el **vendedor responsable** y el **motivo**.
+3. Guardá.
+
+Es solo un registro informativo por vendedor (no le descuenta nada automático de su comisión), pero **sí resta** del saldo de Cajas que ve Gerencia (sección 15.1).
+
+---
+
+## 16. Cierre de caja (sesión de POS)
 
 Al terminar el turno o el día, el chofer:
 1. Dentro del punto de venta, menú **☰** (arriba a la derecha) → **Cerrar sesión de PdV**.
@@ -328,9 +345,11 @@ Al terminar el turno o el día, el chofer:
 
 Antes de cerrar, **asegurate de que todas las ventas estén enviadas** (sección 11). Para volver a vender hay que abrir una **sesión nueva**.
 
+> Esto es distinto de la **Rendición** (sección 15): el cierre de sesión es un control interno de Odoo por dispositivo/turno; la Rendición es el proceso de negocio por el que Administración confirma cuánta plata entregó cada vendedor y recién ahí se refleja en las Cajas de la empresa.
+
 ---
 
-## 16. Preguntas frecuentes
+## 17. Preguntas frecuentes
 
 **No veo ningún cliente en el punto de venta.**
 El cliente no tiene tu usuario como **Vendedor** (sección 5.3). Pedile a Administración que se lo asigne.
@@ -339,7 +358,7 @@ El cliente no tiene tu usuario como **Vendedor** (sección 5.3). Pedile a Admini
 Probablemente un cliente de la lista no está asignado a ese chofer. Revisá el viaje y asigná el cliente.
 
 **El sistema no me deja vender por "Stock insuficiente".**
-El camión no tiene cargada esa cantidad (sección 7). Depósito tiene que cargarla o hay que bajar la cantidad del pedido.
+No hay esa cantidad en el stock general (sección 7). Depósito tiene que cargarla o hay que bajar la cantidad del pedido.
 
 **Un producto no aparece en el punto de venta.**
 No está cargado en el camión, o no tiene tildado **Punto de venta** (sección 6.2).
@@ -367,25 +386,25 @@ Pedile al administrador que te genere una nueva.
 
 ---
 
-## 17. Para el administrador: usuarios y camiones
+## 18. Para el administrador: usuarios y camiones
 
-### 17.1 Cambiar el nombre de un usuario
+### 18.1 Cambiar el nombre de un usuario
 **Ajustes → Usuarios y compañías → Usuarios →** abrí el usuario → cambiá **Nombre** y, si querés, el **login**. No se pierde ninguna configuración.
 
-### 17.2 Cambiar o resetear una contraseña
+### 18.2 Cambiar o resetear una contraseña
 Abrí el usuario → **Acción → Cambiar contraseña**. Entregala por un canal privado y pedí que la cambie al primer ingreso.
 
-### 17.3 Crear un usuario nuevo
+### 18.3 Crear un usuario nuevo
 1. **Ajustes → Usuarios y compañías → Usuarios → Nuevo**.
 2. Nombre, login y contraseña inicial.
 3. En permisos, elegí **un** rol de **Reparto** (Vendedor, Depósito, Administración Operativa o Gerencia).
 4. Si es **vendedor**, en la pestaña **Camión (Reparto)** elegí su punto de venta: **solo verá ese camión**.
 5. Asignale sus **clientes** (sección 5.3); si no, no verá ninguno.
 
-### 17.4 Camiones
-Hoy hay **3 camiones**. Cada uno tiene: una ubicación de stock, un tipo de operación de venta, de carga y de descarga, su caja, su método de pago en efectivo y su punto de venta. Para sumar un camión nuevo, pedilo al equipo técnico.
+### 18.4 Camiones
+Hoy hay **3 camiones**, cada uno con su propio punto de venta. Pero **el stock ya es general** (sección 7) y **las cajas ya son de la empresa**, no por camión (sección 15): los 3 camiones venden contra el mismo stock y sus cobros van a las mismas 2 cajas (Efectivo/Transferencia). Lo único propio de cada camión es su punto de venta (para poder abrir su propia sesión) y su método de pago en efectivo puntual (necesario porque Odoo exige un método de efectivo por punto de venta), que ya apunta al mismo diario compartido. Para sumar un camión nuevo, pedilo al equipo técnico.
 
-### 17.5 Problemas con los datos
+### 18.5 Problemas con los datos
 Ante cualquier problema con los datos (algo que desapareció, un número que no cierra), **no borres ni corrijas nada a mano**: avisá al equipo técnico para revisarlo antes.
 
 ---
