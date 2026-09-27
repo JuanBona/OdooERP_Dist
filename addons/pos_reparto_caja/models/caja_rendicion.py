@@ -7,7 +7,10 @@ class RepartoCajaRendicion(models.Model):
     _description = 'Rendición de caja de un vendedor (Reparto)'
     _order = 'fecha desc, id desc'
 
-    vendedor_id = fields.Many2one('res.users', string='Vendedor', required=True)
+    vendedor_id = fields.Many2one(
+        'res.users', string='Vendedor', required=True,
+        domain=lambda self: [('group_ids', 'in', self.env.ref('pos_reparto_security.group_reparto_vendedor').id)],
+    )
     fecha = fields.Date(string='Fecha', required=True, default=fields.Date.context_today)
     currency_id = fields.Many2one(
         'res.currency', default=lambda self: self.env.company.currency_id,

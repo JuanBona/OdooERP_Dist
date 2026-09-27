@@ -15,7 +15,10 @@ class RepartoCajaGasto(models.Model):
         'res.currency', default=lambda self: self.env.company.currency_id,
     )
     monto = fields.Monetary(string='Monto', currency_field='currency_id', required=True)
-    vendedor_id = fields.Many2one('res.users', string='Vendedor responsable', required=True)
+    vendedor_id = fields.Many2one(
+        'res.users', string='Vendedor responsable', required=True,
+        domain=lambda self: [('group_ids', 'in', self.env.ref('pos_reparto_security.group_reparto_vendedor').id)],
+    )
     motivo = fields.Char(string='Motivo', required=True)
     registrado_uid = fields.Many2one(
         'res.users', string='Registrado por', default=lambda self: self.env.user, readonly=True,

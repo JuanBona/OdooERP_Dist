@@ -23,12 +23,12 @@ class TestRepartoCaja(TransactionCase):
         cls.journal_efectivo = cls.env['account.journal'].create({
             'name': 'Caja Efectivo Test',
             'type': 'cash',
-            'code': 'CEFT',
+            'code': 'ZCEF',
         })
         cls.journal_transferencia = cls.env['account.journal'].create({
             'name': 'Caja Transferencia Test',
             'type': 'bank',
-            'code': 'CTRT',
+            'code': 'ZCTR',
         })
         cls.metodo_efectivo = cls.env['pos.payment.method'].create({
             'name': 'Efectivo Test Caja',
