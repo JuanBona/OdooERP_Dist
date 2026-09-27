@@ -1,4 +1,4 @@
-from odoo import fields, models, tools
+from odoo import api, fields, models, tools
 
 
 class RepartoCuentaCorrienteMovimiento(models.Model):
@@ -22,6 +22,7 @@ class RepartoCuentaCorrienteMovimiento(models.Model):
         'res.currency', string='Moneda', compute='_compute_currency_id',
     )
 
+    @api.depends()
     def _compute_currency_id(self):
         currency = self.env.company.currency_id
         for movimiento in self:
@@ -45,10 +46,20 @@ class RepartoCuentaCorrienteMovimiento(models.Model):
                         (aml.debit - aml.credit) AS debe, 0.0 AS haber
                     FROM account_move_line aml
                     JOIN account_move am ON am.id = aml.move_id
+                    -- account_move_line.account_type es un related no almacenado
+                    -- (no existe columna real en la tabla), por eso se joinea
+                    -- account_account en vez de filtrar aml.account_type.
                     JOIN account_account aa ON aa.id = aml.account_id
                     JOIN res_partner rp ON rp.id = aml.partner_id
                     WHERE aa.account_type = 'asset_receivable'
                       AND am.state = 'posted'
+                      -- Excluye el asiento que account.payment genera solo al
+                      -- postearse: ese asiento tiene su propia línea en la
+                      -- cuenta por cobrar, que duplicaría el mismo pago ya
+                      -- representado abajo por la rama UNION de account_payment
+                      -- (como fila "pago"). Sin este filtro, un pago posteado
+                      -- aparecería dos veces (una como "pedido" haber, otra
+                      -- como "pago").
                       AND am.origin_payment_id IS NULL
                       AND aml.partner_id IS NOT NULL
 
