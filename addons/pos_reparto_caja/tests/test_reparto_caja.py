@@ -381,3 +381,50 @@ class TestRepartoCaja(TransactionCase):
             'motivo': 'Adelanto de gerencia',
         })
         self.assertEqual(gasto.caja, 'transferencia')
+
+    def _rendir_todo_pendiente(self, vendedor, monto_efectivo, monto_transferencia):
+        rendicion = self.env['reparto.caja.rendicion'].create({'vendedor_id': vendedor.id})
+        rendicion.write({
+            'monto_recibido_efectivo': monto_efectivo,
+            'monto_recibido_transferencia': monto_transferencia,
+        })
+        rendicion.action_rendir()
+        return rendicion
+
+    def test_saldo_caja_suma_rendiciones_confirmadas_menos_gastos(self):
+        dashboard = self.env['reparto.caja.dashboard'].create({})
+        saldo_efectivo_inicial = dashboard.saldo_efectivo
+        saldo_transferencia_inicial = dashboard.saldo_transferencia
+
+        vendedor = self._crear_vendedor('Vendedor Saldo Dashboard')
+        partner = self._crear_partner('Cliente Saldo Dashboard', vendedor)
+        self._crear_orden_pagada(partner, self.metodo_efectivo, 300.0)
+        self._crear_orden_pagada(partner, self.metodo_debito, 200.0)
+        self._rendir_todo_pendiente(vendedor, 300.0, 200.0)
+
+        self.env['reparto.caja.gasto'].create({
+            'caja': 'efectivo', 'monto': 50.0,
+            'vendedor_id': vendedor.id, 'motivo': 'Gasto de prueba dashboard',
+        })
+
+        dashboard_2 = self.env['reparto.caja.dashboard'].create({})
+        self.assertEqual(dashboard_2.saldo_efectivo, saldo_efectivo_inicial + 300.0 - 50.0)
+        self.assertEqual(dashboard_2.saldo_transferencia, saldo_transferencia_inicial + 200.0)
+
+    def test_saldo_caja_ignora_rendicion_en_borrador(self):
+        dashboard = self.env['reparto.caja.dashboard'].create({})
+        saldo_inicial = dashboard.saldo_efectivo
+
+        vendedor = self._crear_vendedor('Vendedor Saldo Borrador')
+        partner = self._crear_partner('Cliente Saldo Borrador', vendedor)
+        self._crear_orden_pagada(partner, self.metodo_efectivo, 400.0)
+        self.env['reparto.caja.rendicion'].create({
+            'vendedor_id': vendedor.id, 'monto_recibido_efectivo': 400.0,
+        })  # no se llama action_rendir: sigue en borrador
+
+        dashboard_2 = self.env['reparto.caja.dashboard'].create({})
+        self.assertEqual(dashboard_2.saldo_efectivo, saldo_inicial)
+
+    def test_dashboard_accion_existe(self):
+        action = self.env.ref('pos_reparto_caja.action_reparto_caja_dashboard')
+        self.assertEqual(action.res_model, 'reparto.caja.dashboard')

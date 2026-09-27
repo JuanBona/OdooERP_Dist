@@ -6,6 +6,7 @@
     'depends': ['point_of_sale', 'account', 'pos_reparto_security', 'pos_reparto_comision'],
     'data': [
         'security/ir.model.access.csv',
+        'views/caja_dashboard_views.xml',
     ],
     'installable': True,
     'application': False,

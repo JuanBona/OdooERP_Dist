@@ -1,0 +1,30 @@
+<odoo>
+    <record id="view_reparto_caja_dashboard_form" model="ir.ui.view">
+        <field name="name">reparto.caja.dashboard.form</field>
+        <field name="model">reparto.caja.dashboard</field>
+        <field name="arch" type="xml">
+            <form string="Cajas">
+                <sheet>
+                    <group>
+                        <field name="saldo_efectivo" readonly="1"/>
+                        <field name="saldo_transferencia" readonly="1"/>
+                    </group>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <record id="action_reparto_caja_dashboard" model="ir.actions.act_window">
+        <field name="name">Cajas</field>
+        <field name="res_model">reparto.caja.dashboard</field>
+        <field name="view_mode">form</field>
+        <field name="target">current</field>
+    </record>
+
+    <menuitem id="menu_reparto_caja_dashboard"
+        name="Cajas"
+        parent="point_of_sale.menu_point_root"
+        action="action_reparto_caja_dashboard"
+        groups="pos_reparto_security.group_reparto_gerencia,pos_reparto_security.group_reparto_adminop"
+        sequence="15"/>
+</odoo>
