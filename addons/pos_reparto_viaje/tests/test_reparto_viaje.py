@@ -1,3 +1,4 @@
+from odoo import Command
 from odoo import fields
 from odoo.tests.common import TransactionCase, tagged
 
@@ -50,6 +51,17 @@ class TestRepartoViaje(TransactionCase):
         cls.cliente_a = cls.env['res.partner'].create({'name': 'Cliente Viaje A', 'user_id': cls.chofer_1.id})
         cls.cliente_b = cls.env['res.partner'].create({'name': 'Cliente Viaje B', 'user_id': cls.chofer_1.id})
 
+        cls.receivable_account = cls.env['account.account'].search([
+            ('account_type', '=', 'asset_receivable'),
+            ('company_ids', 'in', cls.env.company.id),
+        ], limit=1)
+        cls.income_account = cls.env['account.account'].search([
+            ('account_type', '=', 'income'),
+            ('company_ids', 'in', cls.env.company.id),
+        ], limit=1)
+        cls.cliente_a.property_account_receivable_id = cls.receivable_account.id
+        cls.cliente_b.property_account_receivable_id = cls.receivable_account.id
+
         # "hoy" para el ir.rule de reparto.viaje se calcula con context_today()
         # en la tz del usuario ACTUANTE (ver ir_rule.py de este modulo) --
         # context_today(record) usa record.env.user, no "record" en si mismo,
@@ -64,6 +76,29 @@ class TestRepartoViaje(TransactionCase):
             'pos_config_id': self.pos_config.id,
             'parada_ids': [(0, 0, {'partner_id': p.id}) for p in partners],
         })
+
+    def _crear_linea_por_cobrar(self, partner, monto, fecha):
+        move = self.env['account.move'].create({
+            'move_type': 'entry',
+            'date': fecha,
+            'line_ids': [
+                Command.create({
+                    'account_id': self.receivable_account.id,
+                    'partner_id': partner.id,
+                    'debit': monto,
+                    'credit': 0.0,
+                    'name': 'Pedido a credito de prueba',
+                }),
+                Command.create({
+                    'account_id': self.income_account.id,
+                    'debit': 0.0,
+                    'credit': monto,
+                    'name': 'Contrapartida de prueba',
+                }),
+            ],
+        })
+        move.action_post()
+        return move.line_ids.filtered(lambda l: l.account_id == self.receivable_account)
 
     def test_constraint_un_viaje_por_chofer_y_fecha(self):
         hoy = self.hoy
@@ -223,3 +258,66 @@ class TestRepartoViaje(TransactionCase):
         menu = self.env.ref('pos_reparto_viaje.menu_reparto_viaje_chofer')
         roots_chofer = self.env['ir.ui.menu'].with_user(self.chofer_1).get_user_roots()
         self.assertIn(menu.id, roots_chofer.ids)
+
+    def test_get_mi_viaje_hoy_incluye_deuda_por_parada(self):
+        self._crear_linea_por_cobrar(self.cliente_a, 500.0, self.hoy)
+        self._crear_viaje(self.chofer_1, self.hoy, [self.cliente_a, self.cliente_b])
+
+        resultado = self.env['reparto.viaje'].with_user(self.chofer_1).get_mi_viaje_hoy()
+        deuda_por_nombre = {p['partner_name']: p['deuda_monto'] for p in resultado['paradas']}
+        self.assertEqual(deuda_por_nombre['Cliente Viaje A'], 500.0)
+        self.assertEqual(deuda_por_nombre['Cliente Viaje B'], 0.0)
+
+    def test_action_cobrar_deuda_crea_pago_y_reduce_deuda(self):
+        self._crear_linea_por_cobrar(self.cliente_a, 1000.0, self.hoy)
+        viaje = self._crear_viaje(self.chofer_1, self.hoy, [self.cliente_a])
+        parada = viaje.parada_ids[0]
+
+        nueva_deuda = parada.with_user(self.chofer_1).action_cobrar_deuda(400.0, 'efectivo')
+
+        self.assertEqual(nueva_deuda, 600.0)
+        self.assertEqual(self.cliente_a.credito_monto_adeudado, 600.0)
+
+    def test_action_cobrar_deuda_marca_parada_visitada(self):
+        self._crear_linea_por_cobrar(self.cliente_a, 500.0, self.hoy)
+        viaje = self._crear_viaje(self.chofer_1, self.hoy, [self.cliente_a])
+        parada = viaje.parada_ids[0]
+
+        parada.with_user(self.chofer_1).action_cobrar_deuda(500.0, 'efectivo')
+
+        self.assertTrue(parada.visitado)
+
+    def test_action_cobrar_deuda_usa_diario_segun_medio(self):
+        self._crear_linea_por_cobrar(self.cliente_a, 1000.0, self.hoy)
+        viaje = self._crear_viaje(self.chofer_1, self.hoy, [self.cliente_a])
+        parada = viaje.parada_ids[0]
+
+        parada.with_user(self.chofer_1).action_cobrar_deuda(300.0, 'transferencia')
+
+        pago = self.env['account.payment'].search([('partner_id', '=', self.cliente_a.id)])
+        self.assertEqual(len(pago), 1)
+        self.assertEqual(pago.journal_id.type, 'bank')
+
+    def test_action_cobrar_deuda_rechaza_monto_cero(self):
+        self._crear_linea_por_cobrar(self.cliente_a, 500.0, self.hoy)
+        viaje = self._crear_viaje(self.chofer_1, self.hoy, [self.cliente_a])
+        parada = viaje.parada_ids[0]
+
+        with self.assertRaises(Exception):
+            parada.with_user(self.chofer_1).action_cobrar_deuda(0.0, 'efectivo')
+
+    def test_action_cobrar_deuda_rechaza_monto_mayor_a_la_deuda(self):
+        self._crear_linea_por_cobrar(self.cliente_a, 500.0, self.hoy)
+        viaje = self._crear_viaje(self.chofer_1, self.hoy, [self.cliente_a])
+        parada = viaje.parada_ids[0]
+
+        with self.assertRaises(Exception):
+            parada.with_user(self.chofer_1).action_cobrar_deuda(600.0, 'efectivo')
+
+    def test_action_cobrar_deuda_rechaza_parada_de_otro_chofer(self):
+        self._crear_linea_por_cobrar(self.cliente_a, 500.0, self.hoy)
+        viaje = self._crear_viaje(self.chofer_1, self.hoy, [self.cliente_a])
+        parada = viaje.parada_ids[0]
+
+        with self.assertRaises(Exception):
+            parada.with_user(self.chofer_2).action_cobrar_deuda(100.0, 'efectivo')

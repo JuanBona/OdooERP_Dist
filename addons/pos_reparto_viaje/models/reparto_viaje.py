@@ -1,4 +1,5 @@
 from odoo import api, fields, models
+from odoo.exceptions import UserError
 
 
 class RepartoViaje(models.Model):
@@ -44,7 +45,12 @@ class RepartoViaje(models.Model):
             'id': viaje.id,
             'fecha': fields.Date.to_string(viaje.fecha),
             'paradas': [
-                {'id': parada.id, 'partner_name': parada.partner_id.name, 'visitado': parada.visitado}
+                {
+                    'id': parada.id,
+                    'partner_name': parada.partner_id.name,
+                    'visitado': parada.visitado,
+                    'deuda_monto': parada.partner_id.credito_monto_adeudado,
+                }
                 for parada in viaje.parada_ids
             ],
         }
@@ -65,3 +71,35 @@ class RepartoViajeParada(models.Model):
         separator = '&' if '?' in action['url'] else '?'
         action['url'] += f'{separator}reparto_partner_id={self.partner_id.id}'
         return action
+
+    def action_cobrar_deuda(self, monto, medio):
+        self.ensure_one()
+        if self.viaje_id.chofer_id.id != self.env.uid:
+            raise UserError('No podés cobrar una parada que no es tuya.')
+        if medio not in ('efectivo', 'transferencia'):
+            raise UserError('Medio de pago inválido.')
+        partner = self.partner_id
+        deuda = partner.credito_monto_adeudado
+        if monto <= 0:
+            raise UserError('El monto tiene que ser mayor a cero.')
+        if monto > deuda:
+            raise UserError(f'El monto no puede ser mayor a la deuda actual (${deuda:.2f}).')
+        journal_type = 'cash' if medio == 'efectivo' else 'bank'
+        journal = self.env['account.journal'].search([('type', '=', journal_type)], limit=1)
+        if not journal:
+            raise UserError('No hay un diario configurado para ese medio de pago.')
+        payment = self.env['account.payment'].sudo().create({
+            'payment_type': 'inbound',
+            'partner_type': 'customer',
+            'partner_id': partner.id,
+            'amount': monto,
+            'journal_id': journal.id,
+        })
+        payment.action_post()
+        # El grupo Vendedor no tiene perm_write sobre reparto.viaje.parada
+        # (ver ir.model.access.csv): solo Admin Operativa/Gerencia pueden
+        # escribir directamente. El chofer marca su propia parada como
+        # visitada a traves de esta accion controlada, igual que ya hace
+        # el auto-tick de pos_order.py.
+        self.sudo().write({'visitado': True})
+        return partner.credito_monto_adeudado
