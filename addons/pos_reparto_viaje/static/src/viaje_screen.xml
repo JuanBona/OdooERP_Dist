@@ -16,8 +16,31 @@
                 <div t-foreach="state.viaje.paradas" t-as="parada" t-key="parada.id"
                      t-attf-class="o_reparto_viaje_parada {{ parada.visitado ? 'o_reparto_viaje_parada_visitada' : '' }}"
                      t-on-click="() => this.onParadaClick(parada)">
-                    <span t-out="parada.partner_name"/>
+                    <div class="o_reparto_viaje_parada_info">
+                        <span t-out="parada.partner_name"/>
+                        <span t-if="parada.deuda_monto > 0"
+                              class="o_reparto_viaje_deuda"
+                              t-on-click="(ev) => this.onDeudaClick(parada, ev)">
+                            Debe $<t t-out="parada.deuda_monto.toFixed(2)"/>
+                        </span>
+                    </div>
                     <span t-if="parada.visitado" class="o_reparto_viaje_check">✓</span>
+                </div>
+            </div>
+            <div t-if="state.cobro" class="o_reparto_viaje_cobro_overlay" t-on-click="cancelarCobro">
+                <div class="o_reparto_viaje_cobro_panel" t-on-click="(ev) => ev.stopPropagation()">
+                    <h3>Cobrar a <t t-out="state.cobro.partnerName"/></h3>
+                    <input type="number" step="0.01" min="0" t-model.number="state.cobro.monto"/>
+                    <div class="o_reparto_viaje_cobro_medios">
+                        <button t-attf-class="o_reparto_viaje_medio_btn {{ state.cobro.medio === 'efectivo' ? 'active' : '' }}"
+                                t-on-click="() => state.cobro.medio = 'efectivo'">Efectivo</button>
+                        <button t-attf-class="o_reparto_viaje_medio_btn {{ state.cobro.medio === 'transferencia' ? 'active' : '' }}"
+                                t-on-click="() => state.cobro.medio = 'transferencia'">Transferencia</button>
+                    </div>
+                    <div class="o_reparto_viaje_cobro_botones">
+                        <button t-on-click="cancelarCobro">Cancelar</button>
+                        <button class="o_reparto_viaje_cobro_continuar" t-on-click="confirmarCobro">Continuar</button>
+                    </div>
                 </div>
             </div>
         </div>
