@@ -46,6 +46,18 @@ class TestConfirmarDespacho(DespachoCase):
         self.assertEqual(self._stock(self.producto_a), 48.0)
         self.assertEqual(self._stock(self.producto_b), 46.0)
 
+    def test_confirmar_con_faltante_no_valida_nada(self):
+        completo = self._crear_pedido(self.config1, self.session1, self.cliente1, [(self.producto_b, 2.0, 100.0)])
+        pedido = self._crear_pedido(self.config1, self.session1, self.cliente2, [(self.producto_a, 4.0, 100.0)])
+        pedido.picking_ids.move_ids.quantity = 2.0
+        despacho = self._despacho()
+        with self.assertRaises(UserError):
+            despacho.action_confirmar()
+        self.assertEqual(despacho.state, 'borrador')
+        self.assertNotEqual(completo.picking_ids.state, 'done')
+        self.assertEqual(self._stock(self.producto_a), 50.0)
+        self.assertEqual(self._stock(self.producto_b), 50.0)
+
     def test_no_se_puede_borrar_un_despacho_confirmado(self):
         self._crear_pedido(self.config1, self.session1, self.cliente1, [(self.producto_a, 1.0, 100.0)])
         despacho = self._despacho()

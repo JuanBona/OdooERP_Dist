@@ -4,6 +4,7 @@ import xlsxwriter
 
 from odoo import _, api, fields, models
 from odoo.exceptions import UserError
+from odoo.tools import float_compare
 
 PICKING_PENDIENTE = ('confirmed', 'waiting', 'assigned', 'partially_available')
 
@@ -68,6 +69,14 @@ class RepartoDespacho(models.Model):
         if not pedidos:
             raise UserError(_("No hay pedidos pendientes de despachar hasta el %s.", self.fecha))
         pickings = pedidos.picking_ids.filtered(lambda p: p.state in PICKING_PENDIENTE)
+        # Todo o nada: con cantidades incompletas button_validate dejaría backorders sin despacho.
+        faltantes = pickings.move_ids.filtered(lambda m: m.state != 'cancel' and float_compare(
+            m.quantity, m.product_uom_qty, precision_rounding=m.product_uom.rounding) < 0)
+        if faltantes:
+            raise UserError(_(
+                "Hay productos sin cantidad completa, no se validó nada:\n%s",
+                '\n'.join('%s (%s)' % (m.product_id.display_name, m.picking_id.display_name) for m in faltantes),
+            ))
         pickings.with_context(
             skip_immediate=True, skip_backorder=True, skip_sms=True, skip_expired=True,
         ).button_validate()
@@ -114,19 +123,27 @@ class RepartoDespacho(models.Model):
             cliente = por_cliente.setdefault(
                 partner.id, {'nombre': partner.name or _('Sin cliente'), 'camiones': set(), 'productos': {}})
             cliente['camiones'].add(config.name)
-            for linea in pedido.lines:
-                nombre = linea.product_id.display_name
-                camion['productos'][nombre] = camion['productos'].get(nombre, 0.0) + linea.qty
-                cliente['productos'][nombre] = cliente['productos'].get(nombre, 0.0) + linea.qty
+            # Lo que sale del depósito son los movimientos, no las líneas del pedido: refleja devoluciones
+            # parciales previas, no duplica combos (padre + hijas) y deja afuera los servicios.
+            moves = pedido.picking_ids.move_ids.filtered(
+                lambda m: m.state != 'cancel' and m.location_dest_id.usage == 'customer')
+            for move in moves:
+                for grupo in (camion, cliente):
+                    grupo['productos'][move.product_id] = grupo['productos'].get(move.product_id, 0.0) \
+                        + move.product_qty
+
+        def _productos(por_producto):
+            return sorted((producto.display_name, qty) for producto, qty in por_producto.items())
+
         return {
             'por_camion': [
                 {'nombre': c['nombre'], 'chofer': c['chofer'],
-                 'productos': sorted(c['productos'].items()), 'total': sum(c['productos'].values())}
+                 'productos': _productos(c['productos']), 'total': sum(c['productos'].values())}
                 for c in sorted(por_camion.values(), key=lambda c: c['nombre'])
             ],
             'por_cliente': [
                 {'nombre': c['nombre'], 'camiones': ', '.join(sorted(c['camiones'])),
-                 'productos': sorted(c['productos'].items()), 'total': sum(c['productos'].values())}
+                 'productos': _productos(c['productos']), 'total': sum(c['productos'].values())}
                 for c in sorted(por_cliente.values(), key=lambda c: c['nombre'])
             ],
         }
