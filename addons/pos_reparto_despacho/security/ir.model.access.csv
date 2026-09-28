@@ -1,0 +1,4 @@
+id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
+access_reparto_despacho_deposito,reparto.despacho.deposito,model_reparto_despacho,pos_reparto_security.group_reparto_deposito,1,1,1,1
+access_reparto_despacho_adminop,reparto.despacho.adminop,model_reparto_despacho,pos_reparto_security.group_reparto_adminop,1,1,1,1
+access_reparto_despacho_gerencia,reparto.despacho.gerencia,model_reparto_despacho,pos_reparto_security.group_reparto_gerencia,1,1,1,1

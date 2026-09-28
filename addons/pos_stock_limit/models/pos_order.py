@@ -39,13 +39,15 @@ class PosOrder(models.Model):
                     needed[product_id] += qty
 
         errors = []
+        comprometido = self.env['product.product'].browse(list(needed)).sudo()._reparto_comprometido(location)
         for product_id, qty in needed.items():
             product = self.env['product.product'].browse(product_id)
-            available = product.with_context(location=location.id).qty_available
+            available = product.with_context(location=location.id).qty_available \
+                - comprometido.get(product_id, 0.0)
             if qty > available:
                 errors.append(
                     "%s: pediste %s, hay %s disponibles en %s"
-                    % (product.display_name, qty, available, location.display_name)
+                    % (product.display_name, qty, max(available, 0.0), location.display_name)
                 )
 
         if errors:

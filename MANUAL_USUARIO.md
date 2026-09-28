@@ -180,6 +180,8 @@ Producto → botón **A la mano**: muestra la cantidad disponible, con el histor
 ### 7.3 El número de stock en el punto de venta
 En la grilla y en el carrito, cada producto muestra el stock general disponible. Es una **foto** del momento en que se abrió la sesión: si otro camión vendió el mismo producto mientras tanto, no se actualiza solo. Para eso está el bloqueo real al cobrar, que sí es exacto y compara contra el stock general, no contra ningún camión.
 
+> **Ojo — cuándo baja el stock a mano:** ya no baja al vender, sino cuando Depósito **confirma el listado de despacho** (sección 14.1). Mientras tanto, lo vendido sin despachar queda **comprometido**: el número que ve el vendedor en el punto de venta y el bloqueo al cobrar ya lo descuentan, así que dos camiones no pueden vender la misma unidad. En **Inventario → A la mano** vas a ver el stock físico, que todavía incluye lo vendido y no despachado.
+
 ---
 
 ## 8. Armar el viaje del día
@@ -339,6 +341,23 @@ Solo cuenta si el cliente tiene **vendedor asignado** (sección 5.3): la comisi�
 2. Botón **Imprimir remito**.
 
 El remito muestra cliente, productos, cantidades y totales. La factura se hace aparte, con el remito como respaldo.
+
+### 14.1 Listado de despacho
+
+Es el listado que Depósito imprime para armar la carga: **todo lo vendido por los camiones que todavía no salió del depósito**. **Confirmarlo es lo que descuenta el stock**, una sola vez.
+
+**Quién lo usa:** Depósito, Administración Operativa y Gerencia. El Vendedor no lo ve.
+
+1. **Inventario → Operaciones → Listado de despacho → Nuevo.**
+2. Dejá la **fecha** de hoy (o elegí otra). La pantalla te muestra, sin descontar nada todavía, lo que entraría en el listado: **Por camión** (qué productos y cuántas unidades se vendieron con cada camión, con el chofer del viaje de ese día si lo hay) y **Por cliente** (qué lleva cada cliente).
+3. Tocá **Confirmar e imprimir**. Te avisa que va a descontar el stock; aceptá. Se descuenta el stock de todos esos pedidos y se abre el **PDF** del listado.
+4. Más tarde podés volver a abrir el despacho y usar **Imprimir PDF** o **Descargar Excel** las veces que quieras: **reimprimir no vuelve a descontar stock**.
+
+**Entran los pedidos de esa fecha y los atrasados** que todavía no salieron.
+
+**Complementario:** si después de confirmar entra otro pedido del mismo día, creá un nuevo despacho para esa fecha y confirmalo. Ese listado trae **solo los pedidos nuevos** y queda marcado como **Complementario**.
+
+> Un despacho confirmado **no se puede borrar** porque ya movió stock. Si al confirmar falta stock de algún producto, el sistema no confirma y avisa qué pedido no pudo validar: corregí el stock y volvé a intentar.
 
 ---
 

@@ -247,6 +247,20 @@ Ubicación: `addons/pos_reparto_ventas/`. Depende de `point_of_sale` y `pos_repa
 - **Regla `ir.rule` sobre `report.pos.order` para Vendedor** (`user_id = user.id`): `report.pos.order` es una vista SQL, no le aplican las reglas de `pos.order`, y `point_of_sale.group_pos_user` (que implica Vendedor) tiene lectura ACL sobre ella. Sin la regla un Vendedor podía leer las ventas de todos por RPC (verificado: el test falla sin la regla).
 - 3 tests en verde (`tests/test_ventas_vendedor.py`). Verificado con los usuarios reales: menú visible para gerencia/adminop/admin, oculto para vendedor.
 
+## 5decies. Módulo custom: `pos_reparto_despacho`
+
+Ubicación: `addons/pos_reparto_despacho/` (más un cambio en `pos_stock_limit`). Depende de `point_of_sale`, `stock`, `pos_reparto_security` y `pos_reparto_viaje`. Cubre **RF-A03** (listado de despacho, fase 6 del roadmap del 2026-09-26). Spec: `docs/superpowers/specs/2026-09-28-pos-reparto-despacho-design.md`. Plan: `docs/superpowers/plans/2026-09-28-pos-reparto-despacho.md`.
+
+- **El stock se descuenta al confirmar el despacho, no al vender** (decisión del cliente, 2026-09-28). Flag `pos.config.reparto_despacho_diferido` (default `False`; `deploy/carga_inicial.py` lo activa en los POS Camion N): con el flag, el picking de un pedido de camión se crea al vender pero **no se valida** (override de `pos.order._create_order_picking` que activa un contexto que anula `stock.picking._action_done`; el cierre de sesión con `update_stock_at_closing` y las devoluciones siguen el flujo nativo). El flag no tiene vista (se cambia por shell/modo desarrollador). **En una base ya existente el flag queda como estaba (en la de dev, `True` en todos los POS): revisarlo a mano.**
+- **`reparto.despacho`** (por fecha, secuencia `DESP/año/####`): toma los pedidos **de POS con el flag** con picking pendiente y fecha de salida `<=` a la del listado (`shipping_date` o día de la venta) sin despacho; `action_confirmar` valida sus pickings, marca `pos.order.despacho_id` y numera el despacho del día (2º en adelante = **complementario**). Corre bajo un advisory lock de Postgres para no validar dos veces; confirmar un despacho ya confirmado solo devuelve el PDF. Un confirmado no se puede borrar.
+- **Listado**: consolidado **por camión** (el POS donde se tomó el pedido, con el chofer del `reparto.viaje` de esa fecha) y **por cliente**, calculado desde los **movimientos** de los pickings (no desde las líneas del pedido: respeta devoluciones parciales y excluye servicios/combos), en PDF (QWeb) y Excel (`xlsxwriter`, controller `/pos_reparto_despacho/xlsx/<id>` con chequeo del ACL del modelo). Depósito no tiene lectura sobre `pos.order`: la pantalla muestra un `resumen_html` calculado con `sudo`.
+- **`pos_stock_limit`** ahora resta el stock **comprometido** (`product.product._reparto_comprometido`: movimientos pendientes de pedidos POS que salen de la ubicación) en el bloqueo al cobrar y en el badge del POS, para que dos vendedores no vendan la misma unidad mientras el pedido espera el despacho.
+- Menú: **Inventario → Operaciones → Listado de despacho** (Depósito, Administración Operativa, Gerencia).
+- **Verificado por ORM** (con rollback): vender no baja el stock, **cerrar la sesión de POS con el picking sin validar cierra bien**, confirmar el despacho baja el stock y valida el picking, el PDF y el Excel se generan. 32 tests propios en verde; regresión de 9 módulos relacionados en verde (181 tests). Si falta stock al confirmar, no valida nada y avisa qué producto/picking falta (todo o nada, sin backorders huérfanos). **Verificado también en navegador** (2026-09-28): vender en POS Camión 1 no baja el stock (picking `assigned`), confirmar el despacho lo baja (30 → 29) y valida los pickings, el PDF y el Excel responden 200 con contenido válido. El complementario también se vio en pantalla (segundo despacho del día con solo el pedido nuevo, marcado "Complementario", stock 29 → 28), y el acceso de `vendedor@reparto.local` se comprobó por ORM: AccessError al leer/buscar/crear/confirmar y sin menú.
+- **Limitación conocida — contabilidad**: con costo `standard` (el de este proyecto) no hay efecto. Con costo promedio/FIFO, el `total_cost`/margen del pedido POS quedaría en 0 porque el movimiento aún no está valorizado al cerrar la sesión; el asiento de costo (COGS) cae en el período de la confirmación del despacho, no de la venta.
+- **Limitación conocida — tickets mixtos**: un ticket que mezcla venta y devolución no se difiere (se valida al vender), así que no aparece en el listado. Aceptado: en preventa es muy raro.
+- Antes del deploy, repetir la prueba con una venta real desde la tablet.
+
 ## 6. Facturación (ARCA/AFIP) — **DECISIÓN OBSOLETA, ver relevamiento v2.0**
 
 ~~Decisión tomada: por ahora, factura local de Odoo sin timbrar (Factura A/B/C interna, sin conexión a los webservices de ARCA).~~
@@ -298,8 +312,8 @@ Configurado servidor MCP `odoo` en Claude Code (`claude mcp add odoo ...`), modo
 2. ~~Cajas + Gastos + Rendición (RF-G01, RF-G03, RF-A05)~~ — hecho, `pos_reparto_caja`.
 3. ~~Cuenta corriente: pantalla + filtro por vendedor (RF-G05, RF-A04, RF-V04)~~ — hecho, `pos_reparto_credito`.
 4. ~~Cobrar deuda desde Viaje (RF-V05)~~ — hecho, `pos_reparto_viaje`.
-5. ~~Ventas por vendedor (RF-A01)~~ — hecho 2026-09-28, `pos_reparto_ventas` (sección 5novies). Rama `feat/ventas-por-vendedor`.
-6. Listado de despacho (RF-A03): consolidado por camión + por cliente, PDF/Excel, descuento de stock al imprimir (una sola vez + complementario). **Próximo, el más grande.**
+5. ~~Ventas por vendedor (RF-A01)~~ — hecho 2026-09-28, `pos_reparto_ventas` (sección 5novies). Mergeado a `main` (PR #10).
+6. ~~Listado de despacho (RF-A03)~~ — hecho 2026-09-28, `pos_reparto_despacho` (sección 5decies). PR #9.
 7. Vendedor 04 externo sin comisión (RF-U01).
 8. Comprobante con deuda en rojo (RF-V06).
 9. Trayecto en Inicio (RF-G02, deseable; el tracking ya existe, falta exponerlo).

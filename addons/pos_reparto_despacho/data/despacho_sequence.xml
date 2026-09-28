@@ -1,0 +1,9 @@
+<odoo noupdate="1">
+    <record id="seq_reparto_despacho" model="ir.sequence">
+        <field name="name">Despacho Reparto</field>
+        <field name="code">reparto.despacho</field>
+        <field name="prefix">DESP/%(year)s/</field>
+        <field name="padding">4</field>
+        <field name="company_id" eval="False"/>
+    </record>
+</odoo>

@@ -1,0 +1,73 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- Tablas reutilizadas por el PDF y por el resumen de pantalla -->
+    <template id="despacho_tablas">
+        <h5 class="mt-3">Por camión</h5>
+        <t t-if="not datos['por_camion']"><p class="text-muted">No hay pedidos para despachar.</p></t>
+        <t t-foreach="datos['por_camion']" t-as="camion">
+            <table class="table table-sm mt-2">
+                <thead>
+                    <tr>
+                        <th>
+                            <t t-esc="camion['nombre']"/>
+                            <span t-if="camion['chofer']"> — Chofer: <t t-esc="camion['chofer']"/></span>
+                        </th>
+                        <th class="text-end">Cantidad</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr t-foreach="camion['productos']" t-as="fila">
+                        <td><t t-esc="fila[0]"/></td>
+                        <td class="text-end"><t t-esc="'%g' % fila[1]"/></td>
+                    </tr>
+                    <tr>
+                        <td><strong>Total unidades</strong></td>
+                        <td class="text-end"><strong><t t-esc="'%g' % camion['total']"/></strong></td>
+                    </tr>
+                </tbody>
+            </table>
+        </t>
+
+        <h5 class="mt-4">Por cliente</h5>
+        <t t-foreach="datos['por_cliente']" t-as="cliente">
+            <table class="table table-sm mt-2">
+                <thead>
+                    <tr>
+                        <th>
+                            <t t-esc="cliente['nombre']"/>
+                            <small class="text-muted"> (<t t-esc="cliente['camiones']"/>)</small>
+                        </th>
+                        <th class="text-end">Cantidad</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr t-foreach="cliente['productos']" t-as="fila">
+                        <td><t t-esc="fila[0]"/></td>
+                        <td class="text-end"><t t-esc="'%g' % fila[1]"/></td>
+                    </tr>
+                </tbody>
+            </table>
+        </t>
+    </template>
+
+    <template id="despacho_document">
+        <t t-call="web.html_container">
+            <t t-foreach="docs" t-as="o">
+                <t t-call="web.external_layout">
+                    <div class="page">
+                        <t t-set="datos" t-value="o._datos_listado()"/>
+                        <h4>
+                            Listado de despacho <t t-esc="o.name"/>
+                            <span t-if="o.es_complementario" class="badge text-bg-warning">Complementario</span>
+                        </h4>
+                        <div>
+                            <strong>Fecha: </strong><span t-field="o.fecha"/>
+                            <t t-if="o.state == 'borrador'"> — <em>BORRADOR (todavía no descontó stock)</em></t>
+                        </div>
+                        <t t-call="pos_reparto_despacho.despacho_tablas"/>
+                    </div>
+                </t>
+            </t>
+        </t>
+    </template>
+</odoo>

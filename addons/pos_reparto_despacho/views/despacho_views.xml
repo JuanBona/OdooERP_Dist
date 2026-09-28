@@ -1,0 +1,59 @@
+<odoo>
+    <record id="view_reparto_despacho_form" model="ir.ui.view">
+        <field name="name">reparto.despacho.form</field>
+        <field name="model">reparto.despacho</field>
+        <field name="arch" type="xml">
+            <form string="Listado de despacho">
+                <header>
+                    <button name="action_confirmar" type="object" string="Confirmar e imprimir"
+                            class="btn-primary" invisible="state != 'borrador'"
+                            confirm="Se va a descontar el stock de todos los pedidos listados. Esto no se puede deshacer. ¿Continuar?"/>
+                    <button name="action_imprimir" type="object" string="Imprimir PDF" invisible="state != 'confirmado'"/>
+                    <button name="action_descargar_xlsx" type="object" string="Descargar Excel" invisible="state != 'confirmado'"/>
+                    <field name="state" widget="statusbar"/>
+                </header>
+                <sheet>
+                    <div class="oe_title"><h1><field name="name"/></h1></div>
+                    <group>
+                        <group>
+                            <field name="fecha" readonly="state != 'borrador'"/>
+                            <field name="es_complementario" invisible="state != 'confirmado'"/>
+                        </group>
+                        <group>
+                            <field name="confirmado_por" invisible="state != 'confirmado'"/>
+                            <field name="confirmado_el" invisible="state != 'confirmado'"/>
+                        </group>
+                    </group>
+                    <field name="resumen_html" nolabel="1"/>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <record id="view_reparto_despacho_list" model="ir.ui.view">
+        <field name="name">reparto.despacho.list</field>
+        <field name="model">reparto.despacho</field>
+        <field name="arch" type="xml">
+            <list string="Despachos" decoration-muted="state == 'borrador'">
+                <field name="name"/>
+                <field name="fecha"/>
+                <field name="es_complementario" string="Complementario"/>
+                <field name="state"/>
+                <field name="confirmado_por"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="action_reparto_despacho" model="ir.actions.act_window">
+        <field name="name">Despacho</field>
+        <field name="res_model">reparto.despacho</field>
+        <field name="view_mode">list,form</field>
+    </record>
+
+    <menuitem id="menu_reparto_despacho"
+        name="Listado de despacho"
+        parent="stock.menu_stock_transfers"
+        action="action_reparto_despacho"
+        groups="pos_reparto_security.group_reparto_deposito,pos_reparto_security.group_reparto_adminop,pos_reparto_security.group_reparto_gerencia"
+        sequence="30"/>
+</odoo>
