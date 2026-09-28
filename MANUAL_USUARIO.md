@@ -326,6 +326,11 @@ Solo cuenta si el cliente tiene **vendedor asignado** (sección 5.3): la comisi�
 ### 13.3 Ver las comisiones
 **Punto de venta → Comisiones** (solo Gerencia). Es una tabla por **vendedor y mes** con lo cobrado y la comisión resultante, más el detalle línea por línea. Es de **solo lectura**: nadie carga comisiones a mano; las genera el sistema con cada cobro real.
 
+### 13.4 Ver las ventas por vendedor
+**Punto de venta → Ventas por vendedor** (Administración y Gerencia). Muestra, por **vendedor y mes**, cuántos **pedidos** hizo, cuántas **unidades** vendió y el **importe total**. Arriba a la derecha podés pasar de tabla a **gráfico de barras**. Los pedidos cancelados no cuentan. Un **Vendedor** no ve este reporte: solo ve sus propios pedidos en su punto de venta.
+
+> Esto es lo **vendido** (pedidos tomados). Lo **cobrado** y la comisión están en la sección 13.3.
+
 ---
 
 ## 14. Remito interno

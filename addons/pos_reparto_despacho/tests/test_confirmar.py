@@ -32,6 +32,9 @@ class TestConfirmarDespacho(DespachoCase):
             self._despacho().action_confirmar()
 
     def test_complementario_toma_solo_pedidos_nuevos(self):
+        # La base puede tener despachos reales ya confirmados hoy: se numera relativo a ellos.
+        previos = self.env['reparto.despacho'].search_count([
+            ('fecha', '=', fields.Date.context_today(self.env.user)), ('state', '=', 'confirmado')])
         primero = self._crear_pedido(self.config1, self.session1, self.cliente1, [(self.producto_a, 2.0, 100.0)])
         d1 = self._despacho()
         d1.action_confirmar()
@@ -40,9 +43,10 @@ class TestConfirmarDespacho(DespachoCase):
         d2.action_confirmar()
         self.assertEqual(d1.pedido_ids, primero)
         self.assertEqual(d2.pedido_ids, segundo)
-        self.assertFalse(d1.es_complementario)
+        self.assertEqual(d1.numero_del_dia, previos + 1)
+        self.assertEqual(d1.es_complementario, previos > 0)
         self.assertTrue(d2.es_complementario)
-        self.assertEqual(d2.numero_del_dia, 2)
+        self.assertEqual(d2.numero_del_dia, previos + 2)
         self.assertEqual(self._stock(self.producto_a), 48.0)
         self.assertEqual(self._stock(self.producto_b), 46.0)
 
