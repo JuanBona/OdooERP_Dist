@@ -293,10 +293,12 @@ class TestRepartoViaje(TransactionCase):
         parada = viaje.parada_ids[0]
 
         parada.with_user(self.chofer_1).action_cobrar_deuda(300.0, 'transferencia')
+        parada.with_user(self.chofer_1).action_cobrar_deuda(200.0, 'efectivo')
 
-        pago = self.env['account.payment'].search([('partner_id', '=', self.cliente_a.id)])
-        self.assertEqual(len(pago), 1)
-        self.assertEqual(pago.journal_id.type, 'bank')
+        pagos = self.env['account.payment'].search([('partner_id', '=', self.cliente_a.id)], order='id')
+        self.assertEqual(len(pagos), 2)
+        self.assertEqual(pagos[0].journal_id.type, 'bank')
+        self.assertEqual(pagos[1].journal_id.type, 'cash')
 
     def test_action_cobrar_deuda_rechaza_monto_cero(self):
         self._crear_linea_por_cobrar(self.cliente_a, 500.0, self.hoy)

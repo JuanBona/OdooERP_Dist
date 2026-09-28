@@ -85,6 +85,9 @@ class RepartoViajeParada(models.Model):
         if monto > deuda:
             raise UserError(f'El monto no puede ser mayor a la deuda actual (${deuda:.2f}).')
         journal_type = 'cash' if medio == 'efectivo' else 'bank'
+        # Sin scope por company_id: mismo criterio que pos_reparto_caja
+        # (comision_linea._compute_caja_medio), solo importa journal.type.
+        # Revisar si alguna vez hay mas de un journal del mismo type por company.
         journal = self.env['account.journal'].search([('type', '=', journal_type)], limit=1)
         if not journal:
             raise UserError('No hay un diario configurado para ese medio de pago.')
