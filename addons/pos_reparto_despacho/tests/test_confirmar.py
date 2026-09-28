@@ -58,6 +58,13 @@ class TestConfirmarDespacho(DespachoCase):
         self.assertEqual(self._stock(self.producto_a), 50.0)
         self.assertEqual(self._stock(self.producto_b), 50.0)
 
+    def test_no_se_puede_modificar_un_despacho_confirmado(self):
+        self._crear_pedido(self.config1, self.session1, self.cliente1, [(self.producto_a, 1.0, 100.0)])
+        despacho = self._despacho()
+        despacho.action_confirmar()
+        with self.assertRaises(UserError):
+            despacho.write({'state': 'borrador'})
+
     def test_no_se_puede_borrar_un_despacho_confirmado(self):
         self._crear_pedido(self.config1, self.session1, self.cliente1, [(self.producto_a, 1.0, 100.0)])
         despacho = self._despacho()

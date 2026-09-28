@@ -60,9 +60,10 @@ class RepartoDespacho(models.Model):
         """Valida los pickings de los pedidos pendientes (descuenta el stock) y cierra el listado.
         Idempotente: sobre un despacho ya confirmado solo devuelve el reporte."""
         self.ensure_one()
-        # Un solo confirmador a la vez: evita que dos listados validen los mismos pickings.
+        # Serializa confirmaciones concurrentes. Odoo corre en REPEATABLE READ: si otra transacción ya
+        # confirmó los mismos pedidos, esta falla por serialización al escribirlos y Odoo la reintenta
+        # viendo el estado nuevo (esos pedidos ya no están pendientes).
         self.env.cr.execute("SELECT pg_advisory_xact_lock(hashtext('reparto_despacho_confirmar'))")
-        self.env.invalidate_all()
         if self.state == 'confirmado':
             return self.action_imprimir()
         pedidos = self._pedidos_pendientes()
@@ -84,7 +85,7 @@ class RepartoDespacho(models.Model):
         if sin_validar:
             raise UserError(_(
                 "No se pudo validar el picking de: %s. Revisá el stock y volvé a intentar.",
-                ', '.join(sin_validar.mapped('origin')),
+                ', '.join(sin_validar.mapped('display_name')),
             ))
         pedidos.write({'despacho_id': self.id})
         numero = self.search_count([
@@ -147,6 +148,11 @@ class RepartoDespacho(models.Model):
                 for c in sorted(por_cliente.values(), key=lambda c: c['nombre'])
             ],
         }
+
+    def write(self, vals):
+        if {'state', 'fecha', 'numero_del_dia'} & vals.keys() and any(d.state == 'confirmado' for d in self):
+            raise UserError(_("Un despacho confirmado no se puede modificar."))
+        return super().write(vals)
 
     def unlink(self):
         if any(despacho.state == 'confirmado' for despacho in self):

@@ -47,7 +47,7 @@ class PosOrder(models.Model):
             if qty > available:
                 errors.append(
                     "%s: pediste %s, hay %s disponibles en %s"
-                    % (product.display_name, qty, available, location.display_name)
+                    % (product.display_name, qty, max(available, 0.0), location.display_name)
                 )
 
         if errors:

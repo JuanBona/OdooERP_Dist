@@ -17,6 +17,6 @@ class ProductProduct(models.Model):
                 ('picking_id.pos_order_id', '!=', False),
             ],
             ['product_id'],
-            ['product_uom_qty:sum'],
+            ['product_qty:sum'],  # en la UdM del producto, como qty_available
         )
         return {producto.id: qty for producto, qty in grupos}

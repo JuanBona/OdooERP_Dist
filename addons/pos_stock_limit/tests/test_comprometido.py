@@ -37,6 +37,26 @@ class TestComprometido(TransactionCase):
         })
         move._action_confirm()
 
+    @classmethod
+    def _comprometer(cls, qty, uom):
+        picking = cls.pedido_previo.picking_ids[:1]
+        move = cls.env['stock.move'].create({
+            'product_id': cls.producto.id, 'product_uom_qty': qty, 'product_uom': uom.id,
+            'location_id': cls.location.id, 'location_dest_id': picking.location_dest_id.id,
+            'picking_id': picking.id,
+        })
+        move._action_confirm()
+
+    def test_comprometido_se_mide_en_la_udm_del_producto(self):
+        self._comprometer(1.0, self.env.ref('uom.product_uom_dozen'))
+        self.assertEqual(self.producto._reparto_comprometido(self.location).get(self.producto.id), 16.0)
+
+    def test_mensaje_no_muestra_disponible_negativo(self):
+        self._comprometer(20.0, self.producto.uom_id)  # 10 fisicos - 24 comprometidos
+        with self.assertRaises(UserError) as error:
+            self.env['pos.order']._check_stock_availability(self._payload(1.0))
+        self.assertIn('hay 0.0 disponibles', str(error.exception))
+
     def _payload(self, qty):
         return {
             'session_id': self.session.id,
