@@ -76,7 +76,7 @@ export class RepartoViajeScreen extends Component {
             this.state.cobro = false;
             this.dialog.add(AlertDialog, {
                 title: _t("No se pudo registrar el cobro"),
-                body: error.data ? error.data.message : String(error),
+                body: error.data ? error.data.message : _t("No se pudo conectar con el servidor. Probá de nuevo."),
             });
         }
     }
