@@ -331,6 +331,18 @@ Solo cuenta si el cliente tiene **vendedor asignado** (sección 5.3): la comisi�
 
 > Esto es lo **vendido** (pedidos tomados). Lo **cobrado** y la comisión están en la sección 13.3.
 
+### 13.5 Vendedor externo (sin comisión)
+Un **vendedor externo** es alguien que no usa camión ni punto de venta propio: **Administración carga y cobra** por sus clientes.
+
+- **Asignarle clientes:** igual que a cualquier vendedor, en el campo **Vendedor** del cliente (sección 5.3).
+- **No genera comisión:** sus cobros quedan en **Comisiones** (13.3) con la comisión en **0%**.
+- **No se le rinde:** no aparece en **Rendición** ni tiene nada pendiente de rendir.
+- **Suma solo al saldo de Cajas:** lo que se cobra de sus clientes entra directo al saldo de Cajas (sección 15), sin pasar por Rendición.
+
+**Marcar a un usuario como externo:** Ajustes → Usuarios → abrir el usuario → pestaña **Comisión (Reparto)** → tildar **Vendedor externo**. Solo Gerencia ve esa pestaña.
+
+> Marcar a alguien como externo **no cambia las líneas de comisión que ya tenía**: solo vale para los cobros nuevos.
+
 ---
 
 ## 14. Remito interno

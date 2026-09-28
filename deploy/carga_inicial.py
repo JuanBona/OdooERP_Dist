@@ -132,6 +132,17 @@ for nombre, login, grupo, camion in usuarios:
     if camion:
         user_por_camion[camion] = u
 
+# Vendedor externo sin camión ni POS (RF-U01): sin contraseña ni grupos de Reparto, no inicia sesión.
+# Se le asignan clientes a mano desde Clientes; Administración carga y cobra por ellos.
+externo = env["res.users"].search([("login", "=", "vendedor04")], limit=1)
+if not externo:
+    externo = env["res.users"].create({
+        "name": "Vendedor 04 (externo)", "login": "vendedor04", "lang": "es_AR",
+        "reparto_es_externo": True})
+elif not externo.reparto_es_externo:
+    externo.reparto_es_externo = True
+print("Vendedor externo listo: Vendedor 04 (externo) — sin contraseña, sin camión")
+
 # --- Asignación cliente -> camión (opcional) ---------------------------------
 if os.path.exists(os.path.join(D, "asignacion.csv")):
     n_asig = 0

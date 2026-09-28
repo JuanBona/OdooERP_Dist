@@ -261,6 +261,18 @@ Ubicación: `addons/pos_reparto_despacho/` (más un cambio en `pos_stock_limit`)
 - **Limitación conocida — tickets mixtos**: un ticket que mezcla venta y devolución no se difiere (se valida al vender), así que no aparece en el listado. Aceptado: en preventa es muy raro.
 - Antes del deploy, repetir la prueba con una venta real desde la tablet.
 
+## 5undecies. Vendedor externo (RF-U01)
+
+Sin módulo nuevo: cambios en `pos_reparto_comision` y `pos_reparto_caja` (fase 7 del roadmap del 2026-09-26). Spec: `docs/superpowers/specs/2026-09-28-vendedor-externo-design.md`. Plan: `docs/superpowers/plans/2026-09-28-vendedor-externo.md`.
+
+- **`res.users.reparto_es_externo`** (Boolean, sin restricción de grupo porque `pos_reparto_caja` lo usa en dominios que corren como Administración; se edita en la pestaña **Comisión (Reparto)**, solo Gerencia). Un externo no usa camión ni POS: Administración carga y cobra por sus clientes.
+- **Comisión al 0%**: helper `res.users._reparto_comision_pct_efectivo()` que usan los dos hooks de líneas (`pos.order` y `account.payment`). La línea se crea igual (queda el rastro de lo cobrado) pero con `comision_pct = 0`.
+- **Rendición**: `reparto.caja.rendicion` excluye a los externos (dominio de `vendedor_id`, `create` y `action_rendir`): no tienen esperado ni se les marcan líneas.
+- **Cajas**: `_saldo_caja` suma directo `monto_cobrado` de las líneas de externos (ya está en la empresa), sin pasar por Rendición.
+- `deploy/carga_inicial.py` da de alta a "Vendedor 04 (externo)" (login `vendedor04`, sin contraseña ni grupos: no inicia sesión); los clientes se le asignan a mano.
+- **Límites**: el reporte de ventas por vendedor agrupa por quien carga el pedido, no por el vendedor del cliente. Las líneas de comisión viejas no se reclasifican al marcar a alguien como externo: solo vale para los cobros nuevos.
+- 6 tests nuevos en verde (2 en comisión, 4 en caja).
+
 ## 6. Facturación (ARCA/AFIP) — **DECISIÓN OBSOLETA, ver relevamiento v2.0**
 
 ~~Decisión tomada: por ahora, factura local de Odoo sin timbrar (Factura A/B/C interna, sin conexión a los webservices de ARCA).~~
@@ -314,7 +326,7 @@ Configurado servidor MCP `odoo` en Claude Code (`claude mcp add odoo ...`), modo
 4. ~~Cobrar deuda desde Viaje (RF-V05)~~ — hecho, `pos_reparto_viaje`.
 5. ~~Ventas por vendedor (RF-A01)~~ — hecho 2026-09-28, `pos_reparto_ventas` (sección 5novies). Mergeado a `main` (PR #10).
 6. ~~Listado de despacho (RF-A03)~~ — hecho 2026-09-28, `pos_reparto_despacho` (sección 5decies). PR #9.
-7. Vendedor 04 externo sin comisión (RF-U01).
+7. ~~Vendedor 04 externo sin comisión (RF-U01)~~ — hecho 2026-09-28 (sección 5undecies).
 8. Comprobante con deuda en rojo (RF-V06).
 9. Trayecto en Inicio (RF-G02, deseable; el tracking ya existe, falta exponerlo).
 
