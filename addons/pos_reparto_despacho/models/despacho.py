@@ -77,9 +77,46 @@ class RepartoDespacho(models.Model):
         return self.action_imprimir()
 
     def action_imprimir(self):
-        # Provisoria: el reporte PDF se crea en la Task 5, que reemplaza este método.
         self.ensure_one()
-        return True
+        return self.env.ref('pos_reparto_despacho.action_report_despacho').report_action(self)
+
+    def _pedidos_listado(self):
+        """Confirmado: los pedidos que despachó. Borrador: los que despacharía hoy."""
+        self.ensure_one()
+        pedidos = self.pedido_ids if self.state == 'confirmado' else self._pedidos_pendientes()
+        return pedidos.sudo()
+
+    def _datos_listado(self):
+        """Estructura común para el PDF, el Excel y el resumen de pantalla."""
+        self.ensure_one()
+        pedidos = self._pedidos_listado()
+        viajes = self.env['reparto.viaje'].sudo().search([('fecha', '=', self.fecha)])
+        chofer_por_config = {v.pos_config_id.id: v.chofer_id.name for v in viajes}
+        por_camion, por_cliente = {}, {}
+        for pedido in pedidos:
+            config = pedido.config_id
+            camion = por_camion.setdefault(
+                config.id, {'nombre': config.name, 'chofer': chofer_por_config.get(config.id, ''), 'productos': {}})
+            partner = pedido.partner_id
+            cliente = por_cliente.setdefault(
+                partner.id, {'nombre': partner.name or _('Sin cliente'), 'camiones': set(), 'productos': {}})
+            cliente['camiones'].add(config.name)
+            for linea in pedido.lines:
+                nombre = linea.product_id.display_name
+                camion['productos'][nombre] = camion['productos'].get(nombre, 0.0) + linea.qty
+                cliente['productos'][nombre] = cliente['productos'].get(nombre, 0.0) + linea.qty
+        return {
+            'por_camion': [
+                {'nombre': c['nombre'], 'chofer': c['chofer'],
+                 'productos': sorted(c['productos'].items()), 'total': sum(c['productos'].values())}
+                for c in sorted(por_camion.values(), key=lambda c: c['nombre'])
+            ],
+            'por_cliente': [
+                {'nombre': c['nombre'], 'camiones': ', '.join(sorted(c['camiones'])),
+                 'productos': sorted(c['productos'].items()), 'total': sum(c['productos'].values())}
+                for c in sorted(por_cliente.values(), key=lambda c: c['nombre'])
+            ],
+        }
 
     def unlink(self):
         if any(despacho.state == 'confirmado' for despacho in self):

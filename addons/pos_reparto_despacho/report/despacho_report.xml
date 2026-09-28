@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="action_report_despacho" model="ir.actions.report">
+        <field name="name">Listado de despacho</field>
+        <field name="model">reparto.despacho</field>
+        <field name="report_type">qweb-pdf</field>
+        <field name="report_name">pos_reparto_despacho.despacho_document</field>
+        <field name="report_file">pos_reparto_despacho.despacho_document</field>
+    </record>
+</odoo>
