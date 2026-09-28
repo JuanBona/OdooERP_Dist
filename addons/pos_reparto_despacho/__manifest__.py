@@ -9,6 +9,7 @@
         'data/despacho_sequence.xml',
         'report/despacho_report.xml',
         'report/despacho_template.xml',
+        'views/despacho_views.xml',
     ],
     'installable': True,
     'application': False,

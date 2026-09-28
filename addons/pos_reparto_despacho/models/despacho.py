@@ -24,6 +24,14 @@ class RepartoDespacho(models.Model):
     confirmado_por = fields.Many2one('res.users', string='Confirmado por', readonly=True, copy=False)
     confirmado_el = fields.Datetime(string='Confirmado el', readonly=True, copy=False)
 
+    resumen_html = fields.Html(string='Resumen', compute='_compute_resumen_html', sanitize=False)
+
+    @api.depends('fecha', 'state')
+    def _compute_resumen_html(self):
+        for despacho in self:
+            despacho.resumen_html = self.env['ir.qweb']._render(
+                'pos_reparto_despacho.despacho_tablas', {'datos': despacho._datos_listado()})
+
     @api.depends('numero_del_dia')
     def _compute_es_complementario(self):
         for despacho in self:
