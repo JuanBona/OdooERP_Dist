@@ -39,6 +39,6 @@ class PosOrder(models.Model):
                 'fecha': fecha,
                 'origen': 'venta_directa',
                 'monto_cobrado': payment.amount,
-                'comision_pct': vendedor.sudo().reparto_comision_pct,
+                'comision_pct': vendedor.sudo()._reparto_comision_pct_efectivo(),
                 'pos_payment_id': payment.id,
             })

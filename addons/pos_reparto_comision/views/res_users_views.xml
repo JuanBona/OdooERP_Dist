@@ -7,7 +7,8 @@
             <xpath expr="//notebook" position="inside">
                 <page string="Comisión (Reparto)" groups="pos_reparto_security.group_reparto_gerencia">
                     <group>
-                        <field name="reparto_comision_pct"/>
+                        <field name="reparto_comision_pct" invisible="reparto_es_externo"/>
+                        <field name="reparto_es_externo"/>
                     </group>
                 </page>
             </xpath>

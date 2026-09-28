@@ -35,7 +35,7 @@ class AccountPayment(models.Model):
             'fecha': self.date,
             'origen': 'cobro_credito',
             'monto_cobrado': self.amount,
-            'comision_pct': vendedor.sudo().reparto_comision_pct,
+            'comision_pct': vendedor.sudo()._reparto_comision_pct_efectivo(),
             'account_payment_id': self.id,
         })
 
