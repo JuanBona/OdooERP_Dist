@@ -17,3 +17,10 @@ class TestPickingDiferido(DespachoCase):
         pedido = self._crear_pedido(self.config1, self.session1, self.cliente1, [(self.producto_a, 3.0, 100.0)])
         self.assertEqual(pedido.picking_ids.state, 'done')
         self.assertEqual(self._stock(self.producto_a), 47.0)
+
+    def test_picking_diferido_se_puede_validar_despues_y_descuenta(self):
+        pedido = self._crear_pedido(self.config1, self.session1, self.cliente1, [(self.producto_a, 3.0, 100.0)])
+        self.assertEqual(self._stock(self.producto_a), 50.0)
+        pedido.picking_ids.with_context(skip_immediate=True, skip_backorder=True, skip_sms=True).button_validate()
+        self.assertEqual(pedido.picking_ids.state, 'done')
+        self.assertEqual(self._stock(self.producto_a), 47.0)
