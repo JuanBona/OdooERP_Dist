@@ -36,6 +36,11 @@ class TestSeleccionPedidos(DespachoCase):
         despacho = self._despacho()
         self.assertIn(pedido, despacho._pedidos_pendientes())
 
+    def test_pendientes_excluye_pos_sin_despacho_diferido(self):
+        pedido = self._crear_pedido(self.config1, self.session1, self.cliente1, [(self.producto_a, 1.0, 100.0)])
+        self.config1.reparto_despacho_diferido = False
+        self.assertNotIn(pedido, self._despacho()._pedidos_pendientes())
+
     def test_pendientes_excluye_pedidos_ya_despachados(self):
         pedido = self._crear_pedido(self.config1, self.session1, self.cliente1, [(self.producto_a, 1.0, 100.0)])
         otro = self._despacho()

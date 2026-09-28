@@ -6,7 +6,8 @@ class PosConfig(models.Model):
 
     reparto_despacho_diferido = fields.Boolean(
         string="Descontar stock al despachar",
-        default=True,
-        help="Si está activo, los pedidos de este POS dejan su picking pendiente (stock comprometido) y el "
-             "stock se descuenta recién al confirmar el listado de despacho.",
+        default=False,
+        help="Activar en los POS de camión: los pedidos dejan su picking pendiente (stock comprometido) y el "
+             "stock se descuenta recién al confirmar el listado de despacho. Desactivado, el stock se "
+             "descuenta al vender, como en Odoo estándar.",
     )

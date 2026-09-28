@@ -18,8 +18,8 @@ class DespachoCase(TransactionCase):
             'journal_id': journal.id,
             'company_id': cls.env.company.id,
         })
-        cls.config1 = cls.env['pos.config'].create({'name': 'Camión Test Despacho 1'})
-        cls.config2 = cls.env['pos.config'].create({'name': 'Camión Test Despacho 2'})
+        cls.config1 = cls.env['pos.config'].create({'name': 'Camión Test Despacho 1', 'reparto_despacho_diferido': True})
+        cls.config2 = cls.env['pos.config'].create({'name': 'Camión Test Despacho 2', 'reparto_despacho_diferido': True})
         cls.session1 = cls.env['pos.session'].create({'config_id': cls.config1.id})
         cls.session2 = cls.env['pos.session'].create({'config_id': cls.config2.id})
         cls.location = cls.config1.picking_type_id.default_location_src_id

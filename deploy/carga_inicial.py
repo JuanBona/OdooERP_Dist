@@ -105,6 +105,9 @@ for n in range(1, N_CAMIONES + 1):
         or env["pos.config"].create({
             "name": f"POS Camion {n}", "picking_type_id": ptype.id,
             "payment_method_ids": [(6, 0, [card.id, cta_cte.id, efectivo.id])]})
+    # Los camiones descuentan stock al confirmar el listado de despacho (pos_reparto_despacho)
+    if not cfg.reparto_despacho_diferido:
+        cfg.reparto_despacho_diferido = True
     pos_por_camion[n] = cfg
 print(f"Camiones: {N_CAMIONES} POS + tipos Carga/Descarga listos ({', '.join(c.name for c in pos_por_camion.values())})")
 

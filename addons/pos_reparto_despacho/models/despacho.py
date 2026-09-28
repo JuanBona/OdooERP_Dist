@@ -50,6 +50,7 @@ class RepartoDespacho(models.Model):
         self.ensure_one()
         pedidos = self.env['pos.order'].sudo().search([
             ('despacho_id', '=', False),
+            ('config_id.reparto_despacho_diferido', '=', True),
             ('picking_ids.state', 'in', PICKING_PENDIENTE),
         ], order='date_order, id')
         return pedidos.filtered(lambda p: p._reparto_fecha_despacho() <= self.fecha)
