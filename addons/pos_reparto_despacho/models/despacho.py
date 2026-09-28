@@ -1,4 +1,5 @@
 from odoo import _, api, fields, models
+from odoo.exceptions import UserError
 
 PICKING_PENDIENTE = ('confirmed', 'waiting', 'assigned', 'partially_available')
 
@@ -40,3 +41,47 @@ class RepartoDespacho(models.Model):
             ('picking_ids.state', 'in', PICKING_PENDIENTE),
         ], order='date_order, id')
         return pedidos.filtered(lambda p: p._reparto_fecha_despacho() <= self.fecha)
+
+    def action_confirmar(self):
+        """Valida los pickings de los pedidos pendientes (descuenta el stock) y cierra el listado.
+        Idempotente: sobre un despacho ya confirmado solo devuelve el reporte."""
+        self.ensure_one()
+        # Un solo confirmador a la vez: evita que dos listados validen los mismos pickings.
+        self.env.cr.execute("SELECT pg_advisory_xact_lock(hashtext('reparto_despacho_confirmar'))")
+        self.env.invalidate_all()
+        if self.state == 'confirmado':
+            return self.action_imprimir()
+        pedidos = self._pedidos_pendientes()
+        if not pedidos:
+            raise UserError(_("No hay pedidos pendientes de despachar hasta el %s.", self.fecha))
+        pickings = pedidos.picking_ids.filtered(lambda p: p.state in PICKING_PENDIENTE)
+        pickings.with_context(
+            skip_immediate=True, skip_backorder=True, skip_sms=True, skip_expired=True,
+        ).button_validate()
+        sin_validar = pickings.filtered(lambda p: p.state != 'done')
+        if sin_validar:
+            raise UserError(_(
+                "No se pudo validar el picking de: %s. Revisá el stock y volvé a intentar.",
+                ', '.join(sin_validar.mapped('origin')),
+            ))
+        pedidos.write({'despacho_id': self.id})
+        numero = self.search_count([
+            ('fecha', '=', self.fecha), ('state', '=', 'confirmado'), ('id', '!=', self.id),
+        ]) + 1
+        self.write({
+            'state': 'confirmado',
+            'numero_del_dia': numero,
+            'confirmado_por': self.env.uid,
+            'confirmado_el': fields.Datetime.now(),
+        })
+        return self.action_imprimir()
+
+    def action_imprimir(self):
+        # Provisoria: el reporte PDF se crea en la Task 5, que reemplaza este método.
+        self.ensure_one()
+        return True
+
+    def unlink(self):
+        if any(despacho.state == 'confirmado' for despacho in self):
+            raise UserError(_("Un despacho confirmado no se puede borrar: ya movió stock."))
+        return super().unlink()
