@@ -1,0 +1,10 @@
+<odoo>
+    <!-- report.pos.order es una vista SQL: no le aplican las reglas de pos.order.
+         Sin esta regla, un Vendedor podría leer las ventas de todos por RPC. -->
+    <record id="rule_reparto_report_pos_order_vendedor" model="ir.rule">
+        <field name="name">Vendedor Reparto: solo sus propias ventas en el análisis de POS</field>
+        <field name="model_id" ref="point_of_sale.model_report_pos_order"/>
+        <field name="domain_force">[('user_id', '=', user.id)]</field>
+        <field name="groups" eval="[(4, ref('pos_reparto_security.group_reparto_vendedor'))]"/>
+    </record>
+</odoo>

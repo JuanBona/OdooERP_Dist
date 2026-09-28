@@ -1,6 +1,6 @@
 # Estado del proyecto — Odoo 19 CE local (Reparto)
 
-Última actualización: 2026-08-29
+Última actualización: 2026-09-28
 
 ## 1. Infraestructura
 
@@ -239,6 +239,14 @@ Qué hace:
 
 Spec: `docs/superpowers/specs/2026-09-02-pos-reparto-comision-design.md`. Plan: `docs/superpowers/plans/2026-09-02-pos-reparto-comision.md`.
 
+## 5novies. Módulo custom: `pos_reparto_ventas`
+
+Ubicación: `addons/pos_reparto_ventas/`. Depende de `point_of_sale` y `pos_reparto_security`. Cubre **RF-A01** (ventas por vendedor, fase 5 del roadmap del 2026-09-26). Sin modelo nuevo: reusa la vista SQL nativa `report.pos.order` (vendedor = `user_id` del pedido, o sea el cajero/chofer).
+
+- Menú **Punto de Venta → Ventas por vendedor** (Administración Operativa y Gerencia): pivot vendedor × mes (pedidos, unidades, importe) + gráfico de barras; excluye cancelados por defecto.
+- **Regla `ir.rule` sobre `report.pos.order` para Vendedor** (`user_id = user.id`): `report.pos.order` es una vista SQL, no le aplican las reglas de `pos.order`, y `point_of_sale.group_pos_user` (que implica Vendedor) tiene lectura ACL sobre ella. Sin la regla un Vendedor podía leer las ventas de todos por RPC (verificado: el test falla sin la regla).
+- 3 tests en verde (`tests/test_ventas_vendedor.py`). Verificado con los usuarios reales: menú visible para gerencia/adminop/admin, oculto para vendedor.
+
 ## 6. Facturación (ARCA/AFIP) — **DECISIÓN OBSOLETA, ver relevamiento v2.0**
 
 ~~Decisión tomada: por ahora, factura local de Odoo sin timbrar (Factura A/B/C interna, sin conexión a los webservices de ARCA).~~
@@ -283,6 +291,18 @@ Configurado servidor MCP `odoo` en Claude Code (`claude mcp add odoo ...`), modo
 **Paquete de producción (`deploy/`, 2026-09-23)**: `docker-compose.prod.yml` (imágenes fijadas por digest, healthcheck, logs rotados), `deploy/init_db.sh` (base limpia es_AR + AR + módulos; probado en base descartable), `deploy/backup.sh` (base + filestore, cada 4 hs, off-site con rclone, alerta healthchecks), `deploy/restore.sh` (probado: revierte cambios, UTF-8 OK) y `deploy/DEPLOY.md` (runbook). Al probar `init_db.sh` apareció un bug de instalación limpia: `pos_reparto_branding` no declaraba `point_of_sale`/`sale` en `depends` (corregido). **Falta**: contratar VPS/dominio, configurar rclone+healthchecks, simulacro de restore en el servidor real.
 
 **Hecho hasta ahora** (relevamiento v2.0, `Relevamiento_Requerimientos_Odoo_Reparto.docx`): `pos_reparto_security` (4 roles + reglas de acceso, sección 5bis), `pos_reparto_credito` (alerta 15 días, sección 5ter), `pos_reparto_branding` (personalización visual, 5quater), `pos_reparto_home` (pantalla de inicio táctil, 5quinquies), `pos_reparto_remito` (remito interno QWeb), `pos_reparto_viaje` (hoja de ruta, sección 5sexies), `pos_reparto_descuento_volumen` (RF-PV-09, sección 5septies). Todo mergeado a `main`. `pos_reparto_comision` (comisión de vendedor, sección 5octies) también mergeado a `main`.
+
+**Roadmap v2.0 actualizado (reunión 2026-09-26, spec `docs/superpowers/specs/2026-09-26-pos-reparto-caja-design.md`)** — reemplaza como prioridad a la lista de gaps de abajo:
+
+1. ~~Stock camión → general (RF-A02)~~ — hecho (config/datos).
+2. ~~Cajas + Gastos + Rendición (RF-G01, RF-G03, RF-A05)~~ — hecho, `pos_reparto_caja`.
+3. ~~Cuenta corriente: pantalla + filtro por vendedor (RF-G05, RF-A04, RF-V04)~~ — hecho, `pos_reparto_credito`.
+4. ~~Cobrar deuda desde Viaje (RF-V05)~~ — hecho, `pos_reparto_viaje`.
+5. ~~Ventas por vendedor (RF-A01)~~ — hecho 2026-09-28, `pos_reparto_ventas` (sección 5novies). Rama `feat/ventas-por-vendedor`.
+6. Listado de despacho (RF-A03): consolidado por camión + por cliente, PDF/Excel, descuento de stock al imprimir (una sola vez + complementario). **Próximo, el más grande.**
+7. Vendedor 04 externo sin comisión (RF-U01).
+8. Comprobante con deuda en rojo (RF-V06).
+9. Trayecto en Inicio (RF-G02, deseable; el tracking ya existe, falta exponerlo).
 
 **Gaps Must/Should que quedan del relevamiento v2.0** (ver detalle y justificación en memoria `project-reparto-v2-requirements`, o repreguntar al cliente si hace falta el docx):
 
