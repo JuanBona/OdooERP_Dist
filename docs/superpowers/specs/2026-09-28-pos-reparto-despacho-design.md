@@ -12,7 +12,7 @@ Depósito/Administración genera, por fecha, un **listado de despacho** con todo
 - **El stock se descuenta solo al confirmar el despacho** (respuesta del cliente 2026-09-28). Hoy los 3 camiones (`ship_later = False`) validan el picking al vender; eso cambia.
 - **Reserva al vender, descuento al despachar.** El picking sigue creándose al vender (stock comprometido, RF-DL-03 del ADR-001) pero no se valida: queda `assigned`. Se descartó "no crear picking hasta el despacho" porque perdería la reserva y permitiría sobreventa entre vendedores.
 - **Por fecha y por camión a la vez.** El listado es de una fecha, y se presenta agrupado **por camión** = el POS de camión (`pos.config`) con el que se tomó el pedido, y **por cliente**.
-- **Selección de pedidos:** los pedidos de la fecha con al menos un picking pendiente (`confirmed`/`waiting`/`assigned`) y sin despacho asignado. Incluye también los `ship_later` de "Punto de Venta Reparto" (fecha = `shipping_date` si existe, si no `date_order`).
+- **Selección de pedidos:** los pedidos con fecha de salida **hasta** la del listado (`<=`, para no dejar huérfano un pedido atrasado) con al menos un picking pendiente (`confirmed`/`waiting`/`assigned`) y sin despacho asignado. Incluye también los `ship_later` de "Punto de Venta Reparto" (fecha = `shipping_date` si existe, si no `date_order`).
 - **Se confirma desde la pantalla de despacho** (botón), no automático al cerrar sesión de POS.
 
 ## Arquitectura
@@ -48,7 +48,7 @@ addons/pos_reparto_despacho/
 El Excel se arma con `xlsxwriter` (ya incluido en Odoo) y se baja por un controller que exige pertenecer a Depósito/AdminOp/Gerencia.
 
 ### Impacto en `pos_stock_limit`
-El bloqueo al cobrar compara contra `qty_available` (stock físico), que no descuenta lo reservado por pedidos aún no despachados. Pasa a comparar contra **stock libre** (`free_qty`) de la ubicación, para que las reservas cuenten. Sin este cambio, dos vendedores podrían vender la misma unidad. El badge de stock del POS (`reparto_stock_disponible`) se actualiza igual.
+El bloqueo al cobrar compara contra `qty_available` (stock físico), que no descuenta lo comprometido por pedidos aún no despachados (las cantidades de los movimientos de POS no reservan stock). Pasa a restarle el **stock comprometido**: la suma de los movimientos pendientes de pedidos POS que salen de la ubicación (`product.product._reparto_comprometido`). Sin este cambio, dos vendedores podrían vender la misma unidad. El badge de stock del POS (`reparto_stock_disponible`) se actualiza igual.
 
 ### Seguridad
 Depósito, Administración Operativa y Gerencia: crear/confirmar/imprimir. Vendedor: sin acceso. Menú bajo **Inventario → Operaciones** (Depósito no tiene la app de Punto de Venta).

@@ -239,6 +239,19 @@ Qué hace:
 
 Spec: `docs/superpowers/specs/2026-09-02-pos-reparto-comision-design.md`. Plan: `docs/superpowers/plans/2026-09-02-pos-reparto-comision.md`.
 
+## 5decies. Módulo custom: `pos_reparto_despacho`
+
+Ubicación: `addons/pos_reparto_despacho/` (más un cambio en `pos_stock_limit`). Depende de `point_of_sale`, `stock`, `pos_reparto_security` y `pos_reparto_viaje`. Cubre **RF-A03** (listado de despacho, fase 6 del roadmap del 2026-09-26). Spec: `docs/superpowers/specs/2026-09-28-pos-reparto-despacho-design.md`. Plan: `docs/superpowers/plans/2026-09-28-pos-reparto-despacho.md`.
+
+- **El stock se descuenta al confirmar el despacho, no al vender** (decisión del cliente, 2026-09-28). Flag `pos.config.reparto_despacho_diferido` (default `True`): con el flag, el picking de un pedido de camión se crea al vender pero **no se valida** (override de `stock.picking._create_picking_from_pos_order_lines`/`_action_done` por contexto; las devoluciones siguen el flujo nativo). El flag no tiene vista (se cambia por shell/modo desarrollador).
+- **`reparto.despacho`** (por fecha, secuencia `DESP/año/####`): toma los pedidos con picking pendiente y fecha de salida `<=` a la del listado (`shipping_date` o día de la venta) sin despacho; `action_confirmar` valida sus pickings, marca `pos.order.despacho_id` y numera el despacho del día (2º en adelante = **complementario**). Corre bajo un advisory lock de Postgres para no validar dos veces; confirmar un despacho ya confirmado solo devuelve el PDF. Un confirmado no se puede borrar.
+- **Listado**: consolidado **por camión** (el POS donde se tomó el pedido, con el chofer del `reparto.viaje` de esa fecha) y **por cliente**, en PDF (QWeb) y Excel (`xlsxwriter`, controller `/pos_reparto_despacho/xlsx/<id>` con chequeo del ACL del modelo). Depósito no tiene lectura sobre `pos.order`: la pantalla muestra un `resumen_html` calculado con `sudo`.
+- **`pos_stock_limit`** ahora resta el stock **comprometido** (`product.product._reparto_comprometido`: movimientos pendientes de pedidos POS que salen de la ubicación) en el bloqueo al cobrar y en el badge del POS, para que dos vendedores no vendan la misma unidad mientras el pedido espera el despacho.
+- Menú: **Inventario → Operaciones → Listado de despacho** (Depósito, Administración Operativa, Gerencia).
+- **Verificado por ORM** (con rollback): vender no baja el stock, **cerrar la sesión de POS con el picking sin validar cierra bien**, confirmar el despacho baja el stock y valida el picking, el PDF y el Excel se generan. 23 tests propios en verde; regresión de 8 módulos relacionados en verde (172 tests). **No verificado en navegador** (la extensión de Chrome no estaba conectada).
+- **Limitación conocida — contabilidad**: con costo `standard` (el de este proyecto) no hay efecto. Con costo promedio/FIFO, el `total_cost`/margen del pedido POS quedaría en 0 porque el movimiento aún no está valorizado al cerrar la sesión; el asiento de costo (COGS) cae en el período de la confirmación del despacho, no de la venta.
+- Verificar el flujo con un pedido real en el POS desde la tablet antes del deploy (no se pudo en navegador).
+
 ## 6. Facturación (ARCA/AFIP) — **DECISIÓN OBSOLETA, ver relevamiento v2.0**
 
 ~~Decisión tomada: por ahora, factura local de Odoo sin timbrar (Factura A/B/C interna, sin conexión a los webservices de ARCA).~~
