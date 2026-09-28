@@ -1,7 +1,7 @@
 # Guía de Usuario — Sistema de Reparto
 
 **Rincón del Sur — Peyrano**
-Versión: 2026-09-27
+Versión: 2026-09-28
 
 ---
 
@@ -200,6 +200,20 @@ Lo hace **Administración Operativa** o **Gerencia**. Un **viaje** es la hoja de
 
 **Cómo se sigue el avance:** en **Punto de venta → Viajes** se ve, por cada chofer, cuántas paradas se completaron sobre el total. **La parada se tilda sola** cuando el chofer cobra un pedido a ese cliente ese día: no hay que marcar nada a mano.
 
+### 8.1 Cobrar una deuda vieja directo desde Viaje (sin vender nada nuevo)
+Esto es nuevo. Si un cliente de la parada tiene deuda, el chofer la ve **ahí mismo, en la lista de Viaje** — no hace falta abrir el punto de venta para cobrarla.
+
+1. En **Inicio → Viaje**, debajo del nombre del cliente con deuda aparece en rojo **"Debe $X"**.
+2. Tocá ese monto (no el resto de la fila, que sigue abriendo el punto de venta).
+3. Se abre un panel: el monto viene precargado con el total de la deuda, pero se puede cambiar (por ejemplo, si el cliente paga solo una parte). Elegí **Efectivo** o **Transferencia** y tocá **Continuar**.
+4. Aparece una **segunda confirmación** con el monto, el cliente y el medio elegido — es a propósito, porque es plata real y esto **no se puede deshacer** desde esta pantalla. Tocá **Confirmar** recién ahí.
+5. La deuda mostrada baja al toque, y la parada queda **marcada como visitada**, aunque no se haya cargado ningún pedido nuevo ese día.
+
+**Cosas a tener en cuenta:**
+- El monto **no puede ser mayor** a la deuda actual del cliente — el sistema lo rechaza. Para cobrar de más o corregir un cobro mal cargado, se sigue usando el flujo de Facturación (sección 12.3).
+- Este cobro genera comisión igual que cualquier otro (sección 13) y suma al saldo de Cajas cuando Administración lo rinda (sección 15), como cualquier cobro de cuenta corriente.
+- Un chofer **solo puede cobrar en sus propias paradas** — ni viendo ni forzando la pantalla puede cobrarle a un cliente de otro camión.
+
 ---
 
 ## 9. Cuando un cliente llama y hace un pedido
@@ -265,12 +279,14 @@ Es solo información: la venta se puede hacer igual.
 **Punto de venta → Deudores.** Muestra los clientes con deuda, con los más atrasados primero. Un **Vendedor** ve solo a **sus** clientes; los demás roles ven a todos.
 
 ### 12.3 Registrar el cobro de una deuda
-Lo hace **Gerencia**:
+Lo hace **Gerencia**, desde la oficina:
 1. **Inicio → Facturación → Clientes → Pagos → Nuevo**.
 2. Elegí el **Cliente**, el **Monto** y el **Diario** (**Caja Efectivo** o **Caja Transferencia**).
 3. Confirmá. El pago se aplica solo a la deuda y el cliente se actualiza en Deudores (si pagó todo, desaparece de la lista).
 
 Este cobro es también el que **genera la comisión** del vendedor (sección 13) y el que suma al **saldo de Cajas** una vez que Administración lo rinda (sección 15).
+
+> **En la calle, el chofer no usa esta pantalla:** tiene su propio cobro rápido, directo desde Viaje, tocando el monto de la deuda (sección 8.1). Este flujo de Facturación queda para Gerencia, o para casos que el cobro rápido no cubre (por ejemplo, cobrar de más).
 
 ### 12.4 Ver el historial completo de un cliente (extracto de Cuenta Corriente)
 Esto es nuevo. Mientras que **Deudores** (12.2) es una lista corta de quién debe hoy, **Cuenta Corriente** es el detalle completo: cada pedido a crédito y cada pago de cada cliente, uno debajo del otro, con el saldo que va quedando después de cada movimiento — como un resumen de cuenta bancario.
@@ -433,7 +449,7 @@ Para que quede más claro cómo se usa todo junto, así se ve un día normal de 
 
 **9:40 — Una venta de contado.** En el almacén "Don Aníbal", el chofer carga 15 cajones de gaseosa: el descuento por cantidad se aplica solo al llegar al tramo (sección 6.4). Cobra en **efectivo**, así que esa plata va, apenas cobra, a quedar "pendiente de rendir" a nombre del chofer — todavía no es plata de la caja de la empresa (sección 15).
 
-**10:15 — Un cliente con deuda.** En la parada siguiente, "Almacén Rossi", al elegir el cliente aparece el cartel 🔴 de deuda vencida (sección 12.1): debe hace 18 días. El chofer igual puede vender —es solo un aviso—, y esta vez logra que le paguen una parte de lo viejo además de la venta del día. Ese cobro parcial también genera su comisión (sección 13.2) y va a quedar registrado como una fila más en la **Cuenta Corriente** de ese cliente (sección 12.4), con el saldo bajando.
+**10:15 — Un cliente con deuda.** En la parada siguiente, "Almacén Rossi", el chofer ya ve en su pantalla de Viaje que debe $45.000 hace 18 días (sección 8.1). Antes de vender nada, toca ese monto y le cobra $20.000 en efectivo a cuenta de lo viejo — dos toques y una confirmación, sin abrir el punto de venta. Recién después carga la venta del día. Al elegir el cliente en el punto de venta también aparece el cartel 🔴 de deuda vencida (sección 12.1), ahora ya más baja. Ese cobro parcial también genera su comisión (sección 13.2) y queda registrado como una fila más en la **Cuenta Corriente** de ese cliente (sección 12.4), con el saldo bajando.
 
 **11:30 — Falta stock.** Un cliente pide 30 unidades de un producto y el sistema avisa "Stock insuficiente" (sección 10): en el depósito general solo quedan 18. El chofer vende lo que hay y avisa por WhatsApp a Julián para reponer.
 
