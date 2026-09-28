@@ -15,8 +15,17 @@ class ProductTemplate(models.Model):
     @api.depends('qty_available', 'is_storable')
     @api.depends_context('location')
     def _compute_reparto_stock_disponible(self):
+        location_id = self.env.context.get('location')
+        comprometido = {}
+        if location_id and not isinstance(location_id, (list, tuple)):
+            location = self.env['stock.location'].browse(location_id)
+            comprometido = self.product_variant_ids._reparto_comprometido(location)
         for product in self:
-            product.reparto_stock_disponible = product.qty_available if product.is_storable else 0.0
+            if not product.is_storable:
+                product.reparto_stock_disponible = 0.0
+                continue
+            reservado = sum(comprometido.get(v.id, 0.0) for v in product.product_variant_ids)
+            product.reparto_stock_disponible = max(product.qty_available - reservado, 0.0)
 
     @api.model
     def _load_pos_data_domain(self, data, config):
