@@ -427,3 +427,57 @@ class TestRepartoCaja(TransactionCase):
     def test_dashboard_accion_existe(self):
         action = self.env.ref('pos_reparto_caja.action_reparto_caja_dashboard')
         self.assertEqual(action.res_model, 'reparto.caja.dashboard')
+
+    def _crear_externo(self, name):
+        externo = self._crear_vendedor(name, pct=10.0)
+        externo.sudo().reparto_es_externo = True
+        return externo
+
+    def test_lineas_de_externo_no_entran_al_esperado_de_la_rendicion(self):
+        externo = self._crear_externo('Externo Sin Esperado')
+        partner = self._crear_partner('Cliente Externo Sin Esperado', externo)
+        self._crear_orden_pagada(partner, self.metodo_efectivo, 300.0)
+        self._crear_orden_pagada(partner, self.metodo_debito, 200.0)
+
+        rendicion = self.env['reparto.caja.rendicion'].create({'vendedor_id': externo.id})
+
+        self.assertEqual(rendicion.monto_esperado_efectivo, 0.0)
+        self.assertEqual(rendicion.monto_esperado_transferencia, 0.0)
+
+    def test_action_rendir_no_marca_lineas_de_externo(self):
+        externo = self._crear_externo('Externo Sin Rendir')
+        partner = self._crear_partner('Cliente Externo Sin Rendir', externo)
+        orden = self._crear_orden_pagada(partner, self.metodo_efectivo, 300.0)
+        rendicion = self.env['reparto.caja.rendicion'].create({'vendedor_id': externo.id})
+
+        rendicion.action_rendir()
+
+        linea = self.env['pos.reparto.comision.linea'].search([
+            ('pos_payment_id', '=', orden.payment_ids[0].id),
+        ])
+        self.assertFalse(linea.rendicion_id)
+
+    def test_saldo_caja_suma_lo_cobrado_por_un_externo_sin_rendicion(self):
+        dashboard = self.env['reparto.caja.dashboard'].create({})
+        saldo_efectivo_inicial = dashboard.saldo_efectivo
+        saldo_transferencia_inicial = dashboard.saldo_transferencia
+
+        externo = self._crear_externo('Externo Saldo')
+        partner = self._crear_partner('Cliente Externo Saldo', externo)
+        self._crear_orden_pagada(partner, self.metodo_efectivo, 300.0)
+        self._crear_orden_pagada(partner, self.metodo_debito, 200.0)
+
+        dashboard_2 = self.env['reparto.caja.dashboard'].create({})
+        self.assertEqual(dashboard_2.saldo_efectivo, saldo_efectivo_inicial + 300.0)
+        self.assertEqual(dashboard_2.saldo_transferencia, saldo_transferencia_inicial + 200.0)
+
+    def test_saldo_caja_de_vendedor_normal_sigue_igual_hasta_rendir(self):
+        dashboard = self.env['reparto.caja.dashboard'].create({})
+        saldo_inicial = dashboard.saldo_efectivo
+
+        vendedor = self._crear_vendedor('Vendedor Normal Saldo')
+        partner = self._crear_partner('Cliente Normal Saldo', vendedor)
+        self._crear_orden_pagada(partner, self.metodo_efectivo, 300.0)
+
+        dashboard_2 = self.env['reparto.caja.dashboard'].create({})
+        self.assertEqual(dashboard_2.saldo_efectivo, saldo_inicial)

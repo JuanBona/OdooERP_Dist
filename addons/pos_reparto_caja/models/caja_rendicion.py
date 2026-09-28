@@ -9,7 +9,10 @@ class RepartoCajaRendicion(models.Model):
 
     vendedor_id = fields.Many2one(
         'res.users', string='Vendedor', required=True,
-        domain=lambda self: [('group_ids', 'in', self.env.ref('pos_reparto_security.group_reparto_vendedor').id)],
+        domain=lambda self: [
+            ('group_ids', 'in', self.env.ref('pos_reparto_security.group_reparto_vendedor').id),
+            ('reparto_es_externo', '=', False),
+        ],
     )
     fecha = fields.Date(string='Fecha', required=True, default=fields.Date.context_today)
     currency_id = fields.Many2one(
@@ -64,6 +67,7 @@ class RepartoCajaRendicion(models.Model):
                 continue
             pendientes = Linea.search([
                 ('vendedor_id', '=', vendedor_id),
+                ('vendedor_id.reparto_es_externo', '=', False),
                 ('rendicion_id', '=', False),
             ])
             vals.setdefault(
@@ -85,6 +89,7 @@ class RepartoCajaRendicion(models.Model):
                 raise UserError('Esta rendición ya fue confirmada.')
             pendientes = Linea.search([
                 ('vendedor_id', '=', rendicion.vendedor_id.id),
+                ('vendedor_id.reparto_es_externo', '=', False),
                 ('rendicion_id', '=', False),
             ])
             pendientes.write({'rendicion_id': rendicion.id})
