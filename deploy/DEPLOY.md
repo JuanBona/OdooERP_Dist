@@ -205,6 +205,17 @@ docker compose -f docker-compose.prod.yml exec -T odoo \
 docker compose -f docker-compose.prod.yml restart odoo   # obligatorio: cache de menús/assets
 ```
 
-Actualizar solo los módulos custom que cambiaron. Para subir de versión de la
+Actualizar solo los módulos custom que cambiaron. Un módulo **nuevo** (que
+todavía no está instalado en la base de producción) va con `-i`, no con `-u`:
+`-u` ignora en silencio los módulos no instalados. Ej. al pasar de `v1.0.0` a
+una versión con `pos_reparto_caja`: `-i pos_reparto_caja -u <los que cambiaron>`.
+Para confirmar qué quedó instalado:
+
+```bash
+docker compose -f docker-compose.prod.yml exec -T db psql -U "$DB_USER" "$DB_NAME" \
+  -c "select name, state, latest_version from ir_module_module where name like 'pos_%' order by name"
+```
+
+Para subir de versión de la
 imagen de Odoo: probarlo antes en una copia (restore en local) y cambiar el
 digest `ODOO_IMAGE` en `.env`.
