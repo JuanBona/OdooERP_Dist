@@ -323,3 +323,43 @@ class TestRepartoViaje(TransactionCase):
 
         with self.assertRaises(Exception):
             parada.with_user(self.chofer_2).action_cobrar_deuda(100.0, 'efectivo')
+
+    def test_action_cobrar_deuda_genera_linea_de_comision_cobro_credito(self):
+        # pos_reparto_viaje no depende de pos_reparto_comision en el
+        # manifest (acoplamiento implicito): este test asume que ambos
+        # modulos estan instalados en la base de test, como lo estan en el
+        # setup estandar de este proyecto (ver deploy/init_db.sh).
+        self.chofer_1.sudo().reparto_comision_pct = 8.0
+        self._crear_linea_por_cobrar(self.cliente_a, 1000.0, self.hoy)
+        viaje = self._crear_viaje(self.chofer_1, self.hoy, [self.cliente_a])
+        parada = viaje.parada_ids[0]
+
+        parada.with_user(self.chofer_1).action_cobrar_deuda(400.0, 'efectivo')
+
+        pago = self.env['account.payment'].search([('partner_id', '=', self.cliente_a.id)], limit=1)
+        linea = self.env['pos.reparto.comision.linea'].search([('account_payment_id', '=', pago.id)])
+        self.assertEqual(len(linea), 1)
+        self.assertEqual(linea.vendedor_id, self.chofer_1)
+        self.assertEqual(linea.origen, 'cobro_credito')
+        self.assertEqual(linea.monto_cobrado, 400.0)
+        self.assertEqual(linea.comision_pct, 8.0)
+        self.assertEqual(linea.comision_monto, 32.0)
+
+    def test_action_cobrar_deuda_clasifica_linea_de_comision_segun_medio(self):
+        # Mismo acoplamiento implicito que el test anterior, ahora con
+        # pos_reparto_caja (clasificacion de caja efectivo/transferencia).
+        self.chofer_1.sudo().reparto_comision_pct = 5.0
+        self._crear_linea_por_cobrar(self.cliente_a, 1000.0, self.hoy)
+        viaje = self._crear_viaje(self.chofer_1, self.hoy, [self.cliente_a])
+        parada = viaje.parada_ids[0]
+
+        parada.with_user(self.chofer_1).action_cobrar_deuda(300.0, 'transferencia')
+        parada.with_user(self.chofer_1).action_cobrar_deuda(200.0, 'efectivo')
+
+        pagos = self.env['account.payment'].search([('partner_id', '=', self.cliente_a.id)], order='id')
+        lineas = self.env['pos.reparto.comision.linea'].search([
+            ('account_payment_id', 'in', pagos.ids),
+        ], order='id')
+        self.assertEqual(len(lineas), 2)
+        self.assertEqual(lineas[0].caja, 'transferencia')
+        self.assertEqual(lineas[1].caja, 'efectivo')
