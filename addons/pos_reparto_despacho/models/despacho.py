@@ -1,3 +1,7 @@
+import io
+
+import xlsxwriter
+
 from odoo import _, api, fields, models
 from odoo.exceptions import UserError
 
@@ -122,3 +126,46 @@ class RepartoDespacho(models.Model):
         if any(despacho.state == 'confirmado' for despacho in self):
             raise UserError(_("Un despacho confirmado no se puede borrar: ya movió stock."))
         return super().unlink()
+
+    def _generar_xlsx(self):
+        self.ensure_one()
+        datos = self._datos_listado()
+        salida = io.BytesIO()
+        libro = xlsxwriter.Workbook(salida, {'in_memory': True})
+        negrita = libro.add_format({'bold': True})
+
+        hoja = libro.add_worksheet('Por camión')
+        fila = 0
+        for camion in datos['por_camion']:
+            titulo = camion['nombre'] + (' — Chofer: %s' % camion['chofer'] if camion['chofer'] else '')
+            hoja.write(fila, 0, titulo, negrita)
+            hoja.write(fila, 1, 'Cantidad', negrita)
+            fila += 1
+            for producto, qty in camion['productos']:
+                hoja.write(fila, 0, producto)
+                hoja.write(fila, 1, qty)
+                fila += 1
+            hoja.write(fila, 0, 'Total unidades', negrita)
+            hoja.write(fila, 1, camion['total'], negrita)
+            fila += 2
+        hoja.set_column(0, 0, 45)
+
+        hoja = libro.add_worksheet('Por cliente')
+        fila = 0
+        for cliente in datos['por_cliente']:
+            hoja.write(fila, 0, '%s (%s)' % (cliente['nombre'], cliente['camiones']), negrita)
+            hoja.write(fila, 1, 'Cantidad', negrita)
+            fila += 1
+            for producto, qty in cliente['productos']:
+                hoja.write(fila, 0, producto)
+                hoja.write(fila, 1, qty)
+                fila += 1
+            fila += 1
+        hoja.set_column(0, 0, 45)
+
+        libro.close()
+        return salida.getvalue()
+
+    def action_descargar_xlsx(self):
+        self.ensure_one()
+        return {'type': 'ir.actions.act_url', 'url': '/pos_reparto_despacho/xlsx/%d' % self.id, 'target': 'self'}

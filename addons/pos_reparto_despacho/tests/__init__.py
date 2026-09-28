@@ -3,3 +3,4 @@ from . import test_despacho
 from . import test_seguridad
 from . import test_confirmar
 from . import test_listado
+from . import test_xlsx
