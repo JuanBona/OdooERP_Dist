@@ -27,6 +27,11 @@ class DespachoCase(TransactionCase):
         cls.producto_b = cls._crear_producto('Producto B Despacho')
         cls.cliente1 = cls.env['res.partner'].create({'name': 'Cliente 1 Despacho'})
         cls.cliente2 = cls.env['res.partner'].create({'name': 'Cliente 2 Despacho'})
+        if 'reparto.despacho' in cls.env:
+            previos = cls.env['pos.order'].sudo().search([
+                ('picking_ids.state', 'in', ('confirmed', 'waiting', 'assigned', 'partially_available'))])
+            if previos:
+                previos.write({'despacho_id': cls.env['reparto.despacho'].create({}).id})
 
     @classmethod
     def _crear_producto(cls, nombre, stock=50.0):
