@@ -81,6 +81,10 @@ if not card:
     card = env["pos.payment.method"].create({"name": "Tarjeta", "journal_id": banco.id})
 if not cta_cte:  # sin diario => tipo pay_later (cuenta corriente)
     cta_cte = env["pos.payment.method"].create({"name": "Cuenta corriente"})
+# "Identificar cliente": sin esto Odoo junta todas las ventas a cuenta corriente en un solo asiento
+# sin cliente al cerrar la caja, y la deuda nunca llega a Deudores ni a Cuenta Corriente.
+if not cta_cte.split_transactions:
+    cta_cte.split_transactions = True
 # Lista de precios "Default": en Odoo 19 una base limpia no trae ninguna y los descuentos por
 # volumen (pos_reparto_descuento_volumen) cuelgan de la primera lista de la compañía.
 Pricelist = env["product.pricelist"]

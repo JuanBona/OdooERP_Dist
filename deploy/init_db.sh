@@ -40,6 +40,14 @@ PY
 echo "==> 3/3 Módulos (tarda varios minutos)"
 "${ODOO[@]}" "${DBARGS[@]}" -i "$MODULES" --without-demo=all --no-http --stop-after-init
 
+echo "==> Quitando l10n_ar_pos (fuerza Recibo/Factura en cada venta: sin facturación en alcance)"
+"${ODOO[@]}" shell "${DBARGS[@]}" --no-http <<PY
+m = env['ir.module.module'].search([('name', '=', 'l10n_ar_pos'), ('state', '=', 'installed')])
+if m:
+    m.button_immediate_uninstall()
+    env.cr.commit()
+PY
+
 echo "==> Reiniciando Odoo (cache de menús/assets)"
 docker compose -f "$COMPOSE_FILE" restart odoo
 echo "Listo. Entrar como admin (password 'admin') y CAMBIARLA de inmediato."
