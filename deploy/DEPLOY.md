@@ -219,6 +219,31 @@ docker compose -f docker-compose.prod.yml exec -T db psql -U "$DB_USER" "$DB_NAM
   -c "select name, state, latest_version from ir_module_module where name like 'pos_%' order by name"
 ```
 
+### De v1.0.0 a v1.1.0
+
+Además del código, cambia configuración y datos (stock general, factura AFIP fuera del POS, cuenta
+corriente con cliente, lista de precios, limpieza de productos de ejemplo). Todo está en
+`deploy/migraciones/v1_1_0.py`, que es repetible y por defecto un ensayo:
+
+```bash
+./deploy/backup.sh
+git fetch --tags && git checkout v1.1.0
+source .env; DC=(docker compose -f docker-compose.prod.yml)
+"${DC[@]}" exec -T odoo odoo -d "$DB_NAME" --db_host=db --db_user="$DB_USER" --db_password="$DB_PASSWORD"   --no-http --stop-after-init -i pos_reparto_caja,pos_reparto_despacho,pos_reparto_ventas   -u pos_reparto_security,pos_reparto_credito,pos_reparto_comision,pos_reparto_viaje,pos_reparto_remito,pos_reparto_branding,pos_reparto_home,pos_reparto_descuento_volumen,pos_reparto_pricelist,pos_stock_limit
+SH=("${DC[@]}" exec -T odoo odoo shell -d "$DB_NAME" --db_host=db --db_user="$DB_USER" --db_password="$DB_PASSWORD" --no-http)
+"${SH[@]}" < deploy/migraciones/v1_1_0.py              # ensayo: mirar qué haría
+"${DC[@]}" exec -T -e COMMIT=1 odoo odoo shell -d "$DB_NAME" --db_host=db --db_user="$DB_USER"   --db_password="$DB_PASSWORD" --no-http < deploy/migraciones/v1_1_0.py   # aplicar
+"${SH[@]}" <<'PY'
+m = env['ir.module.module'].search([('name', '=', 'l10n_ar_pos'), ('state', '=', 'installed')])
+if m:
+    m.button_immediate_uninstall()
+    env.cr.commit()
+PY
+"${DC[@]}" restart odoo
+```
+
+Después, en cada celular de chofer: menú ☰ del POS → **Volver a cargar datos**.
+
 Para subir de versión de la
 imagen de Odoo: probarlo antes en una copia (restore en local) y cambiar el
 digest `ODOO_IMAGE` en `.env`.
