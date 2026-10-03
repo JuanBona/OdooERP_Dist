@@ -103,6 +103,7 @@ class RepartoViajeParada(models.Model):
             'partner_id': partner.id,
             'amount': monto,
             'journal_id': journal.id,
+            'reparto_cobro_viaje': True,
         })
         payment.action_post()
         # El grupo Vendedor no tiene perm_write sobre reparto.viaje.parada

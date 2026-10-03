@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<templates xml:space="preserve">
+    <t t-inherit="point_of_sale.ClosePosPopup" t-inherit-mode="extension">
+        <xpath expr="//div[hasclass('payment-methods-overview')]" position="after">
+            <t t-set="cobros" t-value="props.reparto_cobros_viaje"/>
+            <div t-if="cobros and (cobros.efectivo or cobros.transferencia)" class="alert alert-warning mt-3 mb-0 o_reparto_cobros_viaje">
+                <div class="fw-bold mb-1">Deudas cobradas hoy desde Viaje</div>
+                <div t-if="cobros.efectivo" class="d-flex justify-content-between">
+                    <span>Efectivo</span>
+                    <span t-esc="env.utils.formatCurrency(cobros.efectivo)"/>
+                </div>
+                <div t-if="cobros.transferencia" class="d-flex justify-content-between">
+                    <span>Transferencia</span>
+                    <span t-esc="env.utils.formatCurrency(cobros.transferencia)"/>
+                </div>
+                <div class="small mt-1">No entran en este conteo: separá esa plata y entregala en la Rendición.</div>
+            </div>
+        </xpath>
+    </t>
+</templates>

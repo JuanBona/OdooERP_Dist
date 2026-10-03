@@ -180,18 +180,19 @@ El punto de venta **sigue funcionando sin internet**:
 
 1. Tocá el menú **☰** (arriba a la derecha) y elegí **Cerrar caja registradora**.
 2. Revisá el resumen: total vendido y desglose por medio de pago (**Efectivo**, **Tarjeta**, **Cuenta corriente**).
-3. En **Conteo de efectivo** escribí el efectivo que tenés **de las ventas** (lo que figura en *Efectivo Camión N*).
-4. Tocá **Cerrar caja registradora**.
+3. Si cobraste deudas desde Viaje (2.4), aparece el cuadro amarillo **"Deudas cobradas hoy desde Viaje"** con el monto en efectivo y en transferencia. **Esa plata no entra en este conteo:** separala.
+4. En **Conteo de efectivo** escribí el efectivo **de las ventas** (lo que figura en *Efectivo Camión N*).
+5. Tocá **Cerrar caja registradora**.
 
 ![Menú ☰ → Cerrar caja registradora](img/ch_menu.jpg)
-![Resumen del cierre y conteo de efectivo](img/ch_cierre_conteo.jpg)
+![Resumen del cierre: el cuadro amarillo muestra las deudas cobradas desde Viaje](img/ch_cierre_conteo.jpg)
 
 Si lo contado no coincide con lo esperado, aparece **"Diferencia de pagos"**. Podés volver (**Descartar**) y recontar, o **Continuar de todos modos** para registrar la diferencia.
 
 ![Diferencia de pagos: el conteo no coincide](img/ch_cierre_diferencia.jpg)
 
 > **Antes de cerrar**, asegurate de que todas las ventas estén enviadas (sección 2.5).
-> **Lo que cobraste de deudas desde Viaje (2.4) no figura en este resumen**: se controla aparte, en la **Rendición** que te hace Administración al final del día (sección 3.8). Entregale a Administración **todo** el efectivo que juntaste, ventas y cobros de deuda.
+> **Lo cobrado de deudas desde Viaje (2.4) no se cuenta en el cierre**: el sistema te lo muestra aparte (cuadro amarillo) y se controla en la **Rendición** que te hace Administración (sección 3.8). Entregale a Administración **todo** el efectivo que juntaste: ventas y cobros de deuda.
 > Para volver a vender hay que abrir una caja nueva.
 
 <div class="page-break"></div>

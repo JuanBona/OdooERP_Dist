@@ -8,5 +8,6 @@
         name="Viaje"
         action="action_reparto_viaje_chofer"
         sequence="5"
+        web_icon="pos_reparto_viaje,static/description/icon.png"
         groups="pos_reparto_security.group_reparto_vendedor"/>
 </odoo>

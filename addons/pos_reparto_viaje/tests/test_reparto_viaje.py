@@ -259,6 +259,11 @@ class TestRepartoViaje(TransactionCase):
         roots_chofer = self.env['ir.ui.menu'].with_user(self.chofer_1).get_user_roots()
         self.assertIn(menu.id, roots_chofer.ids)
 
+    def test_el_cuadro_viaje_tiene_icono(self):
+        menu = self.env.ref('pos_reparto_viaje.menu_reparto_viaje_chofer')
+        self.assertEqual(menu.web_icon, 'pos_reparto_viaje,static/description/icon.png')
+        self.assertTrue(menu.web_icon_data)
+
     def test_get_mi_viaje_hoy_incluye_deuda_por_parada(self):
         self._crear_linea_por_cobrar(self.cliente_a, 500.0, self.hoy)
         self._crear_viaje(self.chofer_1, self.hoy, [self.cliente_a, self.cliente_b])
@@ -328,6 +333,37 @@ class TestRepartoViaje(TransactionCase):
         self.assertEqual(len(pagos), 2)
         self.assertEqual(pagos[0].journal_id.type, 'bank')
         self.assertEqual(pagos[1].journal_id.type, 'cash')
+
+    def test_cierre_de_caja_informa_los_cobros_de_deuda_del_chofer(self):
+        # El efectivo de deudas cobradas desde Viaje no es una venta del POS: el cierre de caja no lo
+        # espera, pero tiene que mostrarlo para que el chofer no lo mezcle en el conteo.
+        self.chofer_1.reparto_camion_asignado_id = self.pos_config
+        self._crear_linea_por_cobrar(self.cliente_a, 1000.0, self.hoy)
+        parada = self._crear_viaje(self.chofer_1, self.hoy, [self.cliente_a]).parada_ids[0]
+        parada.with_user(self.chofer_1).action_cobrar_deuda(300.0, 'efectivo')
+        parada.with_user(self.chofer_1).action_cobrar_deuda(200.0, 'transferencia')
+
+        datos = self.session.with_user(self.admin_op).get_closing_control_data()
+
+        self.assertEqual(datos['reparto_cobros_viaje'], {'efectivo': 300.0, 'transferencia': 200.0})
+
+    def test_cierre_de_caja_no_suma_cobros_de_otro_camion(self):
+        self.chofer_1.reparto_camion_asignado_id = self.pos_config
+        self.cliente_b.user_id = self.chofer_2
+        self._crear_linea_por_cobrar(self.cliente_b, 500.0, self.hoy)
+        parada = self._crear_viaje(self.chofer_2, self.hoy, [self.cliente_b]).parada_ids[0]
+        parada.with_user(self.chofer_2).action_cobrar_deuda(500.0, 'efectivo')
+
+        datos = self.session.with_user(self.admin_op).get_closing_control_data()
+
+        self.assertEqual(datos['reparto_cobros_viaje'], {'efectivo': 0.0, 'transferencia': 0.0})
+
+    def test_cobro_desde_viaje_queda_marcado(self):
+        self._crear_linea_por_cobrar(self.cliente_a, 500.0, self.hoy)
+        parada = self._crear_viaje(self.chofer_1, self.hoy, [self.cliente_a]).parada_ids[0]
+        parada.with_user(self.chofer_1).action_cobrar_deuda(500.0, 'efectivo')
+        pago = self.env['account.payment'].search([('partner_id', '=', self.cliente_a.id)])
+        self.assertTrue(pago.reparto_cobro_viaje)
 
     def test_action_cobrar_deuda_rechaza_monto_cero(self):
         self._crear_linea_por_cobrar(self.cliente_a, 500.0, self.hoy)

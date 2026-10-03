@@ -18,6 +18,8 @@
         ],
         'point_of_sale._assets_pos': [
             'pos_reparto_viaje/static/src/app/services/pos_store.js',
+            'pos_reparto_viaje/static/src/app/components/closing_popup.js',
+            'pos_reparto_viaje/static/src/app/components/closing_popup.xml',
         ],
     },
     'installable': True,
