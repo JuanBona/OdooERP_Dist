@@ -91,6 +91,26 @@ class TestRepartoRemito(TransactionCase):
         self.assertEqual(len(mail), 1)
         self.assertIn(order.remito_number, mail.subject)
 
+    def test_email_enviado_como_vendedor(self):
+        vendedor = self.env['res.users'].create({
+            'name': 'Vendedor Remito',
+            'login': 'vendedor_remito',
+            'group_ids': [(6, 0, [
+                self.env.ref('base.group_user').id,
+                self.env.ref('pos_reparto_security.group_reparto_vendedor').id,
+            ])],
+        })
+        order = self._make_order(partner=self.partner_con_email)
+        order.user_id = vendedor
+        self.partner_con_email.user_id = vendedor
+        with patch.object(type(order), '_render_remito_pdf', return_value=b'%PDF-fake'), \
+             patch('odoo.addons.mail.models.mail_mail.MailMail.send', return_value=None):
+            order.with_user(vendedor)._generate_remito()
+        mail = self.env['mail.mail'].sudo().search([
+            ('email_to', '=', 'cliente@test.com'),
+        ])
+        self.assertEqual(len(mail), 1)
+
     def test_sin_email_no_falla(self):
         order = self._make_order(partner=self.partner_sin_email)
         with patch.object(type(order), '_render_remito_pdf', return_value=b'%PDF-fake'):
