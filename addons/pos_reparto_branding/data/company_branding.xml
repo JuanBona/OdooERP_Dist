@@ -1,0 +1,4 @@
+<odoo>
+    <!-- Sin noupdate a propósito: un `-u pos_reparto_branding` aplica la marca también en bases ya creadas. -->
+    <function model="res.company" name="_reparto_aplicar_marca"/>
+</odoo>
