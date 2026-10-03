@@ -5,3 +5,4 @@ from . import test_confirmar
 from . import test_listado
 from . import test_xlsx
 from . import test_resumen
+from . import test_tz
