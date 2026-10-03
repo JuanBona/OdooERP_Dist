@@ -5,6 +5,10 @@ class RepartoCajaDashboard(models.TransientModel):
     _name = 'reparto.caja.dashboard'
     _description = 'Panel de saldo de Cajas (Reparto)'
 
+    def _compute_display_name(self):
+        for panel in self:
+            panel.display_name = 'Cajas'
+
     currency_id = fields.Many2one(
         'res.currency', default=lambda self: self.env.company.currency_id,
     )

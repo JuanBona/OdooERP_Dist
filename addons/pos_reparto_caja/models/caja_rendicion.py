@@ -45,6 +45,11 @@ class RepartoCajaRendicion(models.Model):
     rendido_uid = fields.Many2one('res.users', string='Rendido por', readonly=True)
     rendido_fecha = fields.Datetime(string='Fecha de rendición', readonly=True)
 
+    @api.depends('vendedor_id', 'fecha')
+    def _compute_display_name(self):
+        for rendicion in self:
+            rendicion.display_name = f"Rendición {rendicion.vendedor_id.name or ''} - {rendicion.fecha or ''}".strip(' -')
+
     @api.depends(
         'monto_recibido_efectivo', 'monto_esperado_efectivo',
         'monto_recibido_transferencia', 'monto_esperado_transferencia',

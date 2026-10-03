@@ -77,3 +77,7 @@ class TestRepartoViajeTz(TransactionCase):
         self.env['ir.default'].set('res.partner', 'tz', TZ_AR)
         nuevo = self.env['res.users'].create({'name': 'Nuevo Tz', 'login': 'nuevo_tz_test'})
         self.assertEqual(nuevo.tz, TZ_AR)
+
+    def test_nombre_legible_del_viaje(self):
+        viaje = self._viaje(self.chofer, HOY_AR, self.cliente)
+        self.assertEqual(viaje.display_name, 'Chofer Tz - 2026-10-03')
