@@ -14,7 +14,7 @@
             </div>
             <div t-else="" class="o_reparto_viaje_grid">
                 <div t-foreach="state.viaje.paradas" t-as="parada" t-key="parada.id"
-                     t-attf-class="o_reparto_viaje_parada {{ parada.visitado ? 'o_reparto_viaje_parada_visitada' : '' }}"
+                     t-attf-class="o_reparto_viaje_parada {{ parada.visitado ? (parada.tiene_pedido ? 'o_reparto_viaje_parada_visitada' : 'o_reparto_viaje_parada_cobrada') : '' }}"
                      t-on-click="() => this.onParadaClick(parada)">
                     <div class="o_reparto_viaje_parada_info">
                         <span t-out="parada.partner_name"/>

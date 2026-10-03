@@ -32,6 +32,11 @@
         cursor: default;
         opacity: 0.7;
     }
+
+    // Visitada solo por cobro de deuda: sigue tocable para cargar el pedido.
+    &_cobrada {
+        background-color: #e6f4ea;
+    }
 }
 
 .o_reparto_viaje_check {

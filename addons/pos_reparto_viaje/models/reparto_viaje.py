@@ -49,6 +49,7 @@ class RepartoViaje(models.Model):
                     'id': parada.id,
                     'partner_name': parada.partner_id.name,
                     'visitado': parada.visitado,
+                    'tiene_pedido': bool(parada.pedido_id),
                     'deuda_monto': parada.partner_id.credito_monto_adeudado,
                 }
                 for parada in viaje.parada_ids

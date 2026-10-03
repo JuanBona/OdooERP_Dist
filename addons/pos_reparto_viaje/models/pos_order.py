@@ -19,7 +19,10 @@ class PosOrder(models.Model):
                 ('viaje_id.chofer_id', '=', order.user_id.id),
                 ('viaje_id.fecha', '=', fecha_pedido),
                 ('partner_id', '=', order.partner_id.id),
-                ('visitado', '=', False),
+                # Sin pedido (no "sin visitar"): una parada que solo se visito
+                # cobrando deuda tiene que quedar linkeada al pedido que se
+                # cargue despues.
+                ('pedido_id', '=', False),
             ], limit=1)
             if parada:
                 parada.write({'visitado': True, 'pedido_id': order.id})
