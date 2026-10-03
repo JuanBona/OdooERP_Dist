@@ -8,6 +8,7 @@
         'security/ir.model.access.csv',
         'views/res_users_views.xml',
         'views/comision_linea_views.xml',
+        'views/vendedores_views.xml',
     ],
     'installable': True,
     'application': False,

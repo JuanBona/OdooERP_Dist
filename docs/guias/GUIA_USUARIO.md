@@ -389,7 +389,7 @@ Con los botones **Imprimir PDF** y **Descargar Excel** podés reimprimir las vec
 
 ## 5. Gerencia
 
-Gerencia ve todo lo de Administración (secciones 3.7 a 3.11: Deudores, Cuenta Corriente, Cajas, Gastos, Ventas por vendedor, Viajes) y además **Comisiones** y **Facturación** (para registrar cobros). Las **rendiciones** las ve pero no las confirma: eso lo hace Administración.
+Gerencia ve todo lo de Administración (secciones 3.7 a 3.11: Deudores, Cuenta Corriente, Cajas, Gastos, Ventas por vendedor, Viajes) y además **Comisiones**, **Vendedores** (para cargar el % de comisión) y **Facturación** (para registrar cobros). Las **rendiciones** las ve pero no las confirma: eso lo hace Administración.
 
 ### 5.1 Cajas y cobranza
 
@@ -429,7 +429,14 @@ Lo hace Gerencia desde la oficina (cuando un cliente paga en el negocio o por tr
 
 ### 5.4 Cargar el porcentaje de comisión de un vendedor
 
-Se hace en la ficha del usuario, pestaña **Comisión (Reparto)**, campo **% Comisión** (ver sección 6.2). Hoy se hace con el usuario de administración del sistema.
+1. **Inicio → Punto de venta → Vendedores**. Ves la lista de vendedores con su camión, su **% Comisión** y si son externos.
+2. Abrí el vendedor, escribí el **% Comisión** y guardá (☁).
+3. En el mismo lugar podés tildar **Vendedor externo (sin comisión ni rendición)** para quien no usa camión (ver 3.5).
+
+![Vendedores: lista con el % de comisión de cada uno](img/ger_vendedores_lista.jpg)
+![Ficha del vendedor: % Comisión y marca de externo](img/ger_vendedor_form.jpg)
+
+> **Un cambio de porcentaje vale para lo que se cobre desde ese momento.** Las comisiones ya generadas no se modifican. Desde esta pantalla Gerencia no puede cambiar claves, camiones ni permisos: eso lo hace el administrador del sistema (sección 6).
 
 <div class="page-break"></div>
 
@@ -454,7 +461,7 @@ Para quien administra el sistema (usuario **admin**). Se llega con el **selector
 En la ficha del usuario hay dos pestañas propias del sistema:
 
 - **Camión (Reparto)**: el **camión asignado** (su punto de venta). **Solo verá ese camión.**
-- **Comisión (Reparto)**: el **% Comisión** y la casilla **Vendedor externo (sin comisión ni rendición)**.
+- **Comisión (Reparto)**: el **% Comisión** y la casilla **Vendedor externo (sin comisión ni rendición)**. Gerencia también las edita, desde **Punto de venta → Vendedores** (5.4).
 
 ![Pestaña Camión (Reparto)](img/admin_usuario_camion.jpg)
 ![Pestaña Comisión (Reparto): % de comisión](img/admin_usuario_comision.jpg)
@@ -523,6 +530,7 @@ Pedile una nueva al administrador del sistema (6.1).
 - El viaje es una lista de paradas, no una ruta optimizada por mapa.
 - Las paradas se agregan a mano.
 - Los remitos todavía no se envían por correo al cliente (falta configurar el correo saliente).
+- El ticket del punto de venta no ofrece factura: este sistema no factura.
 
 <div class="page-break"></div>
 
