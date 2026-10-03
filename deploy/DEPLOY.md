@@ -158,7 +158,10 @@ tardó: ese es el RTO real.
 `deploy/carga_inicial.sh` carga de una vez los productos y clientes del cliente, los
 3 POS de camión (con su tipo de operación sobre el stock general, caja y método de efectivo) y un
 usuario por rol (3 transportistas, Administración, Depósito, Gerencia). Es repetible
-(no duplica) y por defecto es un **ensayo que no guarda nada**.
+(no duplica) y por defecto es un **ensayo que no guarda nada**. También deja la lista de precios
+`Default` (sin ella no andan los descuentos por volumen) asignada a los 3 POS, y fija la zona horaria
+`America/Argentina/Buenos_Aires` para todos los usuarios, la empresa y los usuarios nuevos: sin zona
+Odoo calcula "hoy" en UTC y entre las 21 y las 24 hs el viaje, la mora y el despacho saltan al día siguiente.
 
 ```bash
 # En tu PC: Excel -> CSV (los CSV tienen datos de clientes: NO subirlos a git)

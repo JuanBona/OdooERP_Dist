@@ -16,6 +16,7 @@ from odoo.exceptions import UserError
 D = os.environ.get("CARGA_DIR", "/tmp/carga")
 COMMIT = os.environ.get("COMMIT") == "1"
 N_CAMIONES = 3
+TZ = "America/Argentina/Buenos_Aires"  # una sola zona horaria para toda la operación
 report = []
 
 
@@ -80,6 +81,10 @@ if not card:
     card = env["pos.payment.method"].create({"name": "Tarjeta", "journal_id": banco.id})
 if not cta_cte:  # sin diario => tipo pay_later (cuenta corriente)
     cta_cte = env["pos.payment.method"].create({"name": "Cuenta corriente"})
+# Lista de precios "Default": en Odoo 19 una base limpia no trae ninguna y los descuentos por
+# volumen (pos_reparto_descuento_volumen) cuelgan de la primera lista de la compañía.
+Pricelist = env["product.pricelist"]
+lista = Pricelist.search([("company_id", "in", [env.company.id, False])], order="id", limit=1)     or Pricelist.create({"name": "Default", "currency_id": env.company.currency_id.id})
 pos_por_camion = {}
 for n in range(1, N_CAMIONES + 1):
     # Los camiones venden contra el stock general (WH/Stock), sin ubicacion propia
@@ -99,6 +104,8 @@ for n in range(1, N_CAMIONES + 1):
     # Los camiones descuentan stock al confirmar el listado de despacho (pos_reparto_despacho)
     if not cfg.reparto_despacho_diferido:
         cfg.reparto_despacho_diferido = True
+    if not cfg.pricelist_id:
+        cfg.write({"use_pricelist": True, "pricelist_id": lista.id, "available_pricelist_ids": [(6, 0, [lista.id])]})
     pos_por_camion[n] = cfg
 print(f"Camiones: {N_CAMIONES} POS listos, venden de stock general ({', '.join(c.name for c in pos_por_camion.values())})")
 
@@ -116,7 +123,7 @@ for nombre, login, grupo, camion in usuarios:
         clave = secrets.token_urlsafe(9)
         u = env["res.users"].with_context(no_reset_password=True).create({
             "name": nombre, "login": login, "password": clave, "lang": "es_AR",
-            "tz": "America/Argentina/Buenos_Aires",
+            "tz": TZ,
             "group_ids": [(6, 0, [env.ref("base.group_user").id, env.ref(grupo).id])],
             **({"reparto_camion_asignado_id": pos_por_camion[camion].id} if camion else {})})
         claves.append((login, clave))
@@ -129,10 +136,21 @@ externo = env["res.users"].search([("login", "=", "vendedor04")], limit=1)
 if not externo:
     externo = env["res.users"].create({
         "name": "Vendedor 04 (externo)", "login": "vendedor04", "lang": "es_AR",
-        "reparto_es_externo": True})
+        "tz": TZ, "reparto_es_externo": True})
 elif not externo.reparto_es_externo:
     externo.reparto_es_externo = True
 print("Vendedor externo listo: Vendedor 04 (externo) — sin contraseña, sin camión")
+
+# --- Zona horaria única ------------------------------------------------------
+# Odoo calcula "hoy" (viajes, mora, despacho, caja) con la tz del usuario; sin tz usa UTC y
+# entre las 21 y las 24 hs de Argentina el "hoy" salta al día siguiente. Se normalizan los
+# usuarios y la empresa, y se fija el default para los usuarios/contactos que se creen después.
+env["ir.default"].set("res.partner", "tz", TZ)
+usuarios_tz = env["res.users"].with_context(active_test=False).search(
+    [("share", "=", False), ("id", "!=", env.ref("base.user_root").id)])
+partners_tz = (usuarios_tz.partner_id | env.company.partner_id).filtered(lambda p: p.tz != TZ)
+partners_tz.write({"tz": TZ})
+print(f"Zona horaria {TZ}: {len(partners_tz)} usuarios/empresa actualizados, default fijado")
 
 # --- Asignación cliente -> camión (opcional) ---------------------------------
 if os.path.exists(os.path.join(D, "asignacion.csv")):
