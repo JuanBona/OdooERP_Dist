@@ -27,7 +27,8 @@ class PosOrder(models.Model):
         if not vendedor:
             return
         Linea = self.env['pos.reparto.comision.linea'].sudo()
-        fecha = self.date_order.date() if self.date_order else fields.Date.context_today(self)
+        # date_order es UTC: se pasa a la tz del usuario para que una venta de las 22hs AR no quede del día siguiente
+        fecha = fields.Date.context_today(self, self.date_order)
         for payment in self.payment_ids:
             if payment.payment_method_id.type == 'pay_later':
                 continue
@@ -39,6 +40,6 @@ class PosOrder(models.Model):
                 'fecha': fecha,
                 'origen': 'venta_directa',
                 'monto_cobrado': payment.amount,
-                'comision_pct': vendedor.sudo().reparto_comision_pct,
+                'comision_pct': vendedor.sudo()._reparto_comision_pct_efectivo(),
                 'pos_payment_id': payment.id,
             })

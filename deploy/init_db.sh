@@ -19,7 +19,7 @@ DB_USER="${DB_USER:-odoo}"
 # Apps de Odoo + módulos custom (las dependencias entre custom las resuelve Odoo).
 MODULES="point_of_sale,sale_management,stock,account,sale_stock,pos_sale,l10n_ar,l10n_ar_stock,\
 pos_stock_limit,pos_reparto_security,pos_reparto_pricelist,pos_reparto_branding,pos_reparto_home,\
-pos_reparto_credito,pos_reparto_remito,pos_reparto_viaje,pos_reparto_descuento_volumen,pos_reparto_comision,pos_reparto_ventas,pos_reparto_despacho"
+pos_reparto_credito,pos_reparto_remito,pos_reparto_viaje,pos_reparto_descuento_volumen,pos_reparto_comision,pos_reparto_caja,pos_reparto_ventas,pos_reparto_despacho"
 
 ODOO=(docker compose -f "$COMPOSE_FILE" exec -T odoo odoo)
 DBARGS=(-d "$DB_NAME" --db_host=db --db_user="$DB_USER" --db_password="$DB_PASSWORD")

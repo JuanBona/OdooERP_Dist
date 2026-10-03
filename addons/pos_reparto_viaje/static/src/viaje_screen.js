@@ -25,7 +25,9 @@ export class RepartoViajeScreen extends Component {
     }
 
     async onParadaClick(parada) {
-        if (parada.visitado) {
+        // Solo se bloquea la parada con pedido: una visitada solo por cobro de
+        // deuda todavia tiene que poder abrir el POS para cargar el pedido.
+        if (parada.visitado && parada.tiene_pedido) {
             return;
         }
         const action = await this.orm.call("reparto.viaje.parada", "action_abrir_pos", [parada.id]);

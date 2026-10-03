@@ -1,4 +1,4 @@
-from datetime import timedelta
+from datetime import date, datetime, timedelta
 from unittest.mock import patch
 
 from odoo import Command, fields
@@ -222,6 +222,20 @@ class TestRepartoComision(TransactionCase):
         with self.assertRaises(Exception):
             self.env['pos.reparto.comision.linea'].create(vals)
 
+    def test_venta_nocturna_argentina_queda_con_la_fecha_argentina(self):
+        """Venta a las 22:30 AR (01:30 UTC del día siguiente): la comisión es del día AR, no del UTC."""
+        vendedor = self._crear_vendedor('Vendedor Comision Noche', pct=10.0)
+        partner = self._crear_partner('Cliente Comision Noche', vendedor)
+        orden = self._crear_orden(partner, self.metodo_efectivo, 500.0)
+        orden.date_order = datetime(2026, 10, 4, 1, 30, 0)
+
+        orden.with_context(tz='America/Argentina/Buenos_Aires').write({'state': 'paid'})
+
+        linea = self.env['pos.reparto.comision.linea'].search([
+            ('pos_payment_id', '=', orden.payment_ids[0].id),
+        ])
+        self.assertEqual(linea.fecha, date(2026, 10, 3))
+
     def test_pedido_efectivo_pagado_genera_linea_venta_directa(self):
         vendedor = self._crear_vendedor('Vendedor Comision Cash', pct=10.0)
         partner = self._crear_partner('Cliente Comision Cash', vendedor)
@@ -431,3 +445,35 @@ class TestRepartoComision(TransactionCase):
     def test_accion_comisiones_existe_y_apunta_al_modelo(self):
         action = self.env.ref('pos_reparto_comision.action_reparto_comision_lineas')
         self.assertEqual(action.res_model, 'pos.reparto.comision.linea')
+
+    def test_vendedor_externo_venta_directa_genera_linea_al_0_por_ciento(self):
+        externo = self._crear_vendedor('Vendedor Externo Venta', pct=10.0)
+        externo.sudo().reparto_es_externo = True
+        partner = self._crear_partner('Cliente Externo Venta', externo)
+        orden = self._crear_orden(partner, self.metodo_efectivo, 500.0)
+
+        orden.write({'state': 'paid'})
+
+        lineas = self.env['pos.reparto.comision.linea'].search([
+            ('pos_payment_id', '=', orden.payment_ids[0].id),
+        ])
+        self.assertEqual(len(lineas), 1)
+        self.assertEqual(lineas.vendedor_id, externo)
+        self.assertEqual(lineas.monto_cobrado, 500.0)
+        self.assertEqual(lineas.comision_pct, 0.0)
+        self.assertEqual(lineas.comision_monto, 0.0)
+
+    def test_vendedor_externo_cobro_de_credito_genera_linea_al_0_por_ciento(self):
+        externo = self._crear_vendedor('Vendedor Externo Cobro', pct=8.0)
+        externo.sudo().reparto_es_externo = True
+        partner = self._crear_partner('Cliente Externo Cobro', externo)
+        linea_deuda = self._crear_linea_por_cobrar(partner, 1000.0, fields.Date.today() - timedelta(days=10))
+
+        pago = self._crear_y_conciliar_pago(partner, linea_deuda, 1000.0, fields.Date.today())
+
+        lineas = self.env['pos.reparto.comision.linea'].search([
+            ('account_payment_id', '=', pago.id),
+        ])
+        self.assertEqual(len(lineas), 1)
+        self.assertEqual(lineas.comision_pct, 0.0)
+        self.assertEqual(lineas.comision_monto, 0.0)

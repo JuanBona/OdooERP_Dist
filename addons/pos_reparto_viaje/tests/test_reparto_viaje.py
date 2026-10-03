@@ -287,6 +287,35 @@ class TestRepartoViaje(TransactionCase):
 
         self.assertTrue(parada.visitado)
 
+    def test_get_mi_viaje_hoy_indica_si_la_parada_tiene_pedido(self):
+        # La pantalla bloquea tocar la parada solo si ya tiene pedido: una
+        # parada visitada solo por cobro de deuda tiene que seguir abriendo el POS.
+        self._crear_linea_por_cobrar(self.cliente_a, 500.0, self.hoy)
+        viaje = self._crear_viaje(self.chofer_1, self.hoy, [self.cliente_a])
+        parada = viaje.parada_ids[0]
+        Viaje = self.env['reparto.viaje'].with_user(self.chofer_1)
+
+        parada.with_user(self.chofer_1).action_cobrar_deuda(500.0, 'efectivo')
+        tras_cobro = Viaje.get_mi_viaje_hoy()['paradas'][0]
+        self.assertTrue(tras_cobro['visitado'])
+        self.assertFalse(tras_cobro['tiene_pedido'])
+
+        self._crear_pedido(self.chofer_1, self.cliente_a)
+        tras_pedido = Viaje.get_mi_viaje_hoy()['paradas'][0]
+        self.assertTrue(tras_pedido['tiene_pedido'])
+
+    def test_pedido_despues_de_cobrar_deuda_se_vincula_a_la_parada(self):
+        self._crear_linea_por_cobrar(self.cliente_a, 500.0, self.hoy)
+        viaje = self._crear_viaje(self.chofer_1, self.hoy, [self.cliente_a])
+        parada = viaje.parada_ids[0]
+        parada.with_user(self.chofer_1).action_cobrar_deuda(500.0, 'efectivo')
+        self.assertFalse(parada.pedido_id)
+
+        pedido = self._crear_pedido(self.chofer_1, self.cliente_a)
+
+        self.assertTrue(parada.visitado)
+        self.assertEqual(parada.pedido_id, pedido)
+
     def test_action_cobrar_deuda_usa_diario_segun_medio(self):
         self._crear_linea_por_cobrar(self.cliente_a, 1000.0, self.hoy)
         viaje = self._crear_viaje(self.chofer_1, self.hoy, [self.cliente_a])

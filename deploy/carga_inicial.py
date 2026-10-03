@@ -1,4 +1,4 @@
-# Carga inicial de un cliente: productos, clientes, 3 camiones (ubicación, tipo de
+# Carga inicial de un cliente: productos, clientes, 3 camiones (tipo de
 # operación, caja, método de pago y POS) y usuarios por rol. Se corre con
 # `odoo shell` (ver deploy/carga_inicial.sh, que lo invoca). Es REPETIBLE: lo que
 # ya existe se saltea o se actualiza, nada se duplica.
@@ -16,6 +16,7 @@ from odoo.exceptions import UserError
 D = os.environ.get("CARGA_DIR", "/tmp/carga")
 COMMIT = os.environ.get("COMMIT") == "1"
 N_CAMIONES = 3
+TZ = "America/Argentina/Buenos_Aires"  # una sola zona horaria para toda la operación
 report = []
 
 
@@ -80,23 +81,18 @@ if not card:
     card = env["pos.payment.method"].create({"name": "Tarjeta", "journal_id": banco.id})
 if not cta_cte:  # sin diario => tipo pay_later (cuenta corriente)
     cta_cte = env["pos.payment.method"].create({"name": "Cuenta corriente"})
+# Lista de precios "Default": en Odoo 19 una base limpia no trae ninguna y los descuentos por
+# volumen (pos_reparto_descuento_volumen) cuelgan de la primera lista de la compañía.
+Pricelist = env["product.pricelist"]
+lista = Pricelist.search([("company_id", "in", [env.company.id, False])], order="id", limit=1)     or Pricelist.create({"name": "Default", "currency_id": env.company.currency_id.id})
 pos_por_camion = {}
 for n in range(1, N_CAMIONES + 1):
-    loc = env["stock.location"].search([("name", "=", f"Camion {n}"), ("location_id", "=", wh.lot_stock_id.id)], limit=1) \
-        or env["stock.location"].create({"name": f"Camion {n}", "usage": "internal", "location_id": wh.lot_stock_id.id})
+    # Los camiones venden contra el stock general (WH/Stock), sin ubicacion propia
     ptype = env["stock.picking.type"].search([("sequence_code", "=", f"VCAM{n}"), ("warehouse_id", "=", wh.id)], limit=1) \
         or env["stock.picking.type"].create({
             "name": f"Venta Camion {n}", "code": "outgoing", "sequence_code": f"VCAM{n}",
-            "warehouse_id": wh.id, "default_location_src_id": loc.id,
+            "warehouse_id": wh.id, "default_location_src_id": wh.lot_stock_id.id,
             "default_location_dest_id": clientes_dest.id})
-    # Carga (depósito -> camión) y Descarga (camión -> depósito): rutina diaria de stock
-    for prefijo, codigo, origen, destino in (
-            ("Carga", "CAM", wh.lot_stock_id, loc), ("Descarga", "DCAM", loc, wh.lot_stock_id)):
-        if not env["stock.picking.type"].search_count([("sequence_code", "=", f"{codigo}{n}"), ("warehouse_id", "=", wh.id)]):
-            env["stock.picking.type"].create({
-                "name": f"{prefijo} Camion {n}", "code": "internal", "sequence_code": f"{codigo}{n}",
-                "warehouse_id": wh.id, "default_location_src_id": origen.id,
-                "default_location_dest_id": destino.id})
     jrn = env["account.journal"].search([("code", "=", f"CJ{n}"), ("type", "=", "cash")], limit=1) \
         or env["account.journal"].create({"name": f"Caja Camion {n}", "code": f"CJ{n}", "type": "cash"})
     efectivo = env["pos.payment.method"].search([("name", "=", f"Efectivo Camion {n}")], limit=1) \
@@ -108,8 +104,10 @@ for n in range(1, N_CAMIONES + 1):
     # Los camiones descuentan stock al confirmar el listado de despacho (pos_reparto_despacho)
     if not cfg.reparto_despacho_diferido:
         cfg.reparto_despacho_diferido = True
+    if not cfg.pricelist_id:
+        cfg.write({"use_pricelist": True, "pricelist_id": lista.id, "available_pricelist_ids": [(6, 0, [lista.id])]})
     pos_por_camion[n] = cfg
-print(f"Camiones: {N_CAMIONES} POS + tipos Carga/Descarga listos ({', '.join(c.name for c in pos_por_camion.values())})")
+print(f"Camiones: {N_CAMIONES} POS listos, venden de stock general ({', '.join(c.name for c in pos_por_camion.values())})")
 
 # --- Usuarios por rol --------------------------------------------------------
 G = "pos_reparto_security."
@@ -125,12 +123,34 @@ for nombre, login, grupo, camion in usuarios:
         clave = secrets.token_urlsafe(9)
         u = env["res.users"].with_context(no_reset_password=True).create({
             "name": nombre, "login": login, "password": clave, "lang": "es_AR",
-            "tz": "America/Argentina/Buenos_Aires",
+            "tz": TZ,
             "group_ids": [(6, 0, [env.ref("base.group_user").id, env.ref(grupo).id])],
             **({"reparto_camion_asignado_id": pos_por_camion[camion].id} if camion else {})})
         claves.append((login, clave))
     if camion:
         user_por_camion[camion] = u
+
+# Vendedor externo sin camión ni POS (RF-U01): sin contraseña ni grupos de Reparto, no inicia sesión.
+# Se le asignan clientes a mano desde Clientes; Administración carga y cobra por ellos.
+externo = env["res.users"].search([("login", "=", "vendedor04")], limit=1)
+if not externo:
+    externo = env["res.users"].create({
+        "name": "Vendedor 04 (externo)", "login": "vendedor04", "lang": "es_AR",
+        "tz": TZ, "reparto_es_externo": True})
+elif not externo.reparto_es_externo:
+    externo.reparto_es_externo = True
+print("Vendedor externo listo: Vendedor 04 (externo) — sin contraseña, sin camión")
+
+# --- Zona horaria única ------------------------------------------------------
+# Odoo calcula "hoy" (viajes, mora, despacho, caja) con la tz del usuario; sin tz usa UTC y
+# entre las 21 y las 24 hs de Argentina el "hoy" salta al día siguiente. Se normalizan los
+# usuarios y la empresa, y se fija el default para los usuarios/contactos que se creen después.
+env["ir.default"].set("res.partner", "tz", TZ)
+usuarios_tz = env["res.users"].with_context(active_test=False).search(
+    [("share", "=", False), ("id", "!=", env.ref("base.user_root").id)])
+partners_tz = (usuarios_tz.partner_id | env.company.partner_id).filtered(lambda p: p.tz != TZ)
+partners_tz.write({"tz": TZ})
+print(f"Zona horaria {TZ}: {len(partners_tz)} usuarios/empresa actualizados, default fijado")
 
 # --- Asignación cliente -> camión (opcional) ---------------------------------
 if os.path.exists(os.path.join(D, "asignacion.csv")):

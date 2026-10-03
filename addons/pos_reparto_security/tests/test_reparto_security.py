@@ -73,6 +73,24 @@ class TestRepartoSecurity(TransactionCase):
         contacto_propio = self.env['res.partner'].with_user(self.vendedor_1).browse(self.vendedor_1.partner_id.id)
         self.assertEqual(contacto_propio.name, 'Vendedor Uno')
 
+    def test_vendedor_puede_leer_el_contacto_de_la_empresa_pero_no_editarlo(self):
+        # Al cobrar con "facturar", Odoo lee company_id.partner_id.bank_ids como
+        # el usuario del POS (point_of_sale/_get_partner_bank_id): sin leer la
+        # ficha de la propia empresa, el cobro del vendedor explota con
+        # "no tiene acceso a res.partner".
+        empresa = self.env['res.partner'].with_user(self.vendedor_1).browse(
+            self.vendedor_1.company_id.partner_id.id)
+        self.assertTrue(empresa.name)
+        empresa.bank_ids  # lo que lee Odoo al armar la factura
+        with self.assertRaises(AccessError):
+            empresa.write({'name': 'Otro nombre'})
+
+    def test_vendedor_sigue_sin_leer_clientes_ajenos_aunque_pueda_leer_la_empresa(self):
+        ajeno = self.env['res.partner'].create({
+            'name': 'Cliente de Vendedor 2', 'user_id': self.vendedor_2.id})
+        found = self.env['res.partner'].with_user(self.vendedor_1).search([('id', '=', ajeno.id)])
+        self.assertFalse(found)
+
     def test_usuario_sin_grupo_vendedor_ve_todos_los_clientes(self):
         partner_1 = self.env['res.partner'].create({
             'name': 'Cliente de Vendedor 1',
@@ -184,6 +202,23 @@ class TestRepartoSecurity(TransactionCase):
             ('id', 'in', [camion_1.id, camion_2.id, camion_3.id]),
         ])
         self.assertEqual(found, camion_2)
+
+    def test_cambiar_camion_asignado_se_aplica_sin_reiniciar(self):
+        # El dominio de la regla se cachea por usuario: sin invalidarlo al
+        # cambiar reparto_camion_asignado_id, el vendedor seguia sin ver su
+        # camion recien asignado hasta reiniciar el servidor.
+        camion_1 = self.env['pos.config'].create({'name': 'Camión 1 Test Cache'})
+        camion_2 = self.env['pos.config'].create({'name': 'Camión 2 Test Cache'})
+        PosConfig = self.env['pos.config'].with_user(self.vendedor_1)
+        dominio = [('id', 'in', [camion_1.id, camion_2.id])]
+
+        self.assertFalse(PosConfig.search(dominio))
+
+        self.vendedor_1.sudo().reparto_camion_asignado_id = camion_1
+        self.assertEqual(PosConfig.search(dominio), camion_1)
+
+        self.vendedor_1.sudo().reparto_camion_asignado_id = camion_2
+        self.assertEqual(PosConfig.search(dominio), camion_2)
 
     def test_usuario_sin_grupo_vendedor_ve_todos_los_pos_config(self):
         usuario_pos_sin_vendedor = self.env['res.users'].create({

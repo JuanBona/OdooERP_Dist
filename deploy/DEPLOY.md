@@ -156,9 +156,12 @@ tardó: ese es el RTO real.
 ## 9. Carga inicial de datos (productos, clientes, camiones, usuarios)
 
 `deploy/carga_inicial.sh` carga de una vez los productos y clientes del cliente, los
-3 POS de camión (con su ubicación, tipo de operación, caja y método de efectivo) y un
+3 POS de camión (con su tipo de operación sobre el stock general, caja y método de efectivo) y un
 usuario por rol (3 transportistas, Administración, Depósito, Gerencia). Es repetible
-(no duplica) y por defecto es un **ensayo que no guarda nada**.
+(no duplica) y por defecto es un **ensayo que no guarda nada**. También deja la lista de precios
+`Default` (sin ella no andan los descuentos por volumen) asignada a los 3 POS, y fija la zona horaria
+`America/Argentina/Buenos_Aires` para todos los usuarios, la empresa y los usuarios nuevos: sin zona
+Odoo calcula "hoy" en UTC y entre las 21 y las 24 hs el viaje, la mora y el despacho saltan al día siguiente.
 
 ```bash
 # En tu PC: Excel -> CSV (los CSV tienen datos de clientes: NO subirlos a git)
@@ -182,7 +185,7 @@ tiene asignados**: sin esa asignación no verá ninguno en el POS.
   *Reparto* (Vendedor / Depósito / Administración Operativa / Gerencia) más el
   grupo estándar de la app que use. A los vendedores, asignarles el camión en
   la pestaña "Camión (Reparto)".
-- Crear los `pos.config` de los camiones (con su ubicación de stock y tipo de
+- Crear los `pos.config` de los camiones (con su tipo de
   operación) y el POS de entrega diferida, si aplica.
 - El cliente carga productos, listas de precios y clientes (importación de
   Odoo, orden: categorías → productos → precios → clientes con vendedor
@@ -205,6 +208,17 @@ docker compose -f docker-compose.prod.yml exec -T odoo \
 docker compose -f docker-compose.prod.yml restart odoo   # obligatorio: cache de menús/assets
 ```
 
-Actualizar solo los módulos custom que cambiaron. Para subir de versión de la
+Actualizar solo los módulos custom que cambiaron. Un módulo **nuevo** (que
+todavía no está instalado en la base de producción) va con `-i`, no con `-u`:
+`-u` ignora en silencio los módulos no instalados. Ej. al pasar de `v1.0.0` a
+una versión con `pos_reparto_caja`: `-i pos_reparto_caja -u <los que cambiaron>`.
+Para confirmar qué quedó instalado:
+
+```bash
+docker compose -f docker-compose.prod.yml exec -T db psql -U "$DB_USER" "$DB_NAME" \
+  -c "select name, state, latest_version from ir_module_module where name like 'pos_%' order by name"
+```
+
+Para subir de versión de la
 imagen de Odoo: probarlo antes en una copia (restore en local) y cambiar el
 digest `ODOO_IMAGE` en `.env`.

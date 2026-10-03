@@ -63,7 +63,8 @@ class PosOrder(models.Model):
             f"del {date_str}. Ante cualquier consulta no dude en comunicarse con nosotros."
         )
         try:
-            mail = self.env['mail.mail'].create({
+            # sudo: el vendedor no tiene ACL de create sobre mail.mail
+            mail = self.env['mail.mail'].sudo().create({
                 'subject': subject,
                 'email_to': self.partner_id.email,
                 'body_html': body,
