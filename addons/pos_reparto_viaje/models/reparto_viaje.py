@@ -19,6 +19,11 @@ class RepartoViaje(models.Model):
     paradas_completadas = fields.Integer(string='Paradas completadas', compute='_compute_progreso')
     progreso = fields.Float(string='Progreso (%)', compute='_compute_progreso')
 
+    @api.depends('chofer_id', 'fecha')
+    def _compute_display_name(self):
+        for viaje in self:
+            viaje.display_name = f"{viaje.chofer_id.name or 'Viaje'} - {viaje.fecha or ''}".strip(' -')
+
     _chofer_fecha_unique = models.Constraint(
         'unique(chofer_id, fecha)',
         'Este chofer ya tiene un viaje asignado para esa fecha.',

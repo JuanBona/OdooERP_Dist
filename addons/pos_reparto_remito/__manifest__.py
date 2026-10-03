@@ -9,6 +9,11 @@
         'report/remito_report.xml',
         'report/remito_template.xml',
     ],
+    'assets': {
+        'point_of_sale._assets_pos': [
+            'pos_reparto_remito/static/src/app/models/pos_order.js',
+        ],
+    },
     'installable': True,
     'application': False,
     'license': 'LGPL-3',

@@ -1,5 +1,7 @@
 # Guía de Usuario — Sistema de Reparto
 
+> **Este manual quedó reemplazado por la guía nueva, organizada por rol y con capturas: `docs/guias/GUIA_USUARIO.md` (PDF: `docs/guias/Guia_de_Usuario_Sistema_de_Reparto.pdf`).** Se conserva como referencia técnica; algunos nombres de botones y medios de pago ya no coinciden con el sistema.
+
 **Rincón del Sur — Peyrano**
 Versión: 2026-09-28
 
