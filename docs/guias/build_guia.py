@@ -3,6 +3,8 @@
     python docs/guias/build_guia.py
 
 Requiere `pip install markdown` y Chrome o Edge (variable CHROME para indicar la ruta del ejecutable).
+Para la copia del cliente con usuarios y claves: GUIA_ACCESOS=<accesos.md fuera del repo> y
+GUIA_SALIDA=<pdf fuera del repo>.
 Las capturas viven en docs/guias/img/ y se referencian como ![texto](img/archivo.jpg).
 """
 import html
@@ -16,7 +18,10 @@ import markdown
 
 AQUI = os.path.dirname(os.path.abspath(__file__))
 SRC = os.path.join(AQUI, "GUIA_USUARIO.md")
-OUT = os.path.join(AQUI, "Guia_de_Usuario_Sistema_de_Reparto.pdf")
+OUT = os.environ.get("GUIA_SALIDA") or os.path.join(AQUI, "Guia_de_Usuario_Sistema_de_Reparto.pdf")
+# Pagina de accesos con usuarios y claves, solo para la copia que se entrega al cliente: se pasa un
+# .md por GUIA_ACCESOS y NUNCA se guarda en el repo (es publico).
+ACCESOS = os.environ.get("GUIA_ACCESOS")
 CANDIDATOS = [
     os.environ.get("CHROME", ""),
     r"C:\Program Files\Google\Chrome\Application\chrome.exe",
@@ -123,6 +128,10 @@ def main():
     texto = open(SRC, encoding="utf-8").read()
     # La portada propia reemplaza el titulo y el texto de bienvenida (hasta el primer salto de pagina)
     texto = texto.split('<div class="page-break"></div>', 1)[1]
+    if ACCESOS:
+        accesos = open(ACCESOS, encoding="utf-8").read()
+        salto = '\n\n<div class="page-break"></div>\n\n'
+        texto = texto.replace("## 1. Antes de empezar", accesos + salto + "## 1. Antes de empezar", 1)
     md = markdown.Markdown(extensions=["tables", "sane_lists", "toc", "md_in_html"],
                            extension_configs={"toc": {"slugify": slugify}})
     cuerpo = procesar_figuras(md.convert(texto))
