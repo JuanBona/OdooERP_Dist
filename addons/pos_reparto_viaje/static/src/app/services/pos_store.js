@@ -7,7 +7,23 @@ patch(PosStore.prototype, {
         const params = new URLSearchParams(window.location.search);
         const partnerId = params.get("reparto_partner_id");
         if (partnerId) {
-            const partner = this.models["res.partner"].get(parseInt(partnerId, 10));
+            const id = parseInt(partnerId, 10);
+            let partner = this.models["res.partner"].get(id);
+            if (!partner) {
+                // Odoo 19 carga los clientes bajo demanda: al abrir el POS solo hay un
+                // par en memoria, asi que hay que pedirle al servidor el de la parada
+                // (mismo metodo que usa la lista de clientes del POS).
+                try {
+                    await this.data.callRelated("res.partner", "get_new_partner", [
+                        this.config.id,
+                        [["id", "=", id]],
+                        0,
+                    ]);
+                } catch (error) {
+                    console.warn("reparto: no se pudo traer el cliente de la parada", error);
+                }
+                partner = this.models["res.partner"].get(id);
+            }
             if (partner) {
                 // this.getOrder() puede ser undefined aca: al terminar setup(),
                 // todavia no se creo ninguna orden (eso pasa recien al entrar a
