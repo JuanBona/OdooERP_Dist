@@ -1,4 +1,4 @@
-from datetime import timedelta
+from datetime import date, datetime, timedelta
 from unittest.mock import patch
 
 from odoo import Command, fields
@@ -221,6 +221,20 @@ class TestRepartoComision(TransactionCase):
         self.env['pos.reparto.comision.linea'].create(vals)
         with self.assertRaises(Exception):
             self.env['pos.reparto.comision.linea'].create(vals)
+
+    def test_venta_nocturna_argentina_queda_con_la_fecha_argentina(self):
+        """Venta a las 22:30 AR (01:30 UTC del día siguiente): la comisión es del día AR, no del UTC."""
+        vendedor = self._crear_vendedor('Vendedor Comision Noche', pct=10.0)
+        partner = self._crear_partner('Cliente Comision Noche', vendedor)
+        orden = self._crear_orden(partner, self.metodo_efectivo, 500.0)
+        orden.date_order = datetime(2026, 10, 4, 1, 30, 0)
+
+        orden.with_context(tz='America/Argentina/Buenos_Aires').write({'state': 'paid'})
+
+        linea = self.env['pos.reparto.comision.linea'].search([
+            ('pos_payment_id', '=', orden.payment_ids[0].id),
+        ])
+        self.assertEqual(linea.fecha, date(2026, 10, 3))
 
     def test_pedido_efectivo_pagado_genera_linea_venta_directa(self):
         vendedor = self._crear_vendedor('Vendedor Comision Cash', pct=10.0)
