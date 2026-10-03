@@ -156,7 +156,7 @@ tardó: ese es el RTO real.
 ## 9. Carga inicial de datos (productos, clientes, camiones, usuarios)
 
 `deploy/carga_inicial.sh` carga de una vez los productos y clientes del cliente, los
-3 POS de camión (con su ubicación, tipo de operación, caja y método de efectivo) y un
+3 POS de camión (con su tipo de operación sobre el stock general, caja y método de efectivo) y un
 usuario por rol (3 transportistas, Administración, Depósito, Gerencia). Es repetible
 (no duplica) y por defecto es un **ensayo que no guarda nada**.
 
@@ -182,7 +182,7 @@ tiene asignados**: sin esa asignación no verá ninguno en el POS.
   *Reparto* (Vendedor / Depósito / Administración Operativa / Gerencia) más el
   grupo estándar de la app que use. A los vendedores, asignarles el camión en
   la pestaña "Camión (Reparto)".
-- Crear los `pos.config` de los camiones (con su ubicación de stock y tipo de
+- Crear los `pos.config` de los camiones (con su tipo de
   operación) y el POS de entrega diferida, si aplica.
 - El cliente carga productos, listas de precios y clientes (importación de
   Odoo, orden: categorías → productos → precios → clientes con vendedor

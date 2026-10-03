@@ -1,4 +1,4 @@
-# Carga inicial de un cliente: productos, clientes, 3 camiones (ubicación, tipo de
+# Carga inicial de un cliente: productos, clientes, 3 camiones (tipo de
 # operación, caja, método de pago y POS) y usuarios por rol. Se corre con
 # `odoo shell` (ver deploy/carga_inicial.sh, que lo invoca). Es REPETIBLE: lo que
 # ya existe se saltea o se actualiza, nada se duplica.
@@ -82,21 +82,12 @@ if not cta_cte:  # sin diario => tipo pay_later (cuenta corriente)
     cta_cte = env["pos.payment.method"].create({"name": "Cuenta corriente"})
 pos_por_camion = {}
 for n in range(1, N_CAMIONES + 1):
-    loc = env["stock.location"].search([("name", "=", f"Camion {n}"), ("location_id", "=", wh.lot_stock_id.id)], limit=1) \
-        or env["stock.location"].create({"name": f"Camion {n}", "usage": "internal", "location_id": wh.lot_stock_id.id})
+    # Los camiones venden contra el stock general (WH/Stock), sin ubicacion propia
     ptype = env["stock.picking.type"].search([("sequence_code", "=", f"VCAM{n}"), ("warehouse_id", "=", wh.id)], limit=1) \
         or env["stock.picking.type"].create({
             "name": f"Venta Camion {n}", "code": "outgoing", "sequence_code": f"VCAM{n}",
-            "warehouse_id": wh.id, "default_location_src_id": loc.id,
+            "warehouse_id": wh.id, "default_location_src_id": wh.lot_stock_id.id,
             "default_location_dest_id": clientes_dest.id})
-    # Carga (depósito -> camión) y Descarga (camión -> depósito): rutina diaria de stock
-    for prefijo, codigo, origen, destino in (
-            ("Carga", "CAM", wh.lot_stock_id, loc), ("Descarga", "DCAM", loc, wh.lot_stock_id)):
-        if not env["stock.picking.type"].search_count([("sequence_code", "=", f"{codigo}{n}"), ("warehouse_id", "=", wh.id)]):
-            env["stock.picking.type"].create({
-                "name": f"{prefijo} Camion {n}", "code": "internal", "sequence_code": f"{codigo}{n}",
-                "warehouse_id": wh.id, "default_location_src_id": origen.id,
-                "default_location_dest_id": destino.id})
     jrn = env["account.journal"].search([("code", "=", f"CJ{n}"), ("type", "=", "cash")], limit=1) \
         or env["account.journal"].create({"name": f"Caja Camion {n}", "code": f"CJ{n}", "type": "cash"})
     efectivo = env["pos.payment.method"].search([("name", "=", f"Efectivo Camion {n}")], limit=1) \
@@ -109,7 +100,7 @@ for n in range(1, N_CAMIONES + 1):
     if not cfg.reparto_despacho_diferido:
         cfg.reparto_despacho_diferido = True
     pos_por_camion[n] = cfg
-print(f"Camiones: {N_CAMIONES} POS + tipos Carga/Descarga listos ({', '.join(c.name for c in pos_por_camion.values())})")
+print(f"Camiones: {N_CAMIONES} POS listos, venden de stock general ({', '.join(c.name for c in pos_por_camion.values())})")
 
 # --- Usuarios por rol --------------------------------------------------------
 G = "pos_reparto_security."
