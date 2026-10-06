@@ -242,7 +242,9 @@ PY
 "${DC[@]}" restart odoo
 ```
 
-Después, en cada celular de chofer: menú ☰ del POS → **Volver a cargar datos**.
+Después, en cada celular de chofer: menú ☰ del POS → **Volver a cargar datos** → **Completo** (no
+"Limitado"). Sin esto el navegador sigue con la copia vieja de los productos: el stock de cada producto
+se ve como `?` y los descuentos por cantidad no se aplican.
 
 Para subir de versión de la
 imagen de Odoo: probarlo antes en una copia (restore en local) y cambiar el

@@ -433,7 +433,10 @@ No está cargado en el camión, o no tiene tildado **Punto de venta** (sección 
 No, es informativo.
 
 **Cambié un descuento pero el camión no lo toma.**
-En la tablet: menú **☰** → **Volver a cargar datos**. Si no, cerrá y abrí el punto de venta.
+En la tablet: menú **☰** → **Volver a cargar datos** → **Completo**. Si no, cerrá y abrí el punto de venta.
+
+**Veo un `?` en vez del stock de los productos (o el descuento por cantidad no se aplica).**
+El navegador tiene una copia vieja de los productos, típico después de una actualización del sistema. Menú **☰** → **Volver a cargar datos** → **Completo**.
 
 **La pantalla queda cargando y no abre (después de una actualización).**
 Es una copia vieja guardada en el navegador. Probá en una pestaña privada; si anda, borrá los **datos del sitio** en la configuración del navegador.
