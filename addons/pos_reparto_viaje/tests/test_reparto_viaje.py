@@ -1,3 +1,5 @@
+from datetime import timedelta
+
 from odoo import Command
 from odoo import fields
 from odoo.tests.common import TransactionCase, tagged
@@ -346,6 +348,17 @@ class TestRepartoViaje(TransactionCase):
         datos = self.session.with_user(self.admin_op).get_closing_control_data()
 
         self.assertEqual(datos['reparto_cobros_viaje'], {'efectivo': 300.0, 'transferencia': 200.0})
+
+    def test_cierre_de_caja_no_repite_cobros_ya_informados_en_la_caja_anterior(self):
+        # Dos cajas el mismo dia: lo cobrado antes del cierre de la primera ya se informo ahi.
+        self.chofer_1.reparto_camion_asignado_id = self.pos_config
+        self._crear_linea_por_cobrar(self.cliente_a, 1000.0, self.hoy)
+        parada = self._crear_viaje(self.chofer_1, self.hoy, [self.cliente_a]).parada_ids[0]
+        parada.with_user(self.chofer_1).action_cobrar_deuda(300.0, 'efectivo')
+        self.session.write({'state': 'closed', 'stop_at': fields.Datetime.now() + timedelta(seconds=1)})
+        nueva = self.env['pos.session'].create({'config_id': self.pos_config.id, 'user_id': self.admin_op.id})
+
+        self.assertEqual(nueva._reparto_cobros_viaje(), {'efectivo': 0.0, 'transferencia': 0.0})
 
     def test_cierre_de_caja_no_suma_cobros_de_otro_camion(self):
         self.chofer_1.reparto_camion_asignado_id = self.pos_config

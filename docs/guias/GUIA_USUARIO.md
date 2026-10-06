@@ -265,7 +265,7 @@ Un **viaje** es la hoja de ruta de un chofer para un día: la lista de clientes 
 
 ![Descuentos por volumen: dos tramos](img/adm_producto_descuentos.jpg)
 
-> Después de cambiar precios o descuentos, en la tablet del chofer: menú **☰ → Volver a cargar datos**.
+> Después de cambiar precios o descuentos, en la tablet del chofer: menú **☰ → Volver a cargar datos → Completo**.
 
 ### 3.4 Ver los pedidos y emitir el remito
 
@@ -508,7 +508,10 @@ No tiene tildado **Punto de venta** (3.3).
 No, es solo informativo.
 
 **Cambié un precio o un descuento y el camión no lo toma.**
-En la tablet: menú **☰ → Volver a cargar datos**. Si no, cerrá y abrí el punto de venta.
+En la tablet: menú **☰ → Volver a cargar datos → Completo**. Si no, cerrá y abrí el punto de venta.
+
+**Veo un `?` en vez del stock de los productos (o el descuento por cantidad no se aplica).**
+El navegador tiene una copia vieja de los productos, típico después de una actualización del sistema. Menú **☰ → Volver a cargar datos → Completo**.
 
 **Una venta a cuenta corriente no aparece en Deudores.**
 La deuda se registra al **cerrar la caja** del chofer (2.6).
