@@ -10,21 +10,24 @@ import { Pedidos, PedidoDetalle } from "./views/Pedidos.jsx";
 import { Deposito, DepoPedido } from "./views/Deposito.jsx";
 import Articulos from "./views/Articulos.jsx";
 import Usuarios from "./views/Usuarios.jsx";
+import Caja from "./views/Caja.jsx";
+import Resumen from "./views/Resumen.jsx";
+import { sincronizar, useConexion } from "./lib/offline";
 
 const Ctx = createContext(null);
 export const useApp = () => useContext(Ctx);
 
 const TABS = {
-  vendedor: [["inicio", "Inicio"], ["clientes", "Clientes"], ["catalogo", "Catálogo"], ["pedidos", "Mis pedidos"]],
+  vendedor: [["inicio", "Inicio"], ["clientes", "Clientes"], ["catalogo", "Catálogo"], ["pedidos", "Mis pedidos"], ["caja", "Caja"]],
   deposito: [["deposito", "Preparación"]],
-  admin: [["inicio", "Inicio"], ["pedidos", "Pedidos"], ["deposito", "Depósito"], ["clientes", "Clientes"], ["catalogo", "Catálogo"], ["articulos", "Artículos"]],
-  gerencia: [["inicio", "Inicio"], ["pedidos", "Pedidos"], ["deposito", "Depósito"], ["clientes", "Clientes"], ["catalogo", "Catálogo"], ["articulos", "Artículos"], ["usuarios", "Usuarios"]],
+  admin: [["inicio", "Inicio"], ["pedidos", "Pedidos"], ["deposito", "Depósito"], ["clientes", "Clientes"], ["catalogo", "Catálogo"], ["caja", "Caja"], ["articulos", "Artículos"]],
+  gerencia: [["inicio", "Inicio"], ["resumen", "Resumen del mes"], ["pedidos", "Pedidos"], ["deposito", "Depósito"], ["clientes", "Clientes"], ["catalogo", "Catálogo"], ["caja", "Caja"], ["articulos", "Artículos"], ["usuarios", "Usuarios"]],
 };
 
 const VIEWS = {
   inicio: Inicio, clientes: Clientes, cliente: ClienteDetalle, catalogo: Catalogo, confirmar: Confirmar,
   pedidos: Pedidos, pedido: PedidoDetalle, deposito: Deposito, depoPedido: DepoPedido,
-  articulos: Articulos, usuarios: Usuarios,
+  articulos: Articulos, usuarios: Usuarios, caja: Caja, resumen: Resumen,
 };
 
 export default function App() {
@@ -40,8 +43,14 @@ export default function App() {
     try { localStorage.setItem("rds-dark", dark ? "1" : "0"); } catch {}
   }, [dark]);
 
+  const { online, outbox } = useConexion();
   const go = (view, params = {}) => { setNav({ view, params }); window.scrollTo(0, 0); };
-  const toast = m => { setMsg(m); setTimeout(() => setMsg(null), 2600); };
+  const toast = m => { setMsg(m); setTimeout(() => setMsg(null), 3200); };
+
+  // Al volver la señal se envían solos los pedidos que quedaron esperando.
+  useEffect(() => { if (online) sincronizar(toast); }, [online]);
+  // Entregas automáticas: lo que salió ayer en reparto pasa a Entregado.
+  useEffect(() => { api.cerrarRepartos(); }, []);
   const login = u => {
     setUser(u);
     setCart({ clienteId: null, items: {}, manual: {}, obs: "" });
@@ -72,6 +81,12 @@ export default function App() {
         <nav className="tabs">
           {tabs.map(([k, l]) => <button key={k} className={activo === k ? "on" : ""} onClick={() => go(k)}>{l}</button>)}
         </nav>
+      )}
+      {(!online || outbox.length > 0) && (
+        <div className="offline-bar" role="status">
+          {!online ? "Sin señal. Podés seguir cargando pedidos: se envían solos cuando vuelva la conexión." : "Enviando pedidos guardados…"}
+          {outbox.length > 0 && <b> · {outbox.length} {outbox.length === 1 ? "pedido esperando" : "pedidos esperando"}</b>}
+        </div>
       )}
       <main><View /></main>
       {cartCount > 0 && nav.view === "catalogo" && (

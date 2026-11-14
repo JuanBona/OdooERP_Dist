@@ -13,7 +13,7 @@ export function Deposito() {
     return (
       <div className="list-item" onClick={() => go("depoPedido", { id: p.id })}>
         <div className="avatar">#{p.id}</div>
-        <div style={{ flex: 1, minWidth: 0 }}><b>{c.nombre}</b><div className="muted">{c.localidad || c.dir}{c.dia ? " · " + c.dia : ""} · {bultos} bultos</div></div>
+        <div style={{ flex: 1, minWidth: 0 }}><b>{c.nombre}</b><div className="muted">{c.localidad || c.dir}{c.dia ? " · " + c.dia : ""} · {bultos} {bultos === 1 ? "bulto" : "bultos"}</div></div>
         <div style={{ textAlign: "right" }}><ChipEstado e={p.estado} />{p.estado === "preparando" && <div className="muted">{p.hechos.length}/{p.lineas.length}</div>}</div>
       </div>
     );

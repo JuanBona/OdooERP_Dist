@@ -4,5 +4,5 @@ import react from "@vitejs/plugin-react";
 export default defineConfig({
   plugins: [react()],
   base: "./",
-  build: process.env.INLINE ? { assetsInlineLimit: 1e8, cssCodeSplit: false } : {},
+  build: process.env.INLINE ? { assetsInlineLimit: 1e8, cssCodeSplit: false } : { assetsInlineLimit: 40000 }, // logo embebido: se ve sin señal
 });

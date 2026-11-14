@@ -5,6 +5,7 @@ import { ESTADOS, fmt, puede } from "../lib/reglas";
 import { ChipCuenta, ChipEstado, fechaHora } from "./ui.jsx";
 import { PedidoRow } from "./Inicio.jsx";
 import logo from "../assets/logo.jpg";
+import { descartar, useConexion } from "../lib/offline";
 
 export function Pedidos() {
   const { db, user, params } = useApp();
@@ -21,12 +22,38 @@ export function Pedidos() {
         <select value={estado} onChange={e => setEstado(e.target.value)}><option value="">Todos los estados</option>
           {Object.entries(ESTADOS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select>
       </div>
+      <Bandeja />
       <div className="card">{list.length ? list.map(p => <PedidoRow key={p.id} p={p} />) : <div className="empty">No hay pedidos con ese filtro.</div>}</div>
     </>
   );
 }
 
-const PASOS = [["porAutorizar", "Autorización"], ["pendiente", "Depósito"], ["preparando", "Preparando"], ["preparado", "Listo"], ["enReparto", "En reparto"], ["entregado", "Entregado"]];
+// Pedidos cargados sin señal que todavía no llegaron al sistema.
+function Bandeja() {
+  const { db, user } = useApp();
+  const { outbox } = useConexion();
+  const mios = outbox.filter(o => o.user.id === user.id);
+  if (!mios.length) return null;
+  return (
+    <div className="card" style={{ marginBottom: 12, borderColor: "var(--pend)" }}>
+      <h2>Esperando señal para enviarse</h2>
+      {mios.map(o => {
+        const c = db.clientes.find(x => x.id === o.data.clienteId);
+        const bultos = o.data.items.reduce((s, i) => s + i.cant, 0);
+        return (
+          <div key={o.uid} className="list-item" style={{ cursor: "default" }}>
+            <div className="avatar">⏳</div>
+            <div style={{ flex: 1, minWidth: 0 }}><b>{c?.nombre}</b><div className="muted">{bultos} {bultos === 1 ? "bulto" : "bultos"} · cargado {fechaHora(o.creado)}</div>
+              {o.error && <div className="chip warn" style={{ marginTop: 4 }}>No se pudo enviar: {o.error}</div>}</div>
+            {o.error ? <button className="btn sec sm" onClick={() => descartar(o.uid)}>Descartar</button> : <span className="chip st-pendiente">Pendiente de envío</span>}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+const PASOS =[["porAutorizar", "Autorización"], ["pendiente", "Depósito"], ["preparando", "Preparando"], ["preparado", "Listo"], ["enReparto", "En reparto"], ["entregado", "Entregado"]];
 
 export function PedidoDetalle() {
   const { db, user, go, params, toast } = useApp();

@@ -32,12 +32,15 @@ function inicial() {
   Object.assign(clientes[2], { saldo: -12800, ultimoPago: d(5), vendedorId: 1 });
   Object.assign(clientes[0], { vendedorId: 1 });
   Object.assign(clientes[3], { vendedorId: 2 });
-  return { usuarios, productos, clientes, pedidos: [], cobros: [], auditoria: [], seq: 1 };
+  return { usuarios, productos, clientes, pedidos: [], cobros: [], gastos: [], cajas: [], auditoria: [], seq: 1 };
 }
 
 function load() {
-  try { const raw = localStorage.getItem(KEY); if (raw) return JSON.parse(raw); } catch {}
-  return inicial();
+  let d = null;
+  try { const raw = localStorage.getItem(KEY); if (raw) d = JSON.parse(raw); } catch {}
+  d = d || inicial();
+  d.gastos ||= []; d.cajas ||= [];
+  return d;
 }
 function save() {
   try { localStorage.setItem(KEY, JSON.stringify(db)); } catch {}
@@ -87,6 +90,7 @@ export const api = {
     if (estado === "entregado") {
       db.clientes.find(c => c.id === p.clienteId).saldo -= p.total; // va a cuenta corriente
     }
+    if (estado === "enReparto") p.salio = hoyISO();
     p.estado = estado;
     p.historial.push({ fecha: new Date().toISOString(), usuario: user.nombre, txt });
     audit(user, txt, "#" + p.id);
@@ -103,13 +107,68 @@ export const api = {
     save();
   },
 
+  // ---- Caja: una sesión por usuario. Abrir → cobros/gastos → cerrar contando → Administración recibe ----
+  cajaAbierta(userId) { return db.cajas.find(c => c.usuarioId === userId && c.estado === "abierta") || null; },
+
+  abrirCaja(user, fondo) {
+    if (api.cajaAbierta(user.id)) throw new Error("Ya tenés una caja abierta.");
+    const caja = { id: db.cajas.length + 1, usuarioId: user.id, abierta: new Date().toISOString(), fondo: Math.round(+fondo || 0),
+      estado: "abierta", cerrada: null, contado: null, recibidaPor: null, recibida: null, obs: "" };
+    db.cajas.unshift(caja);
+    audit(user, `Abrió caja con fondo $${caja.fondo}`, "Caja " + caja.id);
+    save();
+    return caja;
+  },
+
   registrarCobro(user, clienteId, monto, medio) {
+    const caja = api.cajaAbierta(user.id);
+    if (!caja) throw new Error("Abrí tu caja antes de cobrar (pestaña Caja).");
     const c = db.clientes.find(x => x.id === clienteId);
+    const vend = db.usuarios.find(u => u.id === c.vendedorId);
     c.saldo += monto;
     c.ultimoPago = hoyISO(); // cualquier pago reinicia el contador de 15 días
-    db.cobros.unshift({ fecha: hoyISO(), clienteId, vendedorId: c.vendedorId, monto, medio, usuario: user.nombre });
+    const comision = Math.round(monto * (vend?.comisionPct || 0) / 100); // RF-GV-03: sobre lo cobrado
+    db.cobros.unshift({ id: db.cobros.length + 1, fecha: hoyISO(), hora: new Date().toISOString(), clienteId, vendedorId: c.vendedorId,
+      monto, medio, comision, cajaId: caja.id, usuario: user.nombre });
     audit(user, `Cobro ${medio} $${monto}`, c.nombre);
     save();
+  },
+
+  registrarGasto(user, { categoria, monto, medio, detalle }) {
+    const caja = api.cajaAbierta(user.id);
+    if (!caja) throw new Error("Abrí tu caja antes de cargar un gasto.");
+    db.gastos.unshift({ id: db.gastos.length + 1, fecha: hoyISO(), hora: new Date().toISOString(), categoria,
+      monto: Math.round(+monto), medio, detalle, cajaId: caja.id, usuarioId: user.id });
+    audit(user, `Gasto ${categoria} $${monto}`, "Caja " + caja.id);
+    save();
+  },
+
+  cerrarCaja(user, contado, obs) {
+    const caja = api.cajaAbierta(user.id);
+    if (!caja) throw new Error("No tenés una caja abierta.");
+    Object.assign(caja, { estado: "cerrada", cerrada: new Date().toISOString(), contado: Math.round(+contado || 0), obs: obs || "" });
+    audit(user, `Cerró caja (contó $${caja.contado})`, "Caja " + caja.id);
+    save();
+  },
+
+  recibirRendicion(user, cajaId) {
+    const caja = db.cajas.find(c => c.id === cajaId);
+    Object.assign(caja, { estado: "rendida", recibidaPor: user.nombre, recibida: new Date().toISOString() });
+    audit(user, "Recibió rendición", "Caja " + caja.id);
+    save();
+  },
+
+  // Entregas automáticas: lo que salió en reparto un día anterior pasa solo a Entregado.
+  cerrarRepartos() {
+    const hoy = hoyISO(); let n = 0;
+    db.pedidos.filter(p => p.estado === "enReparto" && p.salio && p.salio < hoy).forEach(p => {
+      db.clientes.find(c => c.id === p.clienteId).saldo -= p.total;
+      p.estado = "entregado";
+      p.historial.push({ fecha: new Date().toISOString(), usuario: "Sistema", txt: "Entregado automáticamente al cierre del día" });
+      n++;
+    });
+    if (n) save();
+    return n;
   },
 
   guardarProducto(user, prod) {

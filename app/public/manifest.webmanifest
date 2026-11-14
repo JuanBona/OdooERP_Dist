@@ -1,0 +1,9 @@
+{
+  "name": "Rincón del Sur",
+  "short_name": "Rincón del Sur",
+  "start_url": "./",
+  "display": "standalone",
+  "background_color": "#F8F3F1",
+  "theme_color": "#C03028",
+  "lang": "es-AR"
+}

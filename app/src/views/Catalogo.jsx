@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { useApp } from "../App.jsx";
-import { api } from "../api/demo";
+import { enviarPedido } from "../lib/offline";
 import { calcLinea, fmt, nuevoEstadoPedido, proximoTramo, puede } from "../lib/reglas";
 import { ChipCuenta, ProdImg } from "./ui.jsx";
 import { misClientes } from "./Inicio.jsx";
@@ -130,8 +130,10 @@ export function Confirmar() {
     if (!c) return toast("Elegí un cliente primero");
     if (!items.length) return toast("El pedido está vacío");
     try {
-      const p = api.crearPedido(user, { clienteId: c.id, items, obs: cart.obs });
+      const r = enviarPedido(user, { clienteId: c.id, items, obs: cart.obs });
       setCart({ clienteId: null, items: {}, manual: {}, obs: "" });
+      if (r.enCola) { toast("Sin señal: el pedido quedó guardado y se envía solo cuando vuelva la conexión."); go("pedidos"); return; }
+      const p = r.pedido;
       toast(p.estado === "porAutorizar" ? `Pedido #${p.id} enviado. Queda por autorizar (cliente con deuda).` : `Pedido #${p.id} enviado al depósito`);
       go("pedido", { id: p.id });
     } catch (e) { toast(e.message); }
