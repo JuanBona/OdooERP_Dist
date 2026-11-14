@@ -70,14 +70,13 @@ Referencias: ✅ ya está en la maqueta · 🟡 está, falta un ajuste · 🔴 n
 4. **Autorización:** solo pasan por "Por autorizar" los pedidos de **clientes con deuda**. El resto va directo al depósito.
 5. **Finanzas:** por **mes calendario**.
 
-## 6b. Datos que hay que pedirle al cliente
+## 6b. Respuestas del cliente sobre datos (14/11/2026)
 
-- Fotos de los productos (o permiso para usar fotos genéricas de cada marca).
-- Día de visita y localidad de cada cliente.
-- % de comisión de cada vendedor.
-- Tramos de descuento por producto (ej. 10+ = 4%, 20+ = 8%).
-- Límite de crédito por cliente, si lo usa.
-- Usuarios: nombre y rol de cada persona (Vendedor, Depósito, Administración, Gerencia).
+- **Entregas automáticas** (punto 3 de arriba): **aprobado**.
+- **Fotos:** genéricas por ahora; el admin puede subir la foto real de cada producto desde Artículos.
+- **Día de visita / localidad, % de comisión, tramos de descuento:** los **carga el cliente** desde la app (Clientes, Usuarios y Artículos). No se precargan.
+- **Límite de crédito:** queda como **mejora a futuro**, no va en la v1.
+- **Usuarios:** genéricos, con los 4 roles. El cliente los renombra después.
 
 ## 7. Etapas
 
