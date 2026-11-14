@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useEffect, useState, useSyncExternalStore } from "react";
-import { api } from "./api/demo";
+import { api } from "./api";
 import { ROLES } from "./lib/reglas";
 import logo from "./assets/logo.jpg";
 import Login from "./views/Login.jsx";
@@ -52,6 +52,8 @@ export default function App() {
   useEffect(() => { if (online) sincronizar(toast); }, [online]);
   // Entregas automáticas: lo que salió ayer en reparto pasa a Entregado.
   useEffect(() => { api.cerrarRepartos(); }, []);
+  // Si ya había entrado en este dispositivo (modo Supabase), entra directo.
+  useEffect(() => { api.sesionGuardada?.().then(u => u && login(u)).catch(() => {}); }, []);
   const login = u => {
     setUser(u);
     setCart({ clienteId: null, items: {}, manual: {}, obs: "" });
@@ -76,7 +78,7 @@ export default function App() {
           <div><div className="who-n">{user.nombre}</div><div className="sub">{ROLES[user.rol]}</div></div>
         </div>
         <button className="iconbtn" title={dark ? "Modo claro" : "Modo oscuro"} aria-label="Cambiar modo" onClick={() => setDark(!dark)}><Icon n={dark ? "sol" : "luna"} s={18} /></button>
-        <button className="iconbtn" title="Salir" aria-label="Salir" onClick={() => setUser(null)}><Icon n="salir" s={18} /></button>
+        <button className="iconbtn" title="Salir" aria-label="Salir" onClick={() => { api.salir?.(); setUser(null); }}><Icon n="salir" s={18} /></button>
       </div>
       {tabs.length > 1 && (
         <nav className={"tabs" + (tabs.length > 5 ? " muchas" : "")}>

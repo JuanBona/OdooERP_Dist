@@ -2,7 +2,7 @@
 // Si no hay conexión, el pedido se guarda en una "bandeja de salida" en el teléfono
 // y se envía solo cuando vuelve la señal. El vendedor no tiene que hacer nada.
 import { useSyncExternalStore } from "react";
-import { api } from "../api/demo";
+import { api } from "../api";
 
 const KEY = "rds-outbox-v1";
 const listeners = new Set();
@@ -22,29 +22,42 @@ export function useConexion() {
 }
 
 // Devuelve { pedido } si se envió, o { enCola: true } si quedó esperando señal.
-export function enviarPedido(user, data) {
-  if (!navigator.onLine) {
-    outbox.push({ uid: Date.now() + "-" + Math.random().toString(36).slice(2, 7), user, data, creado: new Date().toISOString(), error: null });
-    guardar();
-    return { enCola: true };
+const esCorte = e => !navigator.onLine || /conexión|Failed to fetch|NetworkError|Load failed/i.test(e?.message || "");
+const encolar = (user, data) => {
+  outbox.push({ uid: Date.now() + "-" + Math.random().toString(36).slice(2, 7), user, data, creado: new Date().toISOString(), error: null });
+  guardar();
+  return { enCola: true };
+};
+
+export async function enviarPedido(user, data) {
+  if (!navigator.onLine) return encolar(user, data);
+  try {
+    return { pedido: await api.crearPedido(user, data) };
+  } catch (e) {
+    if (esCorte(e)) return encolar(user, data); // la señal se cortó justo al enviar
+    throw e;                                     // error real (sin stock, sin permiso…)
   }
-  return { pedido: api.crearPedido(user, data) };
 }
 
-export function sincronizar(onResultado) {
-  if (!navigator.onLine || !outbox.length) return;
-  const pendientes = outbox; outbox = [];
-  for (const it of pendientes) {
-    try {
-      const p = api.crearPedido(it.user, it.data);
-      onResultado?.(`Se envió el pedido #${p.id} que estaba esperando señal`);
-    } catch (e) {
-      // Ej.: se quedó sin stock mientras no había señal. Queda en la bandeja con el motivo.
-      outbox.push({ ...it, error: e.message });
-      onResultado?.("Un pedido sin señal no se pudo enviar: " + e.message);
+let sincronizando = false;
+export async function sincronizar(onResultado) {
+  if (sincronizando || !navigator.onLine || !outbox.some(x => !x.error)) return;
+  sincronizando = true;
+  try {
+    for (const it of outbox.filter(x => !x.error)) {
+      try {
+        const p = await api.crearPedido(it.user, it.data);
+        outbox = outbox.filter(x => x.uid !== it.uid);
+        onResultado?.(`Se envió el pedido #${p.id} que estaba esperando señal`);
+      } catch (e) {
+        if (esCorte(e)) break; // se volvió a cortar: queda para la próxima
+        // Ej.: se quedó sin stock mientras no había señal. Queda en la bandeja con el motivo.
+        outbox = outbox.map(x => x.uid === it.uid ? { ...x, error: e.message } : x);
+        onResultado?.("Un pedido sin señal no se pudo enviar: " + e.message);
+      }
+      guardar();
     }
-  }
-  guardar();
+  } finally { sincronizando = false; guardar(); }
 }
 
 export function descartar(uid) { outbox = outbox.filter(x => x.uid !== uid); guardar(); }

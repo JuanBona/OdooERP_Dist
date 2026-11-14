@@ -1,7 +1,7 @@
 import { Icon, Avatar } from "./icons.jsx";
 import React, { useState } from "react";
 import { useApp } from "../App.jsx";
-import { api } from "../api/demo";
+import { api } from "../api";
 import { fmt } from "../lib/reglas";
 import { ProdImg } from "./ui.jsx";
 
@@ -49,11 +49,11 @@ function EditarArticulo({ p, onClose }) {
     }; img.src = r.result; };
     r.readAsDataURL(file);
   };
-  const guardar = () => {
+  const guardar = async () => {
     if (!f.nombre.trim()) return toast("Poné el nombre del artículo");
     const tramos = f.tramos.filter(t => +t.min > 0 && +t.pct > 0).map(t => ({ min: +t.min, pct: +t.pct })).sort((a, b) => a.min - b.min);
-    api.guardarProducto(user, { ...f, precio: +f.precio, stock: +f.stock, stockMin: +f.stockMin, tramos });
-    toast("Artículo guardado"); onClose();
+    try { await api.guardarProducto(user, { ...f, precio: +f.precio, stock: +f.stock, stockMin: +f.stockMin, tramos }); toast("Artículo guardado"); onClose(); }
+    catch (e) { toast(e.message); }
   };
   return (
     <div className="modal-back" onClick={onClose}>

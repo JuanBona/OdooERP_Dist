@@ -1,7 +1,7 @@
 import { Icon, Avatar } from "./icons.jsx";
 import React from "react";
 import { useApp } from "../App.jsx";
-import { api } from "../api/demo";
+import { api } from "../api";
 import { ChipEstado } from "./ui.jsx";
 
 export function Deposito() {
@@ -46,7 +46,7 @@ export function DepoPedido() {
       {p.lineas.map((l, i) => {
         const hecho = p.hechos.includes(i);
         return (
-          <div key={i} className={"check-line" + (hecho ? " done" : "")} onClick={() => editable && api.tildar(user, p.id, i)}>
+          <div key={i} className={"check-line" + (hecho ? " done" : "")} onClick={() => editable && Promise.resolve(api.tildar(user, p.id, i)).catch(e => toast(e.message))}>
             <div className="box">{hecho ? "✓" : ""}</div>
             <div style={{ flex: 1 }}><b style={{ fontSize: 16 }}>{l.cant} ×</b> {l.nombre}</div>
           </div>
@@ -54,7 +54,7 @@ export function DepoPedido() {
       })}
       {p.obs && <p className="muted"><Icon n="nota" s={15} style={{ verticalAlign: "-2px" }} /> {p.obs}</p>}
       {editable && <button className="btn blk" style={{ marginTop: 12, opacity: completo ? 1 : .5 }} disabled={!completo}
-        onClick={() => { api.cambiarEstado(user, p.id, "preparado", "Preparado"); toast("Pedido #" + p.id + " listo para salir"); go("deposito"); }}>
+        onClick={async () => { try { await api.cambiarEstado(user, p.id, "preparado", "Preparado"); toast("Pedido #" + p.id + " listo para salir"); go("deposito"); } catch (e) { toast(e.message); } }}>
         {completo ? "✓ Pedido preparado" : `Faltan ${p.lineas.length - p.hechos.length} productos`}</button>}
       {p.estado === "preparado" && <button className="btn sec blk" style={{ marginTop: 12 }} onClick={() => go("pedido", { id: p.id })}>Ver pedido e imprimir remito</button>}
     </>

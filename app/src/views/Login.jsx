@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { api } from "../api/demo";
+import { api } from "../api";
 import { ROLES } from "../lib/reglas";
 import logo from "../assets/logo.jpg";
 
@@ -7,8 +7,10 @@ export default function Login({ onLogin }) {
   const [usuario, setUsuario] = useState("");
   const [clave, setClave] = useState("");
   const [err, setErr] = useState("");
-  const entrar = (u, c) => {
-    try { onLogin(api.login(u, c)); } catch (e) { setErr(e.message); }
+  const [entrando, setEntrando] = useState(false);
+  const entrar = async (u, c) => {
+    setEntrando(true); setErr("");
+    try { onLogin(await api.login(u, c)); } catch (e) { setErr(e.message); } finally { setEntrando(false); }
   };
   return (
     <div className="login-wrap">
@@ -19,7 +21,7 @@ export default function Login({ onLogin }) {
         <div className="field"><label htmlFor="lg-pass">Clave</label>
           <input id="lg-pass" type="password" autoComplete="current-password" value={clave} onChange={e => setClave(e.target.value)} /></div>
         {err && <p className="chip warn" style={{ display: "block", marginBottom: 10, borderRadius: 8, padding: 8 }}>{err}</p>}
-        <button className="btn blk" type="submit">Entrar</button>
+        <button className="btn blk" type="submit" disabled={entrando}>{entrando ? "Entrando…" : "Entrar"}</button>
         {api.modo === "demo" && <>
           <p className="muted" style={{ marginTop: 18, textAlign: "center" }}>Demo: entrá con un toque</p>
           <div className="demo-users">

@@ -1,7 +1,7 @@
 import { Icon, Avatar } from "./icons.jsx";
 import React, { useState } from "react";
 import { useApp } from "../App.jsx";
-import { api } from "../api/demo";
+import { api } from "../api";
 import { ESTADOS, fmt, puede } from "../lib/reglas";
 import { ChipCuenta, ChipEstado, fechaHora } from "./ui.jsx";
 import { PedidoRow } from "./Inicio.jsx";
@@ -64,7 +64,7 @@ export function PedidoDetalle() {
   const c = db.clientes.find(x => x.id === p.clienteId);
   const v = db.usuarios.find(x => x.id === p.vendedorId);
   const idx = PASOS.findIndex(s => s[0] === p.estado);
-  const accion = (estado, txt) => { api.cambiarEstado(user, p.id, estado, txt); toast(txt); setConfirmar(null); };
+  const accion = async (estado, txt) => { try { await api.cambiarEstado(user, p.id, estado, txt); toast(txt); setConfirmar(null); } catch (e) { toast(e.message); } };
   const admin = puede.administrar(user);
 
   return (

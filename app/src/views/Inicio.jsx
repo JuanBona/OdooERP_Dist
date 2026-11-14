@@ -1,7 +1,7 @@
 import { Icon, Avatar } from "./icons.jsx";
 import React from "react";
 import { useApp } from "../App.jsx";
-import { api } from "../api/demo";
+import { api } from "../api";
 import { fmt, hoyISO, tieneAlerta } from "../lib/reglas";
 import { ChipCuenta, ChipEstado, ProdImg } from "./ui.jsx";
 

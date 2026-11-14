@@ -1,7 +1,7 @@
 import { Icon, Avatar } from "./icons.jsx";
 import React, { useMemo, useState } from "react";
 import { useApp } from "../App.jsx";
-import { api } from "../api/demo";
+import { api } from "../api";
 import { DIAS, fmt, puede, tieneAlerta } from "../lib/reglas";
 import { ChipCuenta } from "./ui.jsx";
 import { misClientes, PedidoRow } from "./Inicio.jsx";
@@ -55,9 +55,9 @@ export function EditarCliente({ c, onClose }) {
   const [f, setF] = useState(c);
   const set = (k, v) => setF({ ...f, [k]: v });
   const vendedores = db.usuarios.filter(u => u.rol === "vendedor");
-  const guardar = () => {
+  const guardar = async () => {
     if (!f.nombre.trim()) return toast("Poné el nombre del cliente");
-    api.guardarCliente(user, f); toast("Cliente guardado"); onClose();
+    try { await api.guardarCliente(user, f); toast("Cliente guardado"); onClose(); } catch (e) { toast(e.message); }
   };
   return (
     <div className="modal-back" onClick={onClose}>
@@ -144,9 +144,9 @@ function Cobro({ c, onClose, onOk }) {
   const [monto, setMonto] = useState(c.saldo < 0 ? -c.saldo : "");
   const [medio, setMedio] = useState("Efectivo");
   const { toast } = useApp();
-  const ok = () => {
+  const ok = async () => {
     const m = Math.round(+monto); if (!(m > 0)) return;
-    try { api.registrarCobro(user, c.id, m, medio); onOk(m); } catch (e) { toast(e.message); }
+    try { await api.registrarCobro(user, c.id, m, medio); onOk(m); } catch (e) { toast(e.message); }
   };
   const nota = medio !== "Efectivo" ? "" : user.rol === "vendedor" ? "Lo vas a tener que entregar en el depósito." : "Entra directo a la caja del depósito.";
   return (

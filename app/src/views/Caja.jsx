@@ -1,7 +1,7 @@
 import { Icon, Avatar } from "./icons.jsx";
 import React, { useState } from "react";
 import { useApp } from "../App.jsx";
-import { api } from "../api/demo";
+import { api } from "../api";
 import { fmt } from "../lib/reglas";
 import { fechaHora } from "./ui.jsx";
 
@@ -120,9 +120,9 @@ function ModalMov({ tipo, onClose }) {
   const conceptos = entrada ? CONCEPTOS_ENTRADA.filter(c => c !== "Rendición de vendedor" && c !== "Cobro en el depósito") : CONCEPTOS_SALIDA;
   const [f, setF] = useState({ concepto: conceptos[0], monto: "", persona: "", detalle: "", vuelve: VUELVE_POR_DEFECTO.includes(conceptos[0]), vuelveFecha: "" });
   const set = (k, v) => setF(prev => ({ ...prev, [k]: v, ...(k === "concepto" && !entrada ? { vuelve: VUELVE_POR_DEFECTO.includes(v) } : {}) }));
-  const guardar = () => {
+  const guardar = async () => {
     if (!entrada && !f.persona.trim()) return toast("Poné a quién se le da la plata");
-    try { api.movCaja(user, { tipo, ...f }); toast(entrada ? "Entrada registrada" : "Salida registrada"); onClose(); } catch (e) { toast(e.message); }
+    try { await api.movCaja(user, { tipo, ...f }); toast(entrada ? "Entrada registrada" : "Salida registrada"); onClose(); } catch (e) { toast(e.message); }
   };
   return (
     <div className="modal-back" onClick={onClose}>
@@ -161,7 +161,7 @@ function ModalDevolucion({ m, onClose }) {
         </div>
         {como !== "Efectivo" && <p className="muted" style={{ marginBottom: 10 }}>No vuelve en efectivo: se da por devuelto pero no suma a la caja.</p>}
         <div className="row"><button className="btn sec" onClick={onClose}>Cancelar</button>
-          <button className="btn" style={{ flex: 1 }} onClick={() => { try { api.registrarDevolucion(user, m.id, monto, como); toast("Devolución registrada"); onClose(); } catch (e) { toast(e.message); } }}>Registrar devolución</button></div>
+          <button className="btn" style={{ flex: 1 }} onClick={async () => { try { await api.registrarDevolucion(user, m.id, monto, como); toast("Devolución registrada"); onClose(); } catch (e) { toast(e.message); } }}>Registrar devolución</button></div>
       </div>
     </div>
   );
@@ -178,7 +178,7 @@ function ModalRendicion({ u, debe, onClose }) {
         <div className="field"><label htmlFor="rd-m">Cuánto entrega</label><input id="rd-m" type="number" inputMode="numeric" value={monto} onChange={e => setMonto(e.target.value)} /></div>
         {+monto !== debe && <p className="chip warn" style={{ display: "block", borderRadius: 8, padding: 8, marginBottom: 10 }}>{+monto < debe ? `Le quedan ${fmt(debe - monto)} por entregar.` : "Entrega más de lo que cobró."}</p>}
         <div className="row"><button className="btn sec" onClick={onClose}>Cancelar</button>
-          <button className="btn" style={{ flex: 1 }} onClick={() => { try { api.movCaja(user, { tipo: "ingreso", concepto: "Rendición de vendedor", monto, persona: u.nombre, vendedorId: u.id }); toast("Entrada registrada"); onClose(); } catch (e) { toast(e.message); } }}>Recibí {fmt(monto)}</button></div>
+          <button className="btn" style={{ flex: 1 }} onClick={async () => { try { await api.movCaja(user, { tipo: "ingreso", concepto: "Rendición de vendedor", monto, persona: u.nombre, vendedorId: u.id }); toast("Entrada registrada"); onClose(); } catch (e) { toast(e.message); } }}>Recibí {fmt(monto)}</button></div>
       </div>
     </div>
   );
@@ -199,7 +199,7 @@ function ModalContar({ onClose }) {
         {dif !== null && <p style={{ marginBottom: 10 }}>{dif === 0 ? <span className="chip st-entregado">Cuadra</span> : dif > 0 ? <span className="chip st-preparado">Sobran {fmt(dif)}</span> : <span className="chip warn">Faltan {fmt(-dif)}</span>}</p>}
         {dif !== null && dif !== 0 && <div className="field"><label htmlFor="ct-m">¿Por qué no cuadra?</label><input id="ct-m" value={motivo} onChange={e => setMotivo(e.target.value)} placeholder="Si no se sabe, poné “sin explicar”" /></div>}
         <div className="row"><button className="btn sec" onClick={onClose}>Cancelar</button>
-          <button className="btn" style={{ flex: 1 }} disabled={contado === "" || (dif !== 0 && !motivo.trim())} onClick={() => { api.arqueo(user, contado, motivo); toast(dif === 0 ? "Caja contada: cuadra" : "Caja contada: diferencia registrada"); onClose(); }}>Guardar conteo</button></div>
+          <button className="btn" style={{ flex: 1 }} disabled={contado === "" || (dif !== 0 && !motivo.trim())} onClick={async () => { try { await api.arqueo(user, contado, motivo); toast(dif === 0 ? "Caja contada: cuadra" : "Caja contada: diferencia registrada"); onClose(); } catch (e) { toast(e.message); } }}>Guardar conteo</button></div>
       </div>
     </div>
   );

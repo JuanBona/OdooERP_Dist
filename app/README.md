@@ -30,6 +30,7 @@ Sin variables de entorno corre en **modo demo**: los datos se guardan en el nave
 
 ## Base de datos
 
-`supabase/schema.sql` tiene tablas, permisos por rol (RLS), auditoría inmutable y las funciones
+`supabase/migrations/` tiene tablas, permisos por rol (RLS), auditoría inmutable y las funciones
 `crear_pedido`, `cambiar_estado`, `registrar_cobro` y `cerrar_reparto` (entregas automáticas).
-**Pendiente:** conectar la interfaz a Supabase (`src/api/supabase.js`) — hoy usa `src/api/demo.js`.
+Con `VITE_SUPABASE_URL` y `VITE_SUPABASE_ANON_KEY` usa Supabase (`src/api/supabase.js`); sin ellas, modo demo (`src/api/demo.js`).
+Cómo instalarlo en el servidor: [`DEPLOY.md`](DEPLOY.md).

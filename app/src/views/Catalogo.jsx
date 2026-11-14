@@ -127,17 +127,19 @@ export function Confirmar() {
   const ahorro = lineas.reduce((s, l) => s + l.ahorro, 0);
   const setCant = (id, n) => { const it = { ...cart.items }; if (n > 0) it[id] = n; else delete it[id]; setCart({ ...cart, items: it }); };
 
-  const enviar = () => {
+  const [enviando, setEnviando] = useState(false);
+  const enviar = async () => {
     if (!c) return toast("Elegí un cliente primero");
     if (!items.length) return toast("El pedido está vacío");
     try {
-      const r = enviarPedido(user, { clienteId: c.id, items, obs: cart.obs });
+      setEnviando(true);
+      const r = await enviarPedido(user, { clienteId: c.id, items, obs: cart.obs });
       setCart({ clienteId: null, items: {}, manual: {}, obs: "" });
       if (r.enCola) { toast("Sin señal: el pedido quedó guardado y se envía solo cuando vuelva la conexión."); go("pedidos"); return; }
       const p = r.pedido;
       toast(p.estado === "porAutorizar" ? `Pedido #${p.id} enviado. Queda por autorizar (cliente con deuda).` : `Pedido #${p.id} enviado al depósito`);
       go("pedido", { id: p.id });
-    } catch (e) { toast(e.message); }
+    } catch (e) { toast(e.message); } finally { setEnviando(false); }
   };
 
   return (
@@ -171,7 +173,7 @@ export function Confirmar() {
         {ahorro > 0 && <div className="row between muted"><span>Descuentos por cantidad</span><span style={{ color: "var(--entr)", fontWeight: 700 }}>− {fmt(ahorro)}</span></div>}
         <div className="row between" style={{ fontSize: 20, fontWeight: 850, marginTop: 6 }}><span>Total</span><span>{fmt(total)}</span></div>
         {c && nuevoEstadoPedido(c) === "porAutorizar" && <p className="chip st-porAutorizar" style={{ display: "block", borderRadius: 9, padding: 10, marginTop: 10 }}>El cliente tiene deuda: el pedido va a quedar por autorizar.</p>}
-        <button className="btn blk" style={{ marginTop: 14 }} onClick={enviar}>Enviar pedido</button>
+        <button className="btn blk" style={{ marginTop: 14 }} onClick={enviar} disabled={enviando}>{enviando ? "Enviando…" : "Enviar pedido"}</button>
       </div>
       {editLinea && <EditarLinea l={editLinea} onClose={() => setEditLinea(null)} onOk={m => { setCart({ ...cart, manual: { ...cart.manual, [editLinea.productoId]: m } }); setEditLinea(null); }} />}
     </>

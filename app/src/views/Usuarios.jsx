@@ -1,7 +1,7 @@
 import { Icon, Avatar } from "./icons.jsx";
 import React, { useState } from "react";
 import { useApp } from "../App.jsx";
-import { api } from "../api/demo";
+import { api } from "../api";
 import { ROLES } from "../lib/reglas";
 
 const QUE_HACE = {
@@ -34,7 +34,7 @@ export default function Usuarios() {
             <div className="field"><label htmlFor="eu-n">Nombre</label><input id="eu-n" value={ed.nombre} onChange={e => setEd({ ...ed, nombre: e.target.value })} /></div>
             {ed.rol === "vendedor" && <div className="field"><label htmlFor="eu-c">Comisión sobre lo cobrado (%)</label><input id="eu-c" type="number" value={ed.comisionPct || 0} onChange={e => setEd({ ...ed, comisionPct: +e.target.value })} /></div>}
             <div className="row"><button className="btn sec" onClick={() => setEd(null)}>Cancelar</button>
-              <button className="btn" style={{ flex: 1 }} onClick={() => { api.guardarUsuario(user, ed); toast("Usuario guardado"); setEd(null); }}>Guardar</button></div>
+              <button className="btn" style={{ flex: 1 }} onClick={async () => { try { await api.guardarUsuario(user, ed); toast("Usuario guardado"); setEd(null); } catch (e) { toast(e.message); } }}>Guardar</button></div>
           </div>
         </div>
       )}
