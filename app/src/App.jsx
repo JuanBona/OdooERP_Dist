@@ -13,6 +13,7 @@ import Usuarios from "./views/Usuarios.jsx";
 import Caja from "./views/Caja.jsx";
 import Resumen from "./views/Resumen.jsx";
 import { sincronizar, useConexion } from "./lib/offline";
+import { Icon, Avatar } from "./views/icons.jsx";
 
 const Ctx = createContext(null);
 export const useApp = () => useContext(Ctx);
@@ -67,32 +68,37 @@ export default function App() {
   return (
     <Ctx.Provider value={{ db, user, go, toast, cart, setCart, params: nav.params }}>
       <div className="topbar">
-        <img className="banner-img" src={logo} alt="Sodería Rincón del Sur" />
+        <div className="logo-pill"><img className="banner-img" src={logo} alt="Sodería Rincón del Sur" /></div>
         {api.modo === "demo" && <span className="demo-flag">DEMO</span>}
         <div className="sp" />
-        <div className="who" style={{ textAlign: "right", lineHeight: 1.2 }}>
-          <div style={{ fontWeight: 700, fontSize: 13 }}>{user.nombre}</div>
-          <div className="sub">{ROLES[user.rol]}</div>
+        <div className="who">
+          <Avatar txt={user.nombre} />
+          <div><div className="who-n">{user.nombre}</div><div className="sub">{ROLES[user.rol]}</div></div>
         </div>
-        <button className="iconbtn" title="Modo oscuro" onClick={() => setDark(!dark)}>{dark ? "☀" : "☾"}</button>
-        <button className="iconbtn" title="Salir" style={{ width: "auto", padding: "0 10px", fontSize: 13, fontWeight: 700 }} onClick={() => setUser(null)}>Salir</button>
+        <button className="iconbtn" title={dark ? "Modo claro" : "Modo oscuro"} aria-label="Cambiar modo" onClick={() => setDark(!dark)}><Icon n={dark ? "sol" : "luna"} s={18} /></button>
+        <button className="iconbtn" title="Salir" aria-label="Salir" onClick={() => setUser(null)}><Icon n="salir" s={18} /></button>
       </div>
       {tabs.length > 1 && (
-        <nav className="tabs">
-          {tabs.map(([k, l]) => <button key={k} className={activo === k ? "on" : ""} onClick={() => go(k)}>{l}</button>)}
+        <nav className={"tabs" + (tabs.length > 5 ? " muchas" : "")}>
+          {tabs.map(([k, l]) => (
+            <button key={k} className={activo === k ? "on" : ""} onClick={() => go(k)}>
+              <Icon n={k} s={19} /><span>{l}</span>
+            </button>
+          ))}
         </nav>
       )}
       {(!online || outbox.length > 0) && (
         <div className="offline-bar" role="status">
-          {!online ? "Sin señal. Podés seguir cargando pedidos: se envían solos cuando vuelva la conexión." : "Enviando pedidos guardados…"}
+          <Icon n="sinSenal" s={16} /> {!online ? "Sin señal. Podés seguir cargando pedidos: se envían solos cuando vuelva la conexión." : "Enviando pedidos guardados…"}
           {outbox.length > 0 && <b> · {outbox.length} {outbox.length === 1 ? "pedido esperando" : "pedidos esperando"}</b>}
         </div>
       )}
       <main><View /></main>
       {cartCount > 0 && nav.view === "catalogo" && (
         <div className="cartbar">
-          <div style={{ flex: 1 }}><div className="sub">{cartCount} unidades</div><div className="tot">Ver pedido</div></div>
-          <button className="btn brand" onClick={() => go("confirmar")}>Revisar y enviar →</button>
+          <div className="cart-ico"><Icon n="pedidos" s={20} /><span>{cartCount}</span></div>
+          <div style={{ flex: 1 }}><div className="sub">{cartCount} {cartCount === 1 ? "unidad" : "unidades"} en el pedido</div><div className="tot">Listo para revisar</div></div>
+          <button className="btn brand" onClick={() => go("confirmar")}>Revisar y enviar</button>
         </div>
       )}
       {msg && <div className="toast" role="status">{msg}</div>}

@@ -1,3 +1,4 @@
+import { Icon, Avatar } from "./icons.jsx";
 import React from "react";
 import { useApp } from "../App.jsx";
 import { api } from "../api/demo";
@@ -12,7 +13,7 @@ export function Deposito() {
     const bultos = p.lineas.reduce((s, l) => s + l.cant, 0);
     return (
       <div className="list-item" onClick={() => go("depoPedido", { id: p.id })}>
-        <div className="avatar">#{p.id}</div>
+        <Avatar txt={"#" + p.id} />
         <div style={{ flex: 1, minWidth: 0 }}><b>{c.nombre}</b><div className="muted">{c.localidad || c.dir}{c.dia ? " · " + c.dia : ""} · {bultos} {bultos === 1 ? "bulto" : "bultos"}</div></div>
         <div style={{ textAlign: "right" }}><ChipEstado e={p.estado} />{p.estado === "preparando" && <div className="muted">{p.hechos.length}/{p.lineas.length}</div>}</div>
       </div>
@@ -37,9 +38,9 @@ export function DepoPedido() {
   const completo = p.hechos.length === p.lineas.length;
   return (
     <>
-      <button className="btn sm sec" onClick={() => go("deposito")}>← Preparación</button>
+      <button className="btn sm sec" onClick={() => go("deposito")}><Icon n="atras" s={16} /> Preparación</button>
       <div className="row between" style={{ margin: "12px 0", flexWrap: "wrap" }}>
-        <div><div className="eyebrow">Pedido #{p.id}</div><h1>{c.nombre}</h1><p className="muted">{c.dir} {c.localidad}</p>{c.obs && <p className="muted">📝 {c.obs}</p>}</div>
+        <div><div className="eyebrow">Pedido #{p.id}</div><h1>{c.nombre}</h1><p className="muted">{c.dir} {c.localidad}</p>{c.obs && <p className="muted"><Icon n="nota" s={15} style={{ verticalAlign: "-2px" }} /> {c.obs}</p>}</div>
         <ChipEstado e={p.estado} />
       </div>
       {p.lineas.map((l, i) => {
@@ -51,7 +52,7 @@ export function DepoPedido() {
           </div>
         );
       })}
-      {p.obs && <p className="muted">📝 {p.obs}</p>}
+      {p.obs && <p className="muted"><Icon n="nota" s={15} style={{ verticalAlign: "-2px" }} /> {p.obs}</p>}
       {editable && <button className="btn blk" style={{ marginTop: 12, opacity: completo ? 1 : .5 }} disabled={!completo}
         onClick={() => { api.cambiarEstado(user, p.id, "preparado", "Preparado"); toast("Pedido #" + p.id + " listo para salir"); go("deposito"); }}>
         {completo ? "✓ Pedido preparado" : `Faltan ${p.lineas.length - p.hechos.length} productos`}</button>}

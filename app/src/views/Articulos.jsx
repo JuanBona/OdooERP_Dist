@@ -1,3 +1,4 @@
+import { Icon, Avatar } from "./icons.jsx";
 import React, { useState } from "react";
 import { useApp } from "../App.jsx";
 import { api } from "../api/demo";
@@ -13,7 +14,7 @@ export default function Articulos() {
     <>
       <div className="row between" style={{ marginBottom: 12, flexWrap: "wrap" }}>
         <div><h1>Artículos</h1><p className="muted">Precios, stock, descuentos por cantidad y fotos.</p></div>
-        <button className="btn" onClick={() => setEd({ nombre: "", categoria: "Bebidas", precio: 0, stock: 0, stockMin: 0, tramos: [], foto: null, activo: true })}>＋ Nuevo artículo</button>
+        <button className="btn" onClick={() => setEd({ nombre: "", categoria: "Bebidas", precio: 0, stock: 0, stockMin: 0, tramos: [], foto: null, activo: true })}><Icon n="mas" s={18} /> Nuevo artículo</button>
       </div>
       <div className="filters"><input type="search" placeholder="Buscar…" value={q} onChange={e => setQ(e.target.value)} /></div>
       <div className="card">
@@ -60,7 +61,7 @@ function EditarArticulo({ p, onClose }) {
         <h2>{p.id ? "Editar artículo" : "Nuevo artículo"}</h2>
         <div className="row" style={{ marginBottom: 12 }}>
           <ProdImg p={f} size={72} />
-          <label className="btn sec sm" style={{ cursor: "pointer" }}>📷 {f.foto ? "Cambiar foto" : "Subir foto"}<input type="file" accept="image/*" hidden onChange={foto} /></label>
+          <label className="btn sec sm" style={{ cursor: "pointer" }}><Icon n="camara" s={16} /> {f.foto ? "Cambiar foto" : "Subir foto"}<input type="file" accept="image/*" hidden onChange={foto} /></label>
           {f.foto && <button className="btn sec sm" onClick={() => set("foto", null)}>Quitar</button>}
         </div>
         <div className="field"><label htmlFor="ea-n">Nombre</label><input id="ea-n" value={f.nombre} onChange={e => set("nombre", e.target.value)} /></div>

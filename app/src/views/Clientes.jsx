@@ -1,3 +1,4 @@
+import { Icon, Avatar } from "./icons.jsx";
 import React, { useMemo, useState } from "react";
 import { useApp } from "../App.jsx";
 import { api } from "../api/demo";
@@ -22,19 +23,19 @@ export function Clientes() {
     <>
       <div className="row between" style={{ marginBottom: 12, flexWrap: "wrap" }}>
         <div><h1>Clientes</h1><p className="muted">Elegí un cliente para tomarle el pedido.</p></div>
-        {puede.administrar(user) && <button className="btn sec" onClick={() => setEditando({ nombre: "", dir: "", tel: "", localidad: "", dia: "", vendedorId: null, obs: "" })}>＋ Nuevo cliente</button>}
+        {puede.administrar(user) && <button className="btn sec" onClick={() => setEditando({ nombre: "", dir: "", tel: "", localidad: "", dia: "", vendedorId: null, obs: "" })}><Icon n="mas" s={18} /> Nuevo cliente</button>}
       </div>
       <div className="filters">
         <input type="search" placeholder="Buscar por nombre, dirección o código…" value={q} onChange={e => setQ(e.target.value)} />
         <select value={dia} onChange={e => setDia(e.target.value)}><option value="">Ruta: todos los días</option>{DIAS.map(d => <option key={d}>{d}</option>)}</select>
         <select value={loc} onChange={e => setLoc(e.target.value)}><option value="">Todas las localidades</option>{localidades.map(l => <option key={l}>{l}</option>)}</select>
-        <button className={"btn sm " + (soloAlerta ? "" : "sec")} onClick={() => setSoloAlerta(!soloAlerta)}>⚠ Con alerta de pago</button>
+        <button className={"btn sm " + (soloAlerta ? "" : "sec")} onClick={() => setSoloAlerta(!soloAlerta)}><Icon n="alerta" s={15} /> Con alerta de pago</button>
       </div>
       <div className="card">
         {list.length === 0 && <div className="empty">No hay clientes con ese filtro.</div>}
         {list.slice(0, 80).map(c => (
           <div key={c.id} className="list-item" onClick={() => go("cliente", { id: c.id })}>
-            <div className="avatar">{c.nombre.slice(0, 2)}</div>
+            <Avatar txt={c?.nombre} />
             <div style={{ flex: 1, minWidth: 0 }}>
               <b>{c.nombre}</b>
               <div className="muted">#{c.codigo} · {c.dir}{c.localidad ? " · " + c.localidad : ""}{c.dia ? " · " + c.dia : ""}</div>
@@ -96,7 +97,7 @@ export function ClienteDetalle() {
 
   return (
     <>
-      <button className="btn sm sec" onClick={() => go("clientes")}>← Clientes</button>
+      <button className="btn sm sec" onClick={() => go("clientes")}><Icon n="atras" s={16} /> Clientes</button>
       <div className="card" style={{ marginTop: 12 }}>
         <div className="row between" style={{ flexWrap: "wrap", alignItems: "flex-start" }}>
           <div style={{ minWidth: 0 }}>
@@ -104,7 +105,7 @@ export function ClienteDetalle() {
             <h1>{c.nombre}</h1>
             <p className="muted">{c.dir}{c.localidad ? " · " + c.localidad : ""}{c.tel ? " · Tel " + c.tel : ""}</p>
             <p className="muted">Ruta: {c.dia || "sin día"} · Vendedor: {vend?.nombre || "sin asignar"}</p>
-            {c.obs && <p className="muted" style={{ marginTop: 6 }}>📝 {c.obs}</p>}
+            {c.obs && <p className="muted" style={{ marginTop: 6 }}><Icon n="nota" s={15} style={{ verticalAlign: "-2px" }} /> {c.obs}</p>}
           </div>
           <div style={{ textAlign: "right" }}>
             <ChipCuenta c={c} />
@@ -113,9 +114,9 @@ export function ClienteDetalle() {
         </div>
         {c.saldo < 0 && <p className="muted" style={{ marginTop: 10 }}>Este cliente tiene deuda: su pedido va a quedar <b>por autorizar</b> hasta que Administración lo apruebe.</p>}
         <div className="row" style={{ marginTop: 14, flexWrap: "wrap" }}>
-          <button className="btn" onClick={() => tomarPedido()}>＋ Tomar pedido</button>
-          <button className="btn sec" onClick={() => setCobro(true)}>$ Registrar cobro</button>
-          {puede.administrar(user) && <button className="btn sec" onClick={() => setEditando(true)}>✎ Editar</button>}
+          <button className="btn" onClick={() => tomarPedido()}><Icon n="mas" s={18} /> Tomar pedido</button>
+          <button className="btn sec" onClick={() => setCobro(true)}><Icon n="plata" s={18} /> Registrar cobro</button>
+          {puede.administrar(user) && <button className="btn sec" onClick={() => setEditando(true)}><Icon n="lapiz" s={16} /> Editar</button>}
         </div>
       </div>
 

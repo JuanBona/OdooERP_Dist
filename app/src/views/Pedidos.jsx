@@ -1,3 +1,4 @@
+import { Icon, Avatar } from "./icons.jsx";
 import React, { useState } from "react";
 import { useApp } from "../App.jsx";
 import { api } from "../api/demo";
@@ -42,7 +43,7 @@ function Bandeja() {
         const bultos = o.data.items.reduce((s, i) => s + i.cant, 0);
         return (
           <div key={o.uid} className="list-item" style={{ cursor: "default" }}>
-            <div className="avatar">⏳</div>
+            <div className="avatar" style={{ color: "var(--pend)", background: "var(--pend-bg)" }}><Icon n="sinSenal" s={18} /></div>
             <div style={{ flex: 1, minWidth: 0 }}><b>{c?.nombre}</b><div className="muted">{bultos} {bultos === 1 ? "bulto" : "bultos"} · cargado {fechaHora(o.creado)}</div>
               {o.error && <div className="chip warn" style={{ marginTop: 4 }}>No se pudo enviar: {o.error}</div>}</div>
             {o.error ? <button className="btn sec sm" onClick={() => descartar(o.uid)}>Descartar</button> : <span className="chip st-pendiente">Pendiente de envío</span>}
@@ -68,7 +69,7 @@ export function PedidoDetalle() {
 
   return (
     <>
-      <button className="btn sm sec" onClick={() => go("pedidos")}>← Pedidos</button>
+      <button className="btn sm sec" onClick={() => go("pedidos")}><Icon n="atras" s={16} /> Pedidos</button>
       <div className="card" style={{ marginTop: 12 }}>
         <div className="row between" style={{ flexWrap: "wrap" }}>
           <div><div className="eyebrow">Pedido #{p.id}</div><h1>{c.nombre}</h1>
@@ -84,12 +85,12 @@ export function PedidoDetalle() {
           </table>
         </div>
         <div className="row between" style={{ fontSize: 19, fontWeight: 850, marginTop: 10 }}><span>Total</span><span>{fmt(p.total)}</span></div>
-        {p.obs && <p className="muted" style={{ marginTop: 8 }}>📝 {p.obs}</p>}
+        {p.obs && <p className="muted" style={{ marginTop: 8 }}><Icon n="nota" s={15} style={{ verticalAlign: "-2px" }} /> {p.obs}</p>}
 
         <div className="row" style={{ flexWrap: "wrap", marginTop: 16 }}>
-          {p.estado === "porAutorizar" && puede.autorizar(user) && <button className="btn" onClick={() => accion("pendiente", "Autorizado y enviado a depósito")}>✓ Autorizar</button>}
-          {["preparado", "enReparto", "entregado"].includes(p.estado) && <button className="btn sec" onClick={() => window.print()}>🖨 Imprimir remito</button>}
-          {admin && p.estado === "preparado" && <button className="btn brand" onClick={() => accion("enReparto", "Salió en reparto")}>🚚 Salió en reparto</button>}
+          {p.estado === "porAutorizar" && puede.autorizar(user) && <button className="btn" onClick={() => accion("pendiente", "Autorizado y enviado a depósito")}><Icon n="check" s={17} /> Autorizar</button>}
+          {["preparado", "enReparto", "entregado"].includes(p.estado) && <button className="btn sec" onClick={() => window.print()}><Icon n="imprimir" s={17} /> Imprimir remito</button>}
+          {admin && p.estado === "preparado" && <button className="btn brand" onClick={() => accion("enReparto", "Salió en reparto")}><Icon n="camion" s={17} /> Salió en reparto</button>}
           {admin && p.estado === "enReparto" && <>
             <button className="btn" onClick={() => accion("entregado", "Entregado")}>Entregado</button>
             <button className="btn dngr" onClick={() => setConfirmar("rechazado")}>Rechazado</button>

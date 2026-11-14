@@ -1,3 +1,4 @@
+import { Icon, Avatar } from "./icons.jsx";
 import React, { useState } from "react";
 import { useApp } from "../App.jsx";
 import { api } from "../api/demo";
@@ -29,8 +30,8 @@ export default function Caja() {
       <div className="row between" style={{ marginBottom: 14, flexWrap: "wrap" }}>
         <div><h1>Caja del depósito</h1><p className="muted">El efectivo que hay en la caja: qué entra, qué sale, a quién y qué tiene que volver.</p></div>
         <div className="row" style={{ flexWrap: "wrap" }}>
-          <button className="btn" onClick={() => setModal("entrada")}>＋ Entrada</button>
-          <button className="btn dngr" onClick={() => setModal("salida")}>− Salida</button>
+          <button className="btn" onClick={() => setModal("entrada")}><Icon n="mas" s={18} /> Entrada</button>
+          <button className="btn dngr" onClick={() => setModal("salida")}><Icon n="menos" s={18} /> Salida</button>
           <button className="btn sec" onClick={() => setModal("contar")}>Contar caja</button>
         </div>
       </div>
@@ -49,7 +50,7 @@ export default function Caja() {
         <div className="card">
           {vendedores.map(({ u, debe }) => (
             <div key={u.id} className="list-item" style={{ cursor: "default" }}>
-              <div className="avatar">{u.nombre.slice(0, 2)}</div>
+              <Avatar txt={u?.nombre} />
               <div style={{ flex: 1, minWidth: 0 }}><b>{u.nombre}</b><div className="muted">Cobró en efectivo y todavía no lo entregó</div></div>
               <b>{fmt(debe)}</b>
               <button className="btn sm" onClick={() => setModal({ rendicion: u, debe })}>Recibir</button>

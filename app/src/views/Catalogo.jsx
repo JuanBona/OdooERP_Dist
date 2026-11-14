@@ -1,3 +1,4 @@
+import { Icon, Avatar } from "./icons.jsx";
 import React, { useState } from "react";
 import { useApp } from "../App.jsx";
 import { enviarPedido } from "../lib/offline";
@@ -56,7 +57,7 @@ export function Catalogo() {
           <div key={p.id} className="pcard" style={p.tramos.length ? { borderColor: "var(--accent)" } : null} onClick={() => setAbierto(p.id)}>
             <div style={{ position: "relative" }}>
               <ProdImg p={p} full />
-              {p.tramos.length > 0 && <span className="chip promo" style={{ position: "absolute", top: 8, left: 8 }}>🏷 OFERTA</span>}
+              {p.tramos.length > 0 && <span className="chip promo" style={{ position: "absolute", top: 8, left: 8 }}><Icon n="oferta" s={13} /> OFERTA</span>}
               {cart.items[p.id] && <span className="chip st-entregado" style={{ position: "absolute", top: 8, right: 8 }}>✓ {cart.items[p.id]}</span>}
             </div>
             <div className="body">
@@ -141,7 +142,7 @@ export function Confirmar() {
 
   return (
     <>
-      <button className="btn sm sec" onClick={() => go("catalogo")}>← Seguir agregando</button>
+      <button className="btn sm sec" onClick={() => go("catalogo")}><Icon n="atras" s={16} /> Seguir agregando</button>
       <h1 style={{ margin: "12px 0" }}>Revisar pedido</h1>
       <SelectorCliente />
       <div className="card">

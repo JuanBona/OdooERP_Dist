@@ -25,7 +25,7 @@ export default function Login({ onLogin }) {
           <div className="demo-users">
             {api.get().usuarios.map(u => (
               <button type="button" key={u.id} onClick={() => entrar(u.usuario, "1234")}>
-                {u.nombre}<span className="rl">{ROLES[u.rol]}</span>
+                {u.nombre}{u.nombre !== ROLES[u.rol] && <span className="rl">{ROLES[u.rol]}</span>}
               </button>
             ))}
           </div>

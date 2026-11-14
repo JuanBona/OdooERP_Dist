@@ -1,3 +1,4 @@
+import { Icon, Avatar } from "./icons.jsx";
 import React from "react";
 import { useApp } from "../App.jsx";
 import { api } from "../api/demo";
@@ -20,7 +21,7 @@ export default function Inicio() {
     <>
       <div className="row between" style={{ marginBottom: 14, flexWrap: "wrap" }}>
         <div><h1>Hola, {user.nombre}</h1><p className="muted">{new Date().toLocaleDateString("es-AR", { weekday: "long", day: "numeric", month: "long" })}</p></div>
-        {user.rol !== "deposito" && <button className="btn" onClick={() => go("clientes")}>＋ Nuevo pedido</button>}
+        {user.rol !== "deposito" && <button className="btn" onClick={() => go("clientes")}><Icon n="mas" s={18} /> Nuevo pedido</button>}
       </div>
 
       <div className="grid g3" style={{ marginBottom: 16 }}>
@@ -39,11 +40,11 @@ export default function Inicio() {
       </div>
 
       {alertas.length > 0 && <>
-        <div className="sec-h"><h2>⚠ Más de 15 días sin pagar</h2></div>
+        <div className="sec-h"><h2><Icon n="alerta" s={18} style={{ color: "var(--prep)", verticalAlign: "-3px" }} /> Más de 15 días sin pagar</h2></div>
         <div className="card">
           {alertas.slice(0, 8).map(c => (
             <div key={c.id} className="list-item" onClick={() => go("cliente", { id: c.id })}>
-              <div className="avatar">{c.nombre.slice(0, 2)}</div>
+              <Avatar txt={c?.nombre} />
               <div style={{ flex: 1, minWidth: 0 }}><b>{c.nombre}</b><div className="muted">{c.dir}</div></div>
               <ChipCuenta c={c} />
             </div>
@@ -80,7 +81,7 @@ export function PedidoRow({ p }) {
   const v = db.usuarios.find(x => x.id === p.vendedorId);
   return (
     <div className="list-item" onClick={() => go("pedido", { id: p.id })}>
-      <div className="avatar">#{p.id}</div>
+      <Avatar txt={"#" + p.id} />
       <div style={{ flex: 1, minWidth: 0 }}><b>{c?.nombre}</b><div className="muted">{p.fecha}{v ? " · " + v.nombre : ""}</div></div>
       <div style={{ textAlign: "right" }}><div style={{ fontWeight: 800 }}>{fmt(p.total)}</div><ChipEstado e={p.estado} /></div>
     </div>

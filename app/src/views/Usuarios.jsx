@@ -1,3 +1,4 @@
+import { Icon, Avatar } from "./icons.jsx";
 import React, { useState } from "react";
 import { useApp } from "../App.jsx";
 import { api } from "../api/demo";
@@ -20,7 +21,7 @@ export default function Usuarios() {
       <div className="card">
         {db.usuarios.map(u => (
           <div key={u.id} className="list-item" onClick={() => setEd({ ...u })}>
-            <div className="avatar">{u.nombre.slice(0, 2)}</div>
+            <Avatar txt={u?.nombre} />
             <div style={{ flex: 1, minWidth: 0 }}><b>{u.nombre}</b> <span className="chip st-autorizado">{ROLES[u.rol]}</span><div className="muted">{QUE_HACE[u.rol]}</div></div>
             {u.rol === "vendedor" && <span className="chip st-preparado">{u.comisionPct || 0}% comisión</span>}
           </div>
