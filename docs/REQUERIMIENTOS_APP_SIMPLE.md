@@ -56,19 +56,28 @@ Referencias: ✅ ya está en la maqueta · 🟡 está, falta un ajuste · 🔴 n
 
 | ID | Requerimiento | Maqueta | Cómo se resuelve simple |
 |---|---|---|---|
-| RNF-04 | 4 roles: Vendedor, Depósito, Admin Operativa, Gerencia | 🟡 | La maqueta tiene admin/vendedor/depósito/**cliente**. Se parte "admin" en **Admin Operativa** (pedidos, depósito, imprimir) y **Gerencia** (además finanzas, comisiones, gastos, usuarios). El rol **Cliente** es nuevo: **confirmar si va en la v1.** |
+| RNF-04 | 4 roles: Vendedor, Depósito, Admin Operativa, Gerencia | 🟡 | Se parte "admin" en **Admin Operativa** (pedidos, depósito, imprimir) y **Gerencia** (además finanzas, comisiones, gastos, usuarios). El rol Cliente de la maqueta se saca. |
 | RNF-07 | Auditoría: quién cambió precio/stock/pedido y cuándo; pedidos no se borran | 🔴 | Automático en la base (historial). En pantalla solo se ve una línea en el detalle del pedido: "Autorizado por Marcela · 14/11 10:32". Anular = archiva, no borra. |
 | RNF-03 | Catálogo en menos de 3 s | 🟡 | Fotos livianas y cache de la PWA. |
 | RNF-05 | Crecer de 3 a 4+ vendedores | ✅ | Sin cambios de diseño. |
 | RNF-08 | Nube con backup | 🟡 | Supabase (backups diarios) + Vercel/Netlify para la web. |
 
-## 6. Decisiones que necesitamos del cliente
+## 6. Decisiones tomadas (14/11/2026)
 
-1. **Comisión:** ¿sobre pedidos del día, sobre lo cobrado o sobre lo entregado?
-2. **Rol Cliente** (el comercio hace su propio pedido): ¿entra en la v1 o después?
-3. **Chofer:** ¿quién marca "Entregado" en la calle? ¿El de depósito, un rol chofer, o administración?
-4. **Autorización de pedidos:** la maqueta hace que todo pedido pase por "Por autorizar". ¿Siempre, o solo cuando el cliente tiene la alerta de deuda?
-5. **Período de 4 semanas** para finanzas: ¿fijo o mensual calendario?
+1. **Comisión:** sobre lo **cobrado**. Cada cobro registrado suma el % del vendedor del cliente.
+2. **Rol Cliente:** se saca de la v1.
+3. **Entregas (propuesta, a confirmar con el cliente):** cuando el depósito arma la **hoja de reparto** y la marca "Salió", todos esos pedidos pasan a **Entregado automáticamente** al cerrar el día. Solo se marca a mano la excepción: **Rechazado** o **Entrega parcial** (vuelve la mercadería al stock). Nadie tiene que tocar nada si todo salió bien.
+4. **Autorización:** solo pasan por "Por autorizar" los pedidos de **clientes con deuda**. El resto va directo al depósito.
+5. **Finanzas:** por **mes calendario**.
+
+## 6b. Datos que hay que pedirle al cliente
+
+- Fotos de los productos (o permiso para usar fotos genéricas de cada marca).
+- Día de visita y localidad de cada cliente.
+- % de comisión de cada vendedor.
+- Tramos de descuento por producto (ej. 10+ = 4%, 20+ = 8%).
+- Límite de crédito por cliente, si lo usa.
+- Usuarios: nombre y rol de cada persona (Vendedor, Depósito, Administración, Gerencia).
 
 ## 7. Etapas
 
