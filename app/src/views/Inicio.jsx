@@ -1,5 +1,6 @@
 import React from "react";
 import { useApp } from "../App.jsx";
+import { api } from "../api/demo";
 import { fmt, hoyISO, tieneAlerta } from "../lib/reglas";
 import { ChipCuenta, ChipEstado, ProdImg } from "./ui.jsx";
 
@@ -24,6 +25,8 @@ export default function Inicio() {
 
       <div className="grid g3" style={{ marginBottom: 16 }}>
         <div className="card kpi"><div className="num">{deHoy.length}</div><div className="lbl">Pedidos de hoy</div></div>
+        {user.rol === "vendedor" && <div className="card kpi"><div className="num" style={{ color: "var(--listo)" }}>{fmt(api.aRendir(user.id))}</div><div className="lbl">Efectivo cobrado para entregar en el depósito</div></div>}
+        {["admin", "gerencia"].includes(user.rol) && <div className="card kpi" style={{ cursor: "pointer" }} onClick={() => go("caja")}><div className="num">{fmt(api.saldoCaja())}</div><div className="lbl">En la caja del depósito</div></div>}
         <div className="card kpi"><div className="num">{fmt(deHoy.reduce((s, p) => s + p.total, 0))}</div><div className="lbl">Vendido hoy</div></div>
         {user.rol !== "vendedor" && <>
           <div className="card kpi" style={{ cursor: "pointer" }} onClick={() => go("pedidos", { estado: "porAutorizar" })}>

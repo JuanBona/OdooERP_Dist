@@ -24,7 +24,9 @@ export default function Resumen() {
   const peds = db.pedidos.filter(p => enMes(p.fecha) && !["anulado", "rechazado"].includes(p.estado));
   const entregados = peds.filter(p => p.estado === "entregado");
   const cobros = db.cobros.filter(c => enMes(c.fecha));
-  const gastos = db.gastos.filter(g => enMes(g.fecha));
+  // Gastos = salidas de la caja que no vuelven (sin contar retiros del dueño).
+  const gastos = db.caja.filter(m => enMes(m.fecha) && m.tipo === "egreso" && !m.vuelve && m.concepto !== "Retiro del dueño")
+    .map(m => ({ categoria: m.concepto, monto: -m.monto }));
   const sum = (a, f) => a.reduce((s, x) => s + f(x), 0);
   const vendido = sum(peds, p => p.total);
   const cobrado = sum(cobros, c => c.monto);

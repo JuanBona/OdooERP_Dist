@@ -4,7 +4,7 @@
 import seed from "../seed.json";
 import { calcPedido, hoyISO, nuevoEstadoPedido } from "../lib/reglas";
 
-const KEY = "rds-demo-v1";
+const KEY = "rds-demo-v2";
 const listeners = new Set();
 let db = load();
 
@@ -32,14 +32,14 @@ function inicial() {
   Object.assign(clientes[2], { saldo: -12800, ultimoPago: d(5), vendedorId: 1 });
   Object.assign(clientes[0], { vendedorId: 1 });
   Object.assign(clientes[3], { vendedorId: 2 });
-  return { usuarios, productos, clientes, pedidos: [], cobros: [], gastos: [], cajas: [], auditoria: [], seq: 1 };
+  return { usuarios, productos, clientes, pedidos: [], cobros: [], caja: [], arqueos: [], auditoria: [], seq: 1 };
 }
 
 function load() {
   let d = null;
   try { const raw = localStorage.getItem(KEY); if (raw) d = JSON.parse(raw); } catch {}
   d = d || inicial();
-  d.gastos ||= []; d.cajas ||= [];
+  d.caja ||= []; d.arqueos ||= [];
   return d;
 }
 function save() {
@@ -107,55 +107,70 @@ export const api = {
     save();
   },
 
-  // ---- Caja: una sesión por usuario. Abrir → cobros/gastos → cerrar contando → Administración recibe ----
-  cajaAbierta(userId) { return db.cajas.find(c => c.usuarioId === userId && c.estado === "abierta") || null; },
+  // ---- Caja del depósito (una sola, la manejan Administración y Gerencia) ----
+  // Movimiento: { tipo: "ingreso" | "egreso" | "ajuste", concepto, monto (+/-), persona, detalle,
+  //   vuelve (solo egresos), vuelveFecha, devoluciones: [{ fecha, monto, como, usuario }] }
+  saldoCaja() {
+    return db.caja.reduce((s, m) => s + m.monto +
+      (m.devoluciones || []).filter(d => d.como === "Efectivo").reduce((a, d) => a + d.monto, 0), 0);
+  },
 
-  abrirCaja(user, fondo) {
-    if (api.cajaAbierta(user.id)) throw new Error("Ya tenés una caja abierta.");
-    const caja = { id: db.cajas.length + 1, usuarioId: user.id, abierta: new Date().toISOString(), fondo: Math.round(+fondo || 0),
-      estado: "abierta", cerrada: null, contado: null, recibidaPor: null, recibida: null, obs: "" };
-    db.cajas.unshift(caja);
-    audit(user, `Abrió caja con fondo $${caja.fondo}`, "Caja " + caja.id);
+  movCaja(user, { tipo, concepto, monto, persona = "", detalle = "", vuelve = false, vuelveFecha = "", vendedorId = null, cobroId = null }) {
+    monto = Math.round(+monto);
+    if (!(Math.abs(monto) > 0)) throw new Error("Poné el monto.");
+    const m = { id: db.caja.length + 1, fecha: hoyISO(), hora: new Date().toISOString(), tipo, concepto,
+      monto: tipo === "egreso" ? -Math.abs(monto) : tipo === "ingreso" ? Math.abs(monto) : monto,
+      persona, detalle, vuelve: tipo === "egreso" && vuelve, vuelveFecha: vuelve ? vuelveFecha : "",
+      devoluciones: [], vendedorId, cobroId, usuario: user.nombre };
+    db.caja.unshift(m);
+    audit(user, `Caja: ${tipo} ${concepto} $${Math.abs(m.monto)}${persona ? " · " + persona : ""}`, "Caja");
     save();
-    return caja;
+    return m;
+  },
+
+  // Lo que falta que vuelva de una salida.
+  pendienteDe(m) { return m.vuelve ? -m.monto - m.devoluciones.reduce((s, d) => s + d.monto, 0) : 0; },
+
+  registrarDevolucion(user, movId, monto, como) {
+    const m = db.caja.find(x => x.id === movId);
+    monto = Math.round(+monto);
+    if (!(monto > 0)) throw new Error("Poné el monto que volvió.");
+    if (monto > api.pendienteDe(m)) throw new Error("Es más de lo que falta devolver.");
+    m.devoluciones.push({ fecha: hoyISO(), hora: new Date().toISOString(), monto, como, usuario: user.nombre });
+    audit(user, `Devolución $${monto} (${como}) de ${m.persona}`, "Caja");
+    save();
+  },
+
+  // Contar la caja: si no cuadra queda un ajuste con el motivo.
+  arqueo(user, contado, motivo) {
+    const dif = Math.round(+contado) - api.saldoCaja();
+    db.arqueos.unshift({ fecha: new Date().toISOString(), contado: Math.round(+contado), esperado: api.saldoCaja(), dif, motivo, usuario: user.nombre });
+    if (dif !== 0) api.movCaja(user, { tipo: "ajuste", concepto: "Diferencia al contar", monto: dif, detalle: motivo });
+    else save();
+    return dif;
+  },
+
+  // Efectivo que un vendedor cobró en la calle y todavía no entregó.
+  aRendir(vendedorId) {
+    const cobrado = db.cobros.filter(c => c.cobradorId === vendedorId && c.medio === "Efectivo").reduce((s, c) => s + c.monto, 0);
+    const entregado = db.caja.filter(m => m.vendedorId === vendedorId && m.concepto === "Rendición de vendedor").reduce((s, m) => s + m.monto, 0);
+    return cobrado - entregado;
   },
 
   registrarCobro(user, clienteId, monto, medio) {
-    const caja = api.cajaAbierta(user.id);
-    if (!caja) throw new Error("Abrí tu caja antes de cobrar (pestaña Caja).");
     const c = db.clientes.find(x => x.id === clienteId);
     const vend = db.usuarios.find(u => u.id === c.vendedorId);
     c.saldo += monto;
     c.ultimoPago = hoyISO(); // cualquier pago reinicia el contador de 15 días
     const comision = Math.round(monto * (vend?.comisionPct || 0) / 100); // RF-GV-03: sobre lo cobrado
-    db.cobros.unshift({ id: db.cobros.length + 1, fecha: hoyISO(), hora: new Date().toISOString(), clienteId, vendedorId: c.vendedorId,
-      monto, medio, comision, cajaId: caja.id, usuario: user.nombre });
+    const cobro = { id: db.cobros.length + 1, fecha: hoyISO(), hora: new Date().toISOString(), clienteId, vendedorId: c.vendedorId,
+      cobradorId: user.id, monto, medio, comision, usuario: user.nombre };
+    db.cobros.unshift(cobro);
     audit(user, `Cobro ${medio} $${monto}`, c.nombre);
-    save();
-  },
-
-  registrarGasto(user, { categoria, monto, medio, detalle }) {
-    const caja = api.cajaAbierta(user.id);
-    if (!caja) throw new Error("Abrí tu caja antes de cargar un gasto.");
-    db.gastos.unshift({ id: db.gastos.length + 1, fecha: hoyISO(), hora: new Date().toISOString(), categoria,
-      monto: Math.round(+monto), medio, detalle, cajaId: caja.id, usuarioId: user.id });
-    audit(user, `Gasto ${categoria} $${monto}`, "Caja " + caja.id);
-    save();
-  },
-
-  cerrarCaja(user, contado, obs) {
-    const caja = api.cajaAbierta(user.id);
-    if (!caja) throw new Error("No tenés una caja abierta.");
-    Object.assign(caja, { estado: "cerrada", cerrada: new Date().toISOString(), contado: Math.round(+contado || 0), obs: obs || "" });
-    audit(user, `Cerró caja (contó $${caja.contado})`, "Caja " + caja.id);
-    save();
-  },
-
-  recibirRendicion(user, cajaId) {
-    const caja = db.cajas.find(c => c.id === cajaId);
-    Object.assign(caja, { estado: "rendida", recibidaPor: user.nombre, recibida: new Date().toISOString() });
-    audit(user, "Recibió rendición", "Caja " + caja.id);
-    save();
+    // Si cobra Administración en el depósito en efectivo, entra directo a la caja.
+    if (medio === "Efectivo" && ["admin", "gerencia"].includes(user.rol)) {
+      api.movCaja(user, { tipo: "ingreso", concepto: "Cobro en el depósito", monto, persona: c.nombre, cobroId: cobro.id });
+    } else save();
   },
 
   // Entregas automáticas: lo que salió en reparto un día anterior pasa solo a Entregado.

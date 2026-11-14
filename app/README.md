@@ -25,6 +25,8 @@ Sin variables de entorno corre en **modo demo**: los datos se guardan en el nave
 - Precio manual en el renglón (solo Administración/Gerencia).
 - Remito interno imprimible. Historial de cada pedido.
 - Artículos con foto (se achica sola), stock mínimo y tramos. Usuarios con % de comisión.
+- Caja del depósito (Administración/Gerencia): entradas, salidas a quién, plata que tiene que volver, rendición de vendedores y conteo.
+- Funciona sin señal (PWA + bandeja de salida). Resumen del mes para Gerencia.
 
 ## Base de datos
 

@@ -18,7 +18,7 @@ const Ctx = createContext(null);
 export const useApp = () => useContext(Ctx);
 
 const TABS = {
-  vendedor: [["inicio", "Inicio"], ["clientes", "Clientes"], ["catalogo", "Catálogo"], ["pedidos", "Mis pedidos"], ["caja", "Caja"]],
+  vendedor: [["inicio", "Inicio"], ["clientes", "Clientes"], ["catalogo", "Catálogo"], ["pedidos", "Mis pedidos"]],
   deposito: [["deposito", "Preparación"]],
   admin: [["inicio", "Inicio"], ["pedidos", "Pedidos"], ["deposito", "Depósito"], ["clientes", "Clientes"], ["catalogo", "Catálogo"], ["caja", "Caja"], ["articulos", "Artículos"]],
   gerencia: [["inicio", "Inicio"], ["resumen", "Resumen del mes"], ["pedidos", "Pedidos"], ["deposito", "Depósito"], ["clientes", "Clientes"], ["catalogo", "Catálogo"], ["caja", "Caja"], ["articulos", "Artículos"], ["usuarios", "Usuarios"]],

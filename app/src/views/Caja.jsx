@@ -1,165 +1,205 @@
 import React, { useState } from "react";
 import { useApp } from "../App.jsx";
 import { api } from "../api/demo";
-import { fmt, puede } from "../lib/reglas";
+import { fmt } from "../lib/reglas";
 import { fechaHora } from "./ui.jsx";
 
-export const CATS_GASTO = ["Combustible", "Peaje", "Comida", "Repuestos", "Mercadería", "Otros"];
-const MEDIOS = ["Efectivo", "Transferencia", "Cheque"];
-
-// Cuentas de una sesión de caja.
-export function cuentasCaja(db, caja) {
-  const cobros = db.cobros.filter(c => c.cajaId === caja.id);
-  const gastos = db.gastos.filter(g => g.cajaId === caja.id);
-  const porMedio = m => cobros.filter(c => c.medio === m).reduce((s, c) => s + c.monto, 0);
-  const gastoEf = gastos.filter(g => g.medio === "Efectivo").reduce((s, g) => s + g.monto, 0);
-  const esperado = caja.fondo + porMedio("Efectivo") - gastoEf;
-  return {
-    cobros, gastos, esperado,
-    efectivo: porMedio("Efectivo"), transferencia: porMedio("Transferencia"), cheque: porMedio("Cheque"),
-    totalCobrado: cobros.reduce((s, c) => s + c.monto, 0), totalGastos: gastos.reduce((s, g) => s + g.monto, 0), gastoEf,
-    diferencia: caja.contado == null ? null : caja.contado - esperado,
-  };
-}
-
-const Dif = ({ d }) => d === 0 ? <span className="chip st-entregado">Cuadra</span>
-  : d > 0 ? <span className="chip st-preparado">Sobran {fmt(d)}</span> : <span className="chip warn">Faltan {fmt(-d)}</span>;
+// Caja del depósito: una sola, la manejan Administración y Gerencia.
+export const CONCEPTOS_ENTRADA = ["Rendición de vendedor", "Cobro en el depósito", "Aporte del dueño", "Otro ingreso"];
+export const CONCEPTOS_SALIDA = ["Pago a proveedor", "Sueldo / adelanto de sueldo", "Combustible", "Cambio para el reparto", "Préstamo", "Retiro del dueño", "Gasto varios"];
+const VUELVE_POR_DEFECTO = ["Cambio para el reparto", "Préstamo"];
+const COMO_VUELVE = ["Efectivo", "Transferencia", "Descontado del sueldo", "Otro"];
 
 export default function Caja() {
-  const { db, user } = useApp();
-  const caja = api.cajaAbierta(user.id);
-  const porRecibir = puede.administrar(user) ? db.cajas.filter(c => c.estado === "cerrada") : [];
-  const historial = db.cajas.filter(c => c.estado !== "abierta" && (puede.administrar(user) || c.usuarioId === user.id));
+  const { db } = useApp();
+  const [modal, setModal] = useState(null); // "entrada" | "salida" | "contar" | { devolver: mov }
+  const [filtro, setFiltro] = useState("");
+  const saldo = api.saldoCaja();
+  const pendientes = db.caja.filter(m => api.pendienteDe(m) > 0);
+  const vendedores = db.usuarios.filter(u => u.rol === "vendedor").map(u => ({ u, debe: api.aRendir(u.id) })).filter(v => v.debe > 0);
+  const hoy = new Date().toISOString().slice(0, 10);
+  const movHoy = db.caja.filter(m => m.fecha === hoy);
+  const entroHoy = movHoy.filter(m => m.monto > 0).reduce((s, m) => s + m.monto, 0);
+  const salioHoy = movHoy.filter(m => m.monto < 0).reduce((s, m) => s - m.monto, 0);
+  const ultimoArqueo = db.arqueos[0];
+  const lista = db.caja.filter(m => !filtro || (m.concepto + " " + m.persona + " " + m.detalle).toLowerCase().includes(filtro.toLowerCase()));
+
   return (
     <>
-      <h1>Caja</h1>
-      <p className="muted" style={{ marginBottom: 14 }}>Abrís la caja al empezar, cargás cobros y gastos, y al final contás el efectivo y la cerrás. Administración recibe la rendición.</p>
-      {caja ? <CajaAbierta caja={caja} /> : <AbrirCaja />}
-      {porRecibir.length > 0 && <>
-        <div className="sec-h"><h2>Rendiciones por recibir</h2></div>
-        <div className="card">{porRecibir.map(c => <FilaCaja key={c.id} caja={c} recibir />)}</div>
+      <div className="row between" style={{ marginBottom: 14, flexWrap: "wrap" }}>
+        <div><h1>Caja del depósito</h1><p className="muted">El efectivo que hay en la caja: qué entra, qué sale, a quién y qué tiene que volver.</p></div>
+        <div className="row" style={{ flexWrap: "wrap" }}>
+          <button className="btn" onClick={() => setModal("entrada")}>＋ Entrada</button>
+          <button className="btn dngr" onClick={() => setModal("salida")}>− Salida</button>
+          <button className="btn sec" onClick={() => setModal("contar")}>Contar caja</button>
+        </div>
+      </div>
+
+      <div className="grid g3" style={{ marginBottom: 6 }}>
+        <div className="card kpi" style={{ borderColor: "var(--brand)" }}><div className="num">{fmt(saldo)}</div><div className="lbl">Tendría que haber en la caja</div></div>
+        <div className="card kpi"><div className="num" style={{ color: "var(--entr)" }}>{fmt(entroHoy)}</div><div className="lbl">Entró hoy</div></div>
+        <div className="card kpi"><div className="num" style={{ color: "var(--danger)" }}>{fmt(salioHoy)}</div><div className="lbl">Salió hoy</div></div>
+        <div className="card kpi"><div className="num" style={{ color: "var(--prep)" }}>{fmt(pendientes.reduce((s, m) => s + api.pendienteDe(m), 0))}</div><div className="lbl">Afuera, tiene que volver</div></div>
+        <div className="card kpi"><div className="num" style={{ color: "var(--listo)" }}>{fmt(vendedores.reduce((s, v) => s + v.debe, 0))}</div><div className="lbl">Cobrado por vendedores, sin entregar</div></div>
+      </div>
+      <p className="muted">{ultimoArqueo ? `Última vez que se contó: ${fechaHora(ultimoArqueo.fecha)} por ${ultimoArqueo.usuario} · ${ultimoArqueo.dif === 0 ? "cuadró" : (ultimoArqueo.dif > 0 ? "sobraron " : "faltaron ") + fmt(Math.abs(ultimoArqueo.dif))}` : "Todavía no se contó la caja."}</p>
+
+      {vendedores.length > 0 && <>
+        <div className="sec-h"><h2>Vendedores con plata para entregar</h2></div>
+        <div className="card">
+          {vendedores.map(({ u, debe }) => (
+            <div key={u.id} className="list-item" style={{ cursor: "default" }}>
+              <div className="avatar">{u.nombre.slice(0, 2)}</div>
+              <div style={{ flex: 1, minWidth: 0 }}><b>{u.nombre}</b><div className="muted">Cobró en efectivo y todavía no lo entregó</div></div>
+              <b>{fmt(debe)}</b>
+              <button className="btn sm" onClick={() => setModal({ rendicion: u, debe })}>Recibir</button>
+            </div>
+          ))}
+        </div>
       </>}
-      {historial.length > 0 && <>
-        <div className="sec-h"><h2>Cajas anteriores</h2></div>
-        <div className="card">{historial.filter(c => c.estado === "rendida" || !puede.administrar(user)).map(c => <FilaCaja key={c.id} caja={c} />)}</div>
+
+      {pendientes.length > 0 && <>
+        <div className="sec-h"><h2>Plata afuera que tiene que volver</h2></div>
+        <div className="card">
+          {pendientes.map(m => {
+            const vencido = m.vuelveFecha && m.vuelveFecha < hoy;
+            return (
+              <div key={m.id} className="list-item" style={{ cursor: "default", flexWrap: "wrap" }}>
+                <div style={{ flex: 1, minWidth: 180 }}><b>{m.persona || "Sin nombre"}</b> <span className="muted">· {m.concepto}</span>
+                  <div className="muted">Salió {fechaHora(m.hora)} · {fmt(-m.monto)}{m.devoluciones.length ? ` · ya volvió ${fmt(-m.monto - api.pendienteDe(m))}` : ""}</div></div>
+                <span className={"chip " + (vencido ? "warn" : "st-pendiente")}>{m.vuelveFecha ? (vencido ? "Vencido " : "Vuelve ") + m.vuelveFecha : "Sin fecha"}</span>
+                <b>{fmt(api.pendienteDe(m))}</b>
+                <button className="btn sm" onClick={() => setModal({ devolver: m })}>Volvió</button>
+              </div>
+            );
+          })}
+        </div>
       </>}
+
+      <div className="sec-h"><h2>Movimientos</h2><input type="search" placeholder="Buscar persona o concepto…" value={filtro} onChange={e => setFiltro(e.target.value)} style={{ maxWidth: 260 }} /></div>
+      <div className="card">
+        {lista.length === 0 && <div className="empty">Sin movimientos. Usá “Entrada” o “Salida” para registrar plata que entra o sale de la caja.</div>}
+        {lista.map(m => <Mov key={m.id} m={m} />)}
+      </div>
+
+      {modal === "entrada" && <ModalMov tipo="ingreso" onClose={() => setModal(null)} />}
+      {modal === "salida" && <ModalMov tipo="egreso" onClose={() => setModal(null)} />}
+      {modal === "contar" && <ModalContar onClose={() => setModal(null)} />}
+      {modal?.devolver && <ModalDevolucion m={modal.devolver} onClose={() => setModal(null)} />}
+      {modal?.rendicion && <ModalRendicion u={modal.rendicion} debe={modal.debe} onClose={() => setModal(null)} />}
     </>
   );
 }
 
-function AbrirCaja() {
-  const { user, toast } = useApp();
-  const [fondo, setFondo] = useState("");
-  return (
-    <div className="card">
-      <h2>Tu caja está cerrada</h2>
-      <p className="muted" style={{ marginBottom: 12 }}>Poné con cuánto efectivo salís (el cambio). Si no llevás, dejalo en 0.</p>
-      <div className="row" style={{ flexWrap: "wrap" }}>
-        <input id="fondo" type="number" inputMode="numeric" placeholder="Fondo inicial $" value={fondo} onChange={e => setFondo(e.target.value)} style={{ maxWidth: 220 }} />
-        <button className="btn" onClick={() => { api.abrirCaja(user, fondo); toast("Caja abierta"); }}>Abrir caja</button>
-      </div>
-    </div>
-  );
-}
-
-function CajaAbierta({ caja }) {
-  const { db, user, toast } = useApp();
-  const [gasto, setGasto] = useState(false);
-  const [cerrar, setCerrar] = useState(false);
-  const k = cuentasCaja(db, caja);
-  const movs = [
-    ...k.cobros.map(c => ({ hora: c.hora, txt: db.clientes.find(x => x.id === c.clienteId)?.nombre, sub: "Cobro · " + c.medio, monto: c.monto })),
-    ...k.gastos.map(g => ({ hora: g.hora, txt: g.categoria + (g.detalle ? " · " + g.detalle : ""), sub: "Gasto · " + g.medio, monto: -g.monto })),
-  ].sort((a, b) => b.hora.localeCompare(a.hora));
-
-  return (
-    <>
-      <div className="card">
-        <div className="row between" style={{ flexWrap: "wrap" }}>
-          <div><span className="chip st-entregado">● Abierta</span> <span className="muted">desde {fechaHora(caja.abierta)}</span></div>
-          <div className="row"><button className="btn sec sm" onClick={() => setGasto(true)}>− Cargar gasto</button><button className="btn sm" onClick={() => setCerrar(true)}>Cerrar caja</button></div>
-        </div>
-        <div className="grid g3" style={{ marginTop: 14 }}>
-          <div className="kpi"><div className="num">{fmt(k.esperado)}</div><div className="lbl">Efectivo que tendrías que tener</div></div>
-          <div className="kpi"><div className="num" style={{ fontSize: 22 }}>{fmt(k.totalCobrado)}</div><div className="lbl">Cobrado hoy</div></div>
-          <div className="kpi"><div className="num" style={{ fontSize: 22 }}>{fmt(k.totalGastos)}</div><div className="lbl">Gastos</div></div>
-        </div>
-        <div className="muted" style={{ marginTop: 10 }}>Fondo {fmt(caja.fondo)} + efectivo cobrado {fmt(k.efectivo)} − gastos en efectivo {fmt(k.gastoEf)} · Transferencias {fmt(k.transferencia)} · Cheques {fmt(k.cheque)}</div>
-      </div>
-      <div className="sec-h"><h2>Movimientos</h2></div>
-      <div className="card">
-        {movs.length === 0 && <div className="empty">Todavía no hay cobros ni gastos. Los cobros se cargan desde la ficha de cada cliente.</div>}
-        {movs.map((m, i) => (
-          <div key={i} className="list-item" style={{ cursor: "default" }}>
-            <div style={{ flex: 1, minWidth: 0 }}><b>{m.txt}</b><div className="muted">{m.sub} · {fechaHora(m.hora)}</div></div>
-            <b style={{ color: m.monto < 0 ? "var(--danger)" : "var(--entr)" }}>{m.monto < 0 ? "− " : "+ "}{fmt(Math.abs(m.monto))}</b>
-          </div>
-        ))}
-      </div>
-      {gasto && <ModalGasto onClose={() => setGasto(false)} />}
-      {cerrar && <ModalCerrar k={k} onClose={() => setCerrar(false)} onOk={(contado, obs) => { api.cerrarCaja(user, contado, obs); toast("Caja cerrada. Queda para que Administración la reciba."); setCerrar(false); }} />}
-    </>
-  );
-}
-
-function ModalGasto({ onClose }) {
-  const { user, toast } = useApp();
-  const [f, setF] = useState({ categoria: "Combustible", monto: "", medio: "Efectivo", detalle: "" });
-  const set = (k, v) => setF({ ...f, [k]: v });
-  return (
-    <div className="modal-back" onClick={onClose}>
-      <div className="modal" onClick={e => e.stopPropagation()}>
-        <h2>Cargar gasto</h2>
-        <div className="grid g2">
-          <div className="field"><label htmlFor="g-c">Tipo</label><select id="g-c" value={f.categoria} onChange={e => set("categoria", e.target.value)}>{CATS_GASTO.map(c => <option key={c}>{c}</option>)}</select></div>
-          <div className="field"><label htmlFor="g-m">Monto</label><input id="g-m" type="number" inputMode="numeric" value={f.monto} onChange={e => set("monto", e.target.value)} /></div>
-          <div className="field"><label htmlFor="g-me">Pagado con</label><select id="g-me" value={f.medio} onChange={e => set("medio", e.target.value)}>{MEDIOS.map(m => <option key={m}>{m}</option>)}</select></div>
-          <div className="field"><label htmlFor="g-d">Detalle</label><input id="g-d" value={f.detalle} onChange={e => set("detalle", e.target.value)} placeholder="Opcional" /></div>
-        </div>
-        <div className="row"><button className="btn sec" onClick={onClose}>Cancelar</button>
-          <button className="btn" style={{ flex: 1 }} onClick={() => { if (!(+f.monto > 0)) return toast("Poné el monto"); api.registrarGasto(user, f); toast("Gasto cargado"); onClose(); }}>Guardar gasto</button></div>
-      </div>
-    </div>
-  );
-}
-
-function ModalCerrar({ k, onClose, onOk }) {
-  const [contado, setContado] = useState("");
-  const [obs, setObs] = useState("");
-  const d = contado === "" ? null : Math.round(+contado) - k.esperado;
-  return (
-    <div className="modal-back" onClick={onClose}>
-      <div className="modal" onClick={e => e.stopPropagation()}>
-        <h2>Cerrar caja</h2>
-        <p className="muted" style={{ marginBottom: 12 }}>Contá el efectivo que tenés y escribilo. El sistema lo compara con lo que debería haber: <b>{fmt(k.esperado)}</b>.</p>
-        <div className="field"><label htmlFor="cc-c">Efectivo contado</label><input id="cc-c" type="number" inputMode="numeric" value={contado} onChange={e => setContado(e.target.value)} /></div>
-        {d !== null && <div style={{ marginBottom: 12 }}><Dif d={d} /></div>}
-        {d !== null && d !== 0 && <div className="field"><label htmlFor="cc-o">¿Por qué no cuadra?</label><input id="cc-o" value={obs} onChange={e => setObs(e.target.value)} placeholder="Ej: le di cambio de más a un cliente" /></div>}
-        <div className="row"><button className="btn sec" onClick={onClose}>Cancelar</button><button className="btn" style={{ flex: 1 }} disabled={contado === ""} onClick={() => onOk(contado, obs)}>Cerrar y rendir</button></div>
-      </div>
-    </div>
-  );
-}
-
-function FilaCaja({ caja, recibir }) {
-  const { db, user, toast } = useApp();
-  const [abierta, setAbierta] = useState(false);
-  const u = db.usuarios.find(x => x.id === caja.usuarioId);
-  const k = cuentasCaja(db, caja);
+function Mov({ m }) {
+  const [abierto, setAbierto] = useState(false);
+  const pend = api.pendienteDe(m);
   return (
     <div style={{ borderBottom: "1px solid var(--line)" }}>
-      <div className="list-item" onClick={() => setAbierta(!abierta)} style={{ borderBottom: 0 }}>
-        <div className="avatar">{u?.nombre.slice(0, 2)}</div>
-        <div style={{ flex: 1, minWidth: 0 }}><b>{u?.nombre}</b><div className="muted">{fechaHora(caja.abierta)} → {fechaHora(caja.cerrada)}{caja.recibidaPor ? " · recibió " + caja.recibidaPor : ""}</div></div>
-        <div style={{ textAlign: "right" }}><b>{fmt(caja.contado)}</b><div><Dif d={k.diferencia} /></div></div>
+      <div className="list-item" style={{ borderBottom: 0, flexWrap: "wrap" }} onClick={() => setAbierto(!abierto)}>
+        <div style={{ flex: 1, minWidth: 180 }}>
+          <b>{m.concepto}</b>{m.persona && <span> · {m.persona}</span>}
+          <div className="muted">{fechaHora(m.hora)} · registró {m.usuario}{m.detalle ? " · " + m.detalle : ""}</div>
+        </div>
+        {m.vuelve && <span className={"chip " + (pend > 0 ? "st-pendiente" : "st-entregado")}>{pend > 0 ? "Falta volver " + fmt(pend) : "Volvió todo"}</span>}
+        <b style={{ color: m.monto < 0 ? "var(--danger)" : "var(--entr)", minWidth: 90, textAlign: "right" }}>{m.monto < 0 ? "− " : "+ "}{fmt(Math.abs(m.monto))}</b>
       </div>
-      {abierta && (
-        <div style={{ padding: "0 4px 12px" }} className="muted">
-          Fondo {fmt(caja.fondo)} · Efectivo cobrado {fmt(k.efectivo)} · Transferencias {fmt(k.transferencia)} · Cheques {fmt(k.cheque)} · Gastos {fmt(k.totalGastos)} · Esperado {fmt(k.esperado)} · Contado {fmt(caja.contado)}
-          {caja.obs && <div>📝 {caja.obs}</div>}
+      {abierto && m.devoluciones.length > 0 && (
+        <div style={{ padding: "0 4px 10px" }}>
+          {m.devoluciones.map((d, i) => <div key={i} className="audit">Volvió {fmt(d.monto)} · {d.como} · {fechaHora(d.hora)} · recibió {d.usuario}</div>)}
         </div>
       )}
-      {recibir && <div style={{ padding: "0 4px 12px" }}><button className="btn sm" onClick={() => { api.recibirRendicion(user, caja.id); toast("Rendición recibida"); }}>✓ Recibí la plata</button></div>}
+    </div>
+  );
+}
+
+function ModalMov({ tipo, onClose }) {
+  const { user, toast } = useApp();
+  const entrada = tipo === "ingreso";
+  const conceptos = entrada ? CONCEPTOS_ENTRADA.filter(c => c !== "Rendición de vendedor" && c !== "Cobro en el depósito") : CONCEPTOS_SALIDA;
+  const [f, setF] = useState({ concepto: conceptos[0], monto: "", persona: "", detalle: "", vuelve: VUELVE_POR_DEFECTO.includes(conceptos[0]), vuelveFecha: "" });
+  const set = (k, v) => setF(prev => ({ ...prev, [k]: v, ...(k === "concepto" && !entrada ? { vuelve: VUELVE_POR_DEFECTO.includes(v) } : {}) }));
+  const guardar = () => {
+    if (!entrada && !f.persona.trim()) return toast("Poné a quién se le da la plata");
+    try { api.movCaja(user, { tipo, ...f }); toast(entrada ? "Entrada registrada" : "Salida registrada"); onClose(); } catch (e) { toast(e.message); }
+  };
+  return (
+    <div className="modal-back" onClick={onClose}>
+      <div className="modal" onClick={e => e.stopPropagation()}>
+        <h2>{entrada ? "Entra plata a la caja" : "Sale plata de la caja"}</h2>
+        <p className="muted" style={{ marginBottom: 12 }}>{entrada ? "Los cobros del depósito y lo que entregan los vendedores se cargan solos. Acá va cualquier otra entrada." : "Queda registrado a quién, cuándo, por qué y quién lo cargó."}</p>
+        <div className="grid g2">
+          <div className="field"><label htmlFor="mv-c">Concepto</label><select id="mv-c" value={f.concepto} onChange={e => set("concepto", e.target.value)}>{conceptos.map(c => <option key={c}>{c}</option>)}</select></div>
+          <div className="field"><label htmlFor="mv-m">Monto en efectivo</label><input id="mv-m" type="number" inputMode="numeric" value={f.monto} onChange={e => set("monto", e.target.value)} /></div>
+        </div>
+        <div className="field"><label htmlFor="mv-p">{entrada ? "De quién (opcional)" : "A quién se le da"}</label><input id="mv-p" value={f.persona} onChange={e => set("persona", e.target.value)} placeholder={entrada ? "" : "Ej: Juan (chofer), Coca-Cola, Mario"} /></div>
+        <div className="field"><label htmlFor="mv-d">Detalle (opcional)</label><input id="mv-d" value={f.detalle} onChange={e => set("detalle", e.target.value)} placeholder="Ej: factura 0001-2345" /></div>
+        {!entrada && <>
+          <label className="row" style={{ gap: 8, marginBottom: 10 }}><input type="checkbox" style={{ width: "auto" }} checked={f.vuelve} onChange={e => set("vuelve", e.target.checked)} /> Esta plata <b>tiene que volver</b> a la caja</label>
+          {f.vuelve && <div className="field"><label htmlFor="mv-f">¿Para cuándo tiene que volver?</label><input id="mv-f" type="date" value={f.vuelveFecha} onChange={e => set("vuelveFecha", e.target.value)} /></div>}
+        </>}
+        <div className="row"><button className="btn sec" onClick={onClose}>Cancelar</button><button className={"btn " + (entrada ? "" : "dngr")} style={{ flex: 1 }} onClick={guardar}>{entrada ? "Registrar entrada" : "Registrar salida"}{f.monto ? " " + fmt(f.monto) : ""}</button></div>
+      </div>
+    </div>
+  );
+}
+
+function ModalDevolucion({ m, onClose }) {
+  const { user, toast } = useApp();
+  const pend = api.pendienteDe(m);
+  const [monto, setMonto] = useState(pend);
+  const [como, setComo] = useState("Efectivo");
+  return (
+    <div className="modal-back" onClick={onClose}>
+      <div className="modal" onClick={e => e.stopPropagation()}>
+        <h2>Volvió plata de {m.persona}</h2>
+        <p className="muted" style={{ marginBottom: 12 }}>{m.concepto} del {m.fecha} por {fmt(-m.monto)}. Falta que vuelva {fmt(pend)}. Puede volver en partes.</p>
+        <div className="grid g2">
+          <div className="field"><label htmlFor="dv-m">Cuánto volvió</label><input id="dv-m" type="number" inputMode="numeric" value={monto} onChange={e => setMonto(e.target.value)} /></div>
+          <div className="field"><label htmlFor="dv-c">Cómo volvió</label><select id="dv-c" value={como} onChange={e => setComo(e.target.value)}>{COMO_VUELVE.map(c => <option key={c}>{c}</option>)}</select></div>
+        </div>
+        {como !== "Efectivo" && <p className="muted" style={{ marginBottom: 10 }}>No vuelve en efectivo: se da por devuelto pero no suma a la caja.</p>}
+        <div className="row"><button className="btn sec" onClick={onClose}>Cancelar</button>
+          <button className="btn" style={{ flex: 1 }} onClick={() => { try { api.registrarDevolucion(user, m.id, monto, como); toast("Devolución registrada"); onClose(); } catch (e) { toast(e.message); } }}>Registrar devolución</button></div>
+      </div>
+    </div>
+  );
+}
+
+function ModalRendicion({ u, debe, onClose }) {
+  const { user, toast } = useApp();
+  const [monto, setMonto] = useState(debe);
+  return (
+    <div className="modal-back" onClick={onClose}>
+      <div className="modal" onClick={e => e.stopPropagation()}>
+        <h2>{u.nombre} entrega plata</h2>
+        <p className="muted" style={{ marginBottom: 12 }}>Cobró en efectivo {fmt(debe)} que todavía no entregó. Contá lo que trae.</p>
+        <div className="field"><label htmlFor="rd-m">Cuánto entrega</label><input id="rd-m" type="number" inputMode="numeric" value={monto} onChange={e => setMonto(e.target.value)} /></div>
+        {+monto !== debe && <p className="chip warn" style={{ display: "block", borderRadius: 8, padding: 8, marginBottom: 10 }}>{+monto < debe ? `Le quedan ${fmt(debe - monto)} por entregar.` : "Entrega más de lo que cobró."}</p>}
+        <div className="row"><button className="btn sec" onClick={onClose}>Cancelar</button>
+          <button className="btn" style={{ flex: 1 }} onClick={() => { try { api.movCaja(user, { tipo: "ingreso", concepto: "Rendición de vendedor", monto, persona: u.nombre, vendedorId: u.id }); toast("Entrada registrada"); onClose(); } catch (e) { toast(e.message); } }}>Recibí {fmt(monto)}</button></div>
+      </div>
+    </div>
+  );
+}
+
+function ModalContar({ onClose }) {
+  const { user, toast } = useApp();
+  const esperado = api.saldoCaja();
+  const [contado, setContado] = useState("");
+  const [motivo, setMotivo] = useState("");
+  const dif = contado === "" ? null : Math.round(+contado) - esperado;
+  return (
+    <div className="modal-back" onClick={onClose}>
+      <div className="modal" onClick={e => e.stopPropagation()}>
+        <h2>Contar la caja</h2>
+        <p className="muted" style={{ marginBottom: 12 }}>Según los movimientos tendría que haber <b>{fmt(esperado)}</b>. Contá el efectivo y escribí cuánto hay.</p>
+        <div className="field"><label htmlFor="ct-c">Efectivo contado</label><input id="ct-c" type="number" inputMode="numeric" value={contado} onChange={e => setContado(e.target.value)} /></div>
+        {dif !== null && <p style={{ marginBottom: 10 }}>{dif === 0 ? <span className="chip st-entregado">Cuadra</span> : dif > 0 ? <span className="chip st-preparado">Sobran {fmt(dif)}</span> : <span className="chip warn">Faltan {fmt(-dif)}</span>}</p>}
+        {dif !== null && dif !== 0 && <div className="field"><label htmlFor="ct-m">¿Por qué no cuadra?</label><input id="ct-m" value={motivo} onChange={e => setMotivo(e.target.value)} placeholder="Si no se sabe, poné “sin explicar”" /></div>}
+        <div className="row"><button className="btn sec" onClick={onClose}>Cancelar</button>
+          <button className="btn" style={{ flex: 1 }} disabled={contado === "" || (dif !== 0 && !motivo.trim())} onClick={() => { api.arqueo(user, contado, motivo); toast(dif === 0 ? "Caja contada: cuadra" : "Caja contada: diferencia registrada"); onClose(); }}>Guardar conteo</button></div>
+      </div>
     </div>
   );
 }

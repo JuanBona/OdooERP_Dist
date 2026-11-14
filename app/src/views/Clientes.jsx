@@ -142,21 +142,12 @@ function Cobro({ c, onClose, onOk }) {
   const { user } = useApp();
   const [monto, setMonto] = useState(c.saldo < 0 ? -c.saldo : "");
   const [medio, setMedio] = useState("Efectivo");
-  const { toast, go } = useApp();
-  const sinCaja = !api.cajaAbierta(user.id);
+  const { toast } = useApp();
   const ok = () => {
     const m = Math.round(+monto); if (!(m > 0)) return;
     try { api.registrarCobro(user, c.id, m, medio); onOk(m); } catch (e) { toast(e.message); }
   };
-  if (sinCaja) return (
-    <div className="modal-back" onClick={onClose}>
-      <div className="modal" onClick={e => e.stopPropagation()}>
-        <h2>Primero abrí tu caja</h2>
-        <p className="muted" style={{ marginBottom: 14 }}>Los cobros se registran en tu caja del día, así al final rendís lo que cobraste.</p>
-        <div className="row"><button className="btn sec" onClick={onClose}>Cancelar</button><button className="btn" style={{ flex: 1 }} onClick={() => go("caja")}>Ir a Caja</button></div>
-      </div>
-    </div>
-  );
+  const nota = medio !== "Efectivo" ? "" : user.rol === "vendedor" ? "Lo vas a tener que entregar en el depósito." : "Entra directo a la caja del depósito.";
   return (
     <div className="modal-back" onClick={onClose}>
       <div className="modal" onClick={e => e.stopPropagation()}>
@@ -164,6 +155,7 @@ function Cobro({ c, onClose, onOk }) {
         <p className="muted" style={{ marginBottom: 12 }}>{c.nombre} · {c.saldo < 0 ? "debe " + fmt(-c.saldo) : "sin deuda"}. Cualquier pago, aunque sea parcial, reinicia la alerta de 15 días.</p>
         <div className="field"><label htmlFor="co-m">Monto</label><input id="co-m" type="number" inputMode="numeric" value={monto} onChange={e => setMonto(e.target.value)} /></div>
         <div className="field"><label htmlFor="co-med">Medio</label><select id="co-med" value={medio} onChange={e => setMedio(e.target.value)}>{["Efectivo", "Transferencia", "Cheque"].map(x => <option key={x}>{x}</option>)}</select></div>
+        {nota && <p className="muted" style={{ marginBottom: 10 }}>{nota}</p>}
         <div className="row"><button className="btn sec" onClick={onClose}>Cancelar</button><button className="btn" style={{ flex: 1 }} onClick={ok}>Registrar {monto ? fmt(monto) : ""}</button></div>
       </div>
     </div>

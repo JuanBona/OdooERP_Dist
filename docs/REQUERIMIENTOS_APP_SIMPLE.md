@@ -48,7 +48,7 @@ Referencias: ✅ ya está en la maqueta · 🟡 está, falta un ajuste · 🔴 n
 | RF-GV-01/02 | Comisión configurable **por vendedor**, panel privado | 🟡 | La maqueta tiene un % único. Se pone un % por vendedor en Usuarios. Panel solo para Gerencia. |
 | RF-GV-03 | Comisión | ✅ | **Sobre lo cobrado** (decisión 14/11). Se calcula en cada cobro con el % del vendedor del cliente. |
 | RF-GV-04 | Seguimiento por período | ✅ | **Resumen del mes** (Gerencia), mes calendario. Ver sección 8. |
-| — | Caja, rendición del vendedor y gastos (`pos_reparto_caja`) | ✅ | **Sesión de caja** por usuario. Ver sección 8. |
+| — | Caja, rendición del vendedor y gastos (`pos_reparto_caja`) | ✅ | **Caja del depósito** (Administración/Gerencia). Ver sección 8. |
 | — | Cuenta corriente / cobro de deuda | ✅ | Saldo + "Nuevo cobro". |
 | — | Reporte de ventas por vendedor | ✅ | Reportes. |
 
@@ -81,7 +81,7 @@ Referencias: ✅ ya está en la maqueta · 🟡 está, falta un ajuste · 🔴 n
 ## 7. Etapas
 
 1. ✅ Login y roles, catálogo, clientes con alerta de deuda, pedido con tramos → depósito con checklist → remito.
-2. ✅ Sin señal, caja por sesión, resumen del mes, entregas automáticas.
+2. ✅ Sin señal, caja del depósito, resumen del mes, entregas automáticas.
 3. Conectar a Supabase (self-hosted en el servidor donde hoy está Odoo).
 4. Pendiente de definir: compras a proveedores, hoja de reparto con Maps, límite de crédito.
 
@@ -93,17 +93,19 @@ Referencias: ✅ ya está en la maqueta · 🟡 está, falta un ajuste · 🔴 n
 - Al volver la señal se envía solo. Si mientras tanto se quedó sin stock, el pedido queda en la bandeja con el motivo y el vendedor lo puede descartar y recargar.
 - El stock se valida y descuenta cuando el pedido llega al sistema, no antes.
 
-### Caja (sesión)
-- Cada usuario que cobra (vendedor, administración) **abre su caja** con un fondo inicial (el cambio).
-- **No se puede cobrar ni cargar gastos sin caja abierta.** Los cobros se cargan desde la ficha del cliente; los gastos (combustible, peaje, etc.) desde la caja.
-- La caja muestra en todo momento el **efectivo esperado** = fondo + cobros en efectivo − gastos en efectivo. Transferencias y cheques se muestran aparte (no están en el bolsillo).
-- **Cerrar caja:** el usuario escribe el efectivo que contó; el sistema muestra si cuadra, sobra o falta, y pide un motivo si no cuadra.
-- **Administración recibe la rendición** ("Recibí la plata"). Queda registrado quién y cuándo.
-- Una sola caja abierta por usuario a la vez.
+### Caja del depósito (rediseño 14/11, pedido del cliente)
+Es **la caja física del depósito**. Una sola. La manejan **Administración y Gerencia**; los vendedores no la ven.
+- **Saldo siempre a la vista:** cuánto efectivo tendría que haber.
+- **Entradas:** cobros en efectivo hechos en el depósito (entran solos), lo que entregan los vendedores, aportes y otros ingresos.
+- **Salidas:** qué, cuánto, **a quién**, cuándo y quién lo registró. Se marca si **tiene que volver** y para qué fecha (préstamo, cambio para el reparto, etc.).
+- **Devoluciones:** cuánto volvió, cuándo y **cómo** (efectivo, transferencia, descontado del sueldo, otro). Pueden ser parciales. Solo la devolución en efectivo suma a la caja. Las vencidas se marcan en rojo.
+- **Vendedores:** cobran en la calle sin caja propia. La app lleva lo que cada uno cobró en efectivo y no entregó; Administración toca "Recibir" cuando lo trae (puede ser parcial).
+- **Contar la caja:** se cuenta el efectivo, se compara con el saldo y si no cuadra queda registrada la diferencia con el motivo. Se muestra cuándo se contó por última vez.
+- Los movimientos no se editan ni se borran (historial).
 
 ### Resumen del mes (Gerencia) — propuesta, el cliente no pidió finanzas
 Sale solo de lo que ya se carga; no agrega trabajo:
-- Vendido, cobrado, gastos, comisiones a pagar, "lo que quedó" (cobrado − gastos − comisiones) y deuda total de clientes.
+- Vendido, cobrado, gastos (salidas de caja que no vuelven, sin retiros del dueño), comisiones a pagar, "lo que quedó" (cobrado − gastos − comisiones) y deuda total de clientes.
 - Tabla por vendedor: pedidos, vendido, cobrado, comisión.
 - Productos más vendidos, gastos por tipo y clientes que más deben.
 - No muestra ganancia sobre mercadería porque no se carga el costo. Si la quiere, se agrega un campo "costo" en Artículos.
