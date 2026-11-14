@@ -2,7 +2,8 @@ import { Icon, Avatar } from "./icons.jsx";
 import React, { useMemo, useState } from "react";
 import { useApp } from "../App.jsx";
 import { api } from "../api";
-import { DIAS, fmt, puede, tieneAlerta } from "../lib/reglas";
+import { enviarCobro } from "../lib/offline";
+import { DIAS, fmt, puede, tieneAlerta, sinContar, tope } from "../lib/reglas";
 import { ChipCuenta } from "./ui.jsx";
 import { misClientes, PedidoRow } from "./Inicio.jsx";
 
@@ -122,10 +123,10 @@ export function ClienteDetalle() {
 
       {habList.length > 0 && <>
         <div className="sec-h"><h2>Lo que compra siempre</h2>
-          <button className="btn sm" onClick={() => tomarPedido(Object.fromEntries(habList.map(h => [h.p.id, Math.min(h.cant, h.p.stock)]).filter(x => x[1] > 0)))}>Repetir último pedido</button></div>
+          <button className="btn sm" onClick={() => tomarPedido(Object.fromEntries(habList.map(h => [h.p.id, Math.min(h.cant, tope(h.p))]).filter(x => x[1] > 0)))}>Repetir último pedido</button></div>
         <div className="grid g2">
           {habList.map(({ p, cant }) => (
-            <div key={p.id} className="hab-card"><div className="info"><div className="nm">{p.nombre}</div><div className="muted">{fmt(p.precio)} · stock {p.stock}</div></div><span className="tag-last">Última: {cant}</span></div>
+            <div key={p.id} className="hab-card"><div className="info"><div className="nm">{p.nombre}</div><div className="muted">{fmt(p.precio)} · {sinContar(p) ? "sin contar" : "stock " + p.stock}</div></div><span className="tag-last">Última: {cant}</span></div>
           ))}
         </div>
       </>}
@@ -146,7 +147,7 @@ function Cobro({ c, onClose, onOk }) {
   const { toast } = useApp();
   const ok = async () => {
     const m = Math.round(+monto); if (!(m > 0)) return;
-    try { await api.registrarCobro(user, c.id, m, medio); onOk(m); } catch (e) { toast(e.message); }
+    try { const r = await enviarCobro(user, { clienteId: c.id, monto: m, medio }); if (r.enCola) { toast("Sin señal: el cobro quedó guardado y se envía solo cuando vuelva la conexión."); onClose(); } else onOk(m); } catch (e) { toast(e.message); }
   };
   const nota = medio !== "Efectivo" ? "" : user.rol === "vendedor" ? "Lo vas a tener que entregar en el depósito." : "Entra directo a la caja del depósito.";
   return (

@@ -4,7 +4,7 @@
 import seed from "../seed.json";
 import { calcPedido, hoyISO, nuevoEstadoPedido } from "../lib/reglas";
 
-const KEY = "rds-demo-v2";
+const KEY = "rds-demo-v3";
 const listeners = new Set();
 let db = load();
 
@@ -18,7 +18,7 @@ function inicial() {
   ];
   const productos = seed.productos.map((p, i) => ({
     id: i + 1, nombre: p.nombre, categoria: p.categoria, precio: p.precio,
-    stock: 50, stockMin: 10, tramos: [], foto: null, activo: true,
+    stock: 50, stockMin: 10, stockContado: true, tramos: [], foto: p.foto || null, activo: true,
   }));
   // Ejemplo de tramos en dos productos para que se vea la función
   productos[0].tramos = [{ min: 5, pct: 4 }, { min: 10, pct: 8 }];
@@ -66,7 +66,7 @@ export const api = {
     const c = db.clientes.find(x => x.id === clienteId);
     for (const it of items) {
       const p = db.productos.find(x => x.id === it.productoId);
-      if (it.cant > p.stock) throw new Error(`No hay stock suficiente de ${p.nombre} (quedan ${p.stock}).`);
+      if (p.stockContado !== false && it.cant > p.stock) throw new Error(`No hay stock suficiente de ${p.nombre} (quedan ${p.stock}).`);
     }
     const lineas = calcPedido(items, db.productos);
     lineas.forEach(l => { db.productos.find(p => p.id === l.productoId).stock -= l.cant; });

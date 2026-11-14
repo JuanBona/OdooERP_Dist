@@ -23,7 +23,7 @@ export default function Articulos() {
             <ProdImg p={p} size={44} />
             <div style={{ flex: 1, minWidth: 0 }}><b>{p.nombre}</b>
               <div className="muted">{p.categoria}{p.tramos.length ? " · 🏷 " + p.tramos.map(t => `${t.min}+ ${t.pct}%`).join(", ") : ""}{!p.activo ? " · inactivo" : ""}</div></div>
-            <div style={{ textAlign: "right" }}><b>{fmt(p.precio)}</b><div><span className={"chip " + (p.stock <= p.stockMin ? "warn" : "st-entregado")}>{p.stock} u.</span></div></div>
+            <div style={{ textAlign: "right" }}><b>{fmt(p.precio)}</b><div>{p.stockContado === false ? <span className="chip st-autorizado">Sin contar</span> : <span className={"chip " + (p.stock <= p.stockMin ? "warn" : "st-entregado")}>{p.stock} u.</span>}</div></div>
           </div>
         ))}
       </div>
@@ -68,7 +68,7 @@ function EditarArticulo({ p, onClose }) {
         <div className="grid g2">
           <div className="field"><label htmlFor="ea-c">Categoría</label><input id="ea-c" list="cats" value={f.categoria} onChange={e => set("categoria", e.target.value)} /><datalist id="cats">{cats.map(c => <option key={c} value={c} />)}</datalist></div>
           <div className="field"><label htmlFor="ea-p">Precio</label><input id="ea-p" type="number" value={f.precio} onChange={e => set("precio", e.target.value)} /></div>
-          <div className="field"><label htmlFor="ea-s">Stock</label><input id="ea-s" type="number" value={f.stock} onChange={e => set("stock", e.target.value)} /></div>
+          <div className="field"><label htmlFor="ea-s">Stock</label><input id="ea-s" type="number" value={f.stock} onChange={e => setF({ ...f, stock: e.target.value, stockContado: true })} /></div>
           <div className="field"><label htmlFor="ea-m">Stock mínimo (alerta)</label><input id="ea-m" type="number" value={f.stockMin} onChange={e => set("stockMin", e.target.value)} /></div>
         </div>
         <div className="field"><label>Descuento por cantidad (hasta 3 tramos)</label>
@@ -80,6 +80,7 @@ function EditarArticulo({ p, onClose }) {
             </div>
           ))}
         </div>
+        <label className="row" style={{ marginBottom: 8, gap: 8 }}><input type="checkbox" style={{ width: "auto" }} checked={f.stockContado !== false} onChange={e => set("stockContado", e.target.checked)} /> Stock contado (si no, se vende sin límite y figura “Sin contar”)</label>
         <label className="row" style={{ marginBottom: 14, gap: 8 }}><input type="checkbox" style={{ width: "auto" }} checked={f.activo} onChange={e => set("activo", e.target.checked)} /> Se muestra en el catálogo</label>
         <div className="row"><button className="btn sec" onClick={onClose}>Cancelar</button><button className="btn" style={{ flex: 1 }} onClick={guardar}>Guardar</button></div>
       </div>

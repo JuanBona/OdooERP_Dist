@@ -60,6 +60,10 @@ export function calcPedido(items, productos) {
   return items.map(it => calcLinea(productos.find(p => p.id === it.productoId), it.cant, it.precioManual, it.descManual));
 }
 
+// Arranque sin stock contado: mientras el producto está "Sin contar" se vende sin límite.
+export const sinContar = p => p.stockContado === false;
+export const tope = p => (sinContar(p) ? Infinity : p.stock);
+
 export const puede = {
   autorizar: u => ["admin", "gerencia"].includes(u.rol),
   editarPrecio: u => ["admin", "gerencia"].includes(u.rol),

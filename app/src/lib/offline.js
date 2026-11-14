@@ -23,21 +23,35 @@ export function useConexion() {
 
 // Devuelve { pedido } si se envió, o { enCola: true } si quedó esperando señal.
 const esCorte = e => !navigator.onLine || /conexión|Failed to fetch|NetworkError|Load failed/i.test(e?.message || "");
-const encolar = (user, data) => {
-  outbox.push({ uid: Date.now() + "-" + Math.random().toString(36).slice(2, 7), user, data, creado: new Date().toISOString(), error: null });
+const nuevoUid = () => Date.now().toString(36) + "-" + Math.random().toString(36).slice(2, 9);
+const encolar = (tipo, user, data) => {
+  outbox.push({ uid: data.uid, tipo, user, data, creado: new Date().toISOString(), error: null });
   guardar();
   return { enCola: true };
 };
+// El identificador viaja con el envío: si se reintenta, el servidor no lo duplica.
+const ENVIAR = {
+  pedido: (user, d) => api.crearPedido(user, d),
+  cobro: (user, d) => api.registrarCobro(user, d.clienteId, d.monto, d.medio, d.uid),
+};
 
-export async function enviarPedido(user, data) {
-  if (!navigator.onLine) return encolar(user, data);
+async function enviar(tipo, user, data) {
+  data = { ...data, uid: data.uid || nuevoUid() };
+  if (!navigator.onLine) return encolar(tipo, user, data);
   try {
-    return { pedido: await api.crearPedido(user, data) };
+    return { resultado: await ENVIAR[tipo](user, data) };
   } catch (e) {
-    if (esCorte(e)) return encolar(user, data); // la señal se cortó justo al enviar
-    throw e;                                     // error real (sin stock, sin permiso…)
+    if (esCorte(e)) return encolar(tipo, user, data); // la señal se cortó justo al enviar
+    throw e;                                           // error real (sin stock, sin permiso…)
   }
 }
+
+// Devuelven { resultado } si se envió, o { enCola: true } si quedó esperando señal.
+export async function enviarPedido(user, data) {
+  const r = await enviar("pedido", user, data);
+  return r.enCola ? r : { pedido: r.resultado };
+}
+export const enviarCobro = (user, data) => enviar("cobro", user, data);
 
 let sincronizando = false;
 export async function sincronizar(onResultado) {
@@ -46,14 +60,14 @@ export async function sincronizar(onResultado) {
   try {
     for (const it of outbox.filter(x => !x.error)) {
       try {
-        const p = await api.crearPedido(it.user, it.data);
+        const r = await ENVIAR[it.tipo || "pedido"](it.user, it.data);
         outbox = outbox.filter(x => x.uid !== it.uid);
-        onResultado?.(`Se envió el pedido #${p.id} que estaba esperando señal`);
+        onResultado?.(it.tipo === "cobro" ? "Se envió un cobro que estaba esperando señal" : `Se envió el pedido #${r?.id ?? ""} que estaba esperando señal`);
       } catch (e) {
         if (esCorte(e)) break; // se volvió a cortar: queda para la próxima
         // Ej.: se quedó sin stock mientras no había señal. Queda en la bandeja con el motivo.
         outbox = outbox.map(x => x.uid === it.uid ? { ...x, error: e.message } : x);
-        onResultado?.("Un pedido sin señal no se pudo enviar: " + e.message);
+        onResultado?.("Algo cargado sin señal no se pudo enviar: " + e.message);
       }
       guardar();
     }

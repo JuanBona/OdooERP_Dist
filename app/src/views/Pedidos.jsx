@@ -40,11 +40,12 @@ function Bandeja() {
       <h2>Esperando señal para enviarse</h2>
       {mios.map(o => {
         const c = db.clientes.find(x => x.id === o.data.clienteId);
-        const bultos = o.data.items.reduce((s, i) => s + i.cant, 0);
+        const esCobro = o.tipo === "cobro";
+        const bultos = esCobro ? 0 : o.data.items.reduce((s, i) => s + i.cant, 0);
         return (
           <div key={o.uid} className="list-item" style={{ cursor: "default" }}>
             <div className="avatar" style={{ color: "var(--pend)", background: "var(--pend-bg)" }}><Icon n="sinSenal" s={18} /></div>
-            <div style={{ flex: 1, minWidth: 0 }}><b>{c?.nombre}</b><div className="muted">{bultos} {bultos === 1 ? "bulto" : "bultos"} · cargado {fechaHora(o.creado)}</div>
+            <div style={{ flex: 1, minWidth: 0 }}><b>{c?.nombre}</b><div className="muted">{esCobro ? `Cobro ${o.data.medio} $ ${o.data.monto.toLocaleString("es-AR")}` : `${bultos} ${bultos === 1 ? "bulto" : "bultos"}`} · cargado {fechaHora(o.creado)}</div>
               {o.error && <div className="chip warn" style={{ marginTop: 4 }}>No se pudo enviar: {o.error}</div>}</div>
             {o.error ? <button className="btn sec sm" onClick={() => descartar(o.uid)}>Descartar</button> : <span className="chip st-pendiente">Pendiente de envío</span>}
           </div>

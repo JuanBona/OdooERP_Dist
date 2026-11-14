@@ -16,9 +16,10 @@ insert into perfiles(id, nombre, rol, comision_pct) values
  ('00000000-0000-0000-0000-000000000003','Depósito','deposito',0),
  ('00000000-0000-0000-0000-000000000004','Administración','admin',0),
  ('00000000-0000-0000-0000-000000000005','Gerencia','gerencia',0);
-insert into productos(nombre, categoria, precio, stock, tramos) values
- ('ACEITE DE OLIVA 500CC X6','Almacén',60000,50,'[{"min":5,"pct":4},{"min":10,"pct":8}]'),
- ('AGUA IVESS 2L X6','Bebidas',5500,3,'[]');
+insert into productos(nombre, categoria, precio, stock, tramos, stock_contado) values
+ ('ACEITE DE OLIVA 500CC X6','Almacén',60000,50,'[{"min":5,"pct":4},{"min":10,"pct":8}]',true),
+ ('AGUA IVESS 2L X6','Bebidas',5500,3,'[]',true),
+ ('VINO SIN CONTAR','Vinos',9000,0,'[]',false);
 insert into clientes(codigo, nombre, vendedor_id, saldo, ultimo_pago) values
  (1,'Cliente al día','00000000-0000-0000-0000-000000000001',0,null),
  (2,'Cliente que debe','00000000-0000-0000-0000-000000000001',-45200,current_date - 20),
@@ -45,7 +46,12 @@ do $$ begin perform crear_pedido(1, '[{"producto_id":1,"cant":1,"precio_manual":
 exception when others then perform chequear(sqlerrm like 'Solo Administración%', 'vendedor no puede cambiar precios'); end $$;
 do $$ begin perform cambiar_estado(1, 'pendiente', 'x'); raise exception 'debió fallar';
 exception when others then perform chequear(sqlerrm like 'No tenés permiso%', 'vendedor no puede autorizar'); end $$;
-select registrar_cobro(2, 20000, 'Efectivo');
+select chequear(crear_pedido(1, '[{"producto_id":3,"cant":12}]') is not null, 'producto sin contar se vende aunque el stock esté en 0');
+select chequear((select stock from productos where id = 3) = -12, 'producto sin contar lleva la cuenta de lo vendido (-12)');
+select chequear(crear_pedido(1, '[{"producto_id":3,"cant":1}]', '', 'tablet-abc') = crear_pedido(1, '[{"producto_id":3,"cant":1}]', '', 'tablet-abc'), 'reenviar el mismo pedido sin señal no lo duplica');
+select chequear((select count(*) from pedidos where uid = 'tablet-abc') = 1, 'queda un solo pedido con ese identificador');
+select registrar_cobro(2, 20000, 'Efectivo', 'cobro-xyz');
+select registrar_cobro(2, 20000, 'Efectivo', 'cobro-xyz');
 select chequear((select comision from cobros order by id desc limit 1) = 1000, 'comisión 5% sobre lo cobrado');
 select chequear((select saldo from clientes where id = 2) = -25200 and (select ultimo_pago from clientes where id = 2) = current_date, 'cobro baja la deuda y reinicia la alerta');
 select chequear((select count(*) from caja_movimientos) = 0, 'vendedor no ve la caja');

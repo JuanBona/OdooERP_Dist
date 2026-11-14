@@ -15,7 +15,7 @@ export default function Inicio() {
   const deHoy = peds.filter(p => p.fecha === hoy && p.estado !== "anulado");
   const alertas = misClientes(db, user).filter(tieneAlerta);
   const cuenta = e => db.pedidos.filter(p => p.estado === e).length;
-  const bajos = db.productos.filter(p => p.activo && p.stock <= p.stockMin);
+  const bajos = db.productos.filter(p => p.activo && p.stockContado !== false && p.stock <= p.stockMin);
 
   return (
     <>

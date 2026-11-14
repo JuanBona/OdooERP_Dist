@@ -2,7 +2,7 @@ import { Icon, Avatar } from "./icons.jsx";
 import React, { useState } from "react";
 import { useApp } from "../App.jsx";
 import { enviarPedido } from "../lib/offline";
-import { calcLinea, fmt, nuevoEstadoPedido, proximoTramo, puede } from "../lib/reglas";
+import { calcLinea, fmt, nuevoEstadoPedido, proximoTramo, puede, sinContar, tope } from "../lib/reglas";
 import { ChipCuenta, ProdImg } from "./ui.jsx";
 import { misClientes } from "./Inicio.jsx";
 
@@ -39,7 +39,7 @@ export function Catalogo() {
   const setQty = (id, n) => {
     const p = db.productos.find(x => x.id === id);
     const items = { ...cart.items };
-    n = Math.max(0, Math.min(n, p.stock));
+    n = Math.max(0, Math.min(n, tope(p)));
     if (n) items[id] = n; else delete items[id];
     setCart({ ...cart, items });
   };
@@ -66,7 +66,7 @@ export function Catalogo() {
               {p.tramos.length > 0 && <span className="chip promo" style={{ alignSelf: "flex-start", fontSize: 11 }}>{txtTramos(p)}</span>}
               <div className="row between" style={{ marginTop: "auto", paddingTop: 6 }}>
                 <span className="pr">{fmt(p.precio)}</span>
-                <span className={"chip " + (p.stock <= 0 ? "warn" : p.stock <= p.stockMin ? "warn" : "st-entregado")}>{p.stock <= 0 ? "Sin stock" : p.stock + " u."}</span>
+                {sinContar(p) ? <span className="chip st-autorizado">Sin contar</span> : <span className={"chip " + (p.stock <= p.stockMin ? "warn" : "st-entregado")}>{p.stock <= 0 ? "Sin stock" : p.stock + " u."}</span>}
               </div>
             </div>
           </div>
@@ -90,7 +90,7 @@ function ProductoModal({ p, cant, setQty, onClose }) {
           <div style={{ flex: 1, minWidth: 0 }}>
             <div className="muted">{p.categoria}</div><h2 style={{ marginBottom: 4 }}>{p.nombre}</h2>
             <div style={{ fontWeight: 850, fontSize: 20 }}>{fmt(p.precio)}</div>
-            <div className="muted">Stock disponible: {p.stock}</div>
+            <div className="muted">{sinContar(p) ? "Stock sin contar todavía" : "Stock disponible: " + p.stock}</div>
           </div>
         </div>
         {p.tramos.length > 0 && <div style={{ marginTop: 12 }}><div className="eyebrow">Descuento por cantidad</div>
@@ -99,7 +99,7 @@ function ProductoModal({ p, cant, setQty, onClose }) {
           <div className="stepper">
             <button aria-label="Menos" onClick={() => setN(Math.max(0, n - 1))}>−</button>
             <input aria-label="Cantidad" inputMode="numeric" value={n} onChange={e => setN(Math.max(0, parseInt(e.target.value) || 0))} />
-            <button aria-label="Más" onClick={() => setN(Math.min(p.stock, n + 1))}>＋</button>
+            <button aria-label="Más" onClick={() => setN(Math.min(tope(p), n + 1))}>＋</button>
           </div>
           <div style={{ textAlign: "right" }}>
             <div style={{ fontWeight: 850, fontSize: 20 }}>{fmt(l.total)}</div>
@@ -107,10 +107,10 @@ function ProductoModal({ p, cant, setQty, onClose }) {
           </div>
         </div>
         {prox && <p className="muted" style={{ marginTop: 8 }}>Llevando {prox.min - n} más tiene {prox.pct}% de descuento.</p>}
-        {n > p.stock && <p className="chip warn" style={{ marginTop: 8 }}>Supera el stock disponible</p>}
+        {n > tope(p) && <p className="chip warn" style={{ marginTop: 8 }}>Supera el stock disponible</p>}
         <div className="row" style={{ marginTop: 16 }}>
           <button className="btn sec" onClick={onClose}>Cerrar</button>
-          <button className="btn" style={{ flex: 1 }} disabled={n > p.stock} onClick={() => { setQty(n); onClose(); }}>{n ? (cant ? "Actualizar" : "Agregar al pedido") : "Quitar del pedido"}</button>
+          <button className="btn" style={{ flex: 1 }} disabled={n > tope(p)} onClick={() => { setQty(n); onClose(); }}>{n ? (cant ? "Actualizar" : "Agregar al pedido") : "Quitar del pedido"}</button>
         </div>
       </div>
     </div>
@@ -160,8 +160,8 @@ export function Confirmar() {
               </div>
               <div className="stepper">
                 <button aria-label="Menos" onClick={() => setCant(l.productoId, l.cant - 1)}>−</button>
-                <input aria-label="Cantidad" value={l.cant} onChange={e => setCant(l.productoId, Math.min(p.stock, parseInt(e.target.value) || 0))} />
-                <button aria-label="Más" onClick={() => setCant(l.productoId, Math.min(p.stock, l.cant + 1))}>＋</button>
+                <input aria-label="Cantidad" value={l.cant} onChange={e => setCant(l.productoId, Math.min(tope(p), parseInt(e.target.value) || 0))} />
+                <button aria-label="Más" onClick={() => setCant(l.productoId, Math.min(tope(p), l.cant + 1))}>＋</button>
               </div>
               <div style={{ width: 100, textAlign: "right", fontWeight: 800 }}>{fmt(l.total)}</div>
               {puede.editarPrecio(user) && <button className="btn sec sm" title="Cambiar precio o descuento" onClick={() => setEditLinea(l)}>✎</button>}

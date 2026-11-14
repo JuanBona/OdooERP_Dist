@@ -13,7 +13,23 @@ const listeners = new Set();
 let db = { usuarios: [], productos: [], clientes: [], pedidos: [], cobros: [], caja: [], arqueos: [], auditoria: [], miARendir: 0 };
 let yo = null;
 
-const emit = () => { db = { ...db }; listeners.forEach(f => f()); };
+// Copia local de los datos para abrir sin señal. La caja no se guarda en la tablet.
+const COPIA = "rds-copia-v1";
+let tCopia = null;
+function guardarCopia() {
+  clearTimeout(tCopia);
+  tCopia = setTimeout(() => {
+    try { localStorage.setItem(COPIA, JSON.stringify({ fecha: new Date().toISOString(), yo, db: { ...db, caja: [], arqueos: [] } })); } catch {}
+  }, 500);
+}
+const leerCopia = () => { try { return JSON.parse(localStorage.getItem(COPIA)); } catch { return null; } };
+const borrarCopia = () => { try { localStorage.removeItem(COPIA); } catch {} };
+const emit = () => { db = { ...db }; listeners.forEach(f => f()); if (yo) guardarCopia(); };
+
+// Al volver la señal se trae todo de nuevo (lo que cambió mientras tanto).
+if (typeof window !== "undefined") {
+  window.addEventListener("online", () => { if (yo && sb) recargarTodo().then(escuchar).catch(() => {}); });
+}
 const err = e => { if (e) throw new Error(traducir(e.message)); };
 function traducir(m) {
   if (/Invalid login/i.test(m)) return "Usuario o clave incorrectos.";
@@ -24,7 +40,7 @@ function traducir(m) {
 // ---------- Carga y conversión (snake_case de la base → forma de la app) ----------
 const num = v => (v == null ? v : Number(v));
 const mapUsuario = p => ({ id: p.id, nombre: p.nombre, rol: p.rol, usuario: p.usuario, comisionPct: num(p.comision_pct) });
-const mapProducto = p => ({ id: p.id, nombre: p.nombre, categoria: p.categoria, precio: num(p.precio), stock: p.stock, stockMin: p.stock_min, tramos: p.tramos || [], foto: p.foto_url, activo: p.activo });
+const mapProducto = p => ({ id: p.id, nombre: p.nombre, categoria: p.categoria, precio: num(p.precio), stock: p.stock, stockMin: p.stock_min, stockContado: p.stock_contado, tramos: p.tramos || [], foto: p.foto_url, activo: p.activo });
 const mapCliente = c => ({ id: c.id, codigo: c.codigo, nombre: c.nombre, dir: c.dir, cuit: c.cuit, tel: c.tel, localidad: c.localidad, dia: c.dia, vendedorId: c.vendedor_id, saldo: num(c.saldo), ultimoPago: c.ultimo_pago, obs: c.obs });
 const mapLinea = l => ({ productoId: l.producto_id, nombre: l.nombre, cant: l.cant, precio: num(l.precio), pct: num(l.pct), manual: l.manual, total: num(l.total) });
 const mapPedido = p => ({ id: p.id, clienteId: p.cliente_id, vendedorId: p.vendedor_id, fecha: p.fecha, creado: p.creado, estado: p.estado, total: num(p.total), obs: p.obs, hechos: p.hechos || [], historial: p.historial || [], salio: p.salio, lineas: (p.pedido_lineas || []).sort((a, b) => a.id - b.id).map(mapLinea) });
@@ -89,21 +105,28 @@ export const api = {
     const { data, error } = await sb.auth.signInWithPassword({ email, password: clave }); err(error);
     return api._entrar(data.user.id);
   },
-  async sesionGuardada() { // si ya había entrado en este dispositivo
+  async sesionGuardada() { // si ya había entrado en este dispositivo (funciona sin señal)
     const { data } = await sb.auth.getSession();
     return data.session ? api._entrar(data.session.user.id) : null;
   },
   async _entrar(uid) {
-    const { data, error } = await sb.from("perfiles").select("*").eq("id", uid).single(); err(error);
-    yo = mapUsuario(data);
-    await recargarTodo(); escuchar();
+    try {
+      const { data, error } = await sb.from("perfiles").select("*").eq("id", uid).single(); err(error);
+      yo = mapUsuario(data);
+      await recargarTodo(); escuchar();
+    } catch (e) {
+      // Sin señal: abre con la última copia guardada en la tablet (solo si es del mismo usuario).
+      const c = leerCopia();
+      if (!c || c.yo?.id !== uid) throw e;
+      yo = c.yo; db = { ...db, ...c.db }; emit();
+    }
     return yo;
   },
-  async salir() { canal?.unsubscribe(); clearInterval(reloj); await sb.auth.signOut(); yo = null; },
+  async salir() { canal?.unsubscribe(); clearInterval(reloj); await sb.auth.signOut(); yo = null; borrarCopia(); },
 
-  async crearPedido(user, { clienteId, items, obs }) {
+  async crearPedido(user, { clienteId, items, obs, uid }) {
     const p_items = items.map(i => ({ producto_id: i.productoId, cant: i.cant, precio_manual: i.precioManual ?? null, desc_manual: i.descManual ?? null }));
-    const { data: id, error } = await sb.rpc("crear_pedido", { p_cliente: clienteId, p_items, p_obs: obs || "" }); err(error);
+    const { data: id, error } = await sb.rpc("crear_pedido", { p_cliente: clienteId, p_items, p_obs: obs || "", p_uid: uid || null }); err(error);
     await recargar("pedidos", "productos");
     return db.pedidos.find(p => p.id === id);
   },
@@ -115,8 +138,8 @@ export const api = {
     const { error } = await sb.rpc("tildar", { p_pedido: pedidoId, p_idx: idx }); err(error);
     await recargar("pedidos");
   },
-  async registrarCobro(user, clienteId, monto, medio) {
-    const { error } = await sb.rpc("registrar_cobro", { p_cliente: clienteId, p_monto: monto, p_medio: medio }); err(error);
+  async registrarCobro(user, clienteId, monto, medio, uid) {
+    const { error } = await sb.rpc("registrar_cobro", { p_cliente: clienteId, p_monto: monto, p_medio: medio, p_uid: uid || null }); err(error);
     await recargar("clientes", "cobros", "caja", "miARendir");
   },
   async guardarProducto(user, p) {
@@ -127,7 +150,7 @@ export const api = {
       const { error } = await sb.storage.from("productos").upload(path, blob, { contentType: "image/jpeg", upsert: true }); err(error);
       foto_url = sb.storage.from("productos").getPublicUrl(path).data.publicUrl;
     }
-    const fila = { nombre: p.nombre, categoria: p.categoria, precio: p.precio, stock: p.stock, stock_min: p.stockMin, tramos: p.tramos, foto_url, activo: p.activo };
+    const fila = { nombre: p.nombre, categoria: p.categoria, precio: p.precio, stock: p.stock, stock_min: p.stockMin, stock_contado: !!p.stockContado, tramos: p.tramos, foto_url, activo: p.activo };
     const { error } = p.id ? await sb.from("productos").update(fila).eq("id", p.id) : await sb.from("productos").insert(fila); err(error);
     await recargar("productos");
   },

@@ -78,6 +78,13 @@ Referencias: ✅ ya está en la maqueta · 🟡 está, falta un ajuste · 🔴 n
 - **Límite de crédito:** queda como **mejora a futuro**, no va en la v1.
 - **Usuarios:** genéricos, con los 4 roles. El cliente los renombra después.
 
+## 6c. Decisiones para el arranque (14/11/2026)
+
+- **Stock y saldos arrancan en 0.** No se migran datos de Odoo. Cada producto queda **"Sin contar"**: se vende sin límite y la app lleva la cuenta de lo vendido. Cuando Otto lo cuenta y carga el número en Artículos, queda **contado** y desde ahí se controla el stock.
+- **Alta de usuarios y cambio de claves desde la app:** se ve más adelante (hoy, desde el panel de Supabase).
+- **Odoo se da de baja el 15/11** y se instala esta app en el servidor (ver `app/DEPLOY.md`).
+- **Fotos:** 26 productos con foto de Open Food Facts (licencia CC BY-SA, créditos en `app/public/productos/CREDITOS.txt`). El resto con imagen genérica hasta subir la propia.
+
 ## 7. Etapas
 
 1. ✅ Login y roles, catálogo, clientes con alerta de deuda, pedido con tramos → depósito con checklist → remito.
