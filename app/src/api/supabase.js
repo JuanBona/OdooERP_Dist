@@ -7,7 +7,8 @@ const URL = import.meta.env.VITE_SUPABASE_URL;
 const KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
 const DOMINIO = "rincondelsur.app"; // el login usa "usuario" → usuario@rincondelsur.app
 
-export const sb = createClient(URL, KEY, { auth: { persistSession: true } });
+// Solo se crea si hay Supabase configurado (sin URL la app corre en modo demo).
+export const sb = URL ? createClient(URL, KEY, { auth: { persistSession: true } }) : null;
 const listeners = new Set();
 let db = { usuarios: [], productos: [], clientes: [], pedidos: [], cobros: [], caja: [], arqueos: [], auditoria: [], miARendir: 0 };
 let yo = null;
