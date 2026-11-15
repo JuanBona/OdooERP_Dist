@@ -1,5 +1,7 @@
 # Instalar en el servidor (reemplaza a Odoo)
 
+> **Forma recomendada:** `cd app/servidor && ./instalar.sh tudominio.com` — instala todo (Supabase en Docker + app con HTTPS) con un comando. Requiere Docker y que el dominio apunte al servidor. Lo de abajo es el detalle manual.
+
 La app es una web estática (React) + Supabase (base de datos, login y fotos). Supabase corre con
 Docker en el mismo servidor donde hoy está Odoo. Antes de apagar Odoo: **backup final** de su base
 (`deploy/backup.sh`) y anotar los **saldos de cuenta corriente y el stock** reales para cargarlos.

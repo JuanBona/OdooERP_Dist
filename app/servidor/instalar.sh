@@ -69,17 +69,32 @@ psqlx -c "revoke all on public.rincon_migraciones from anon, authenticated"
 # Entregas automáticas: 00:05 de cada día pasa a Entregado lo que salió en reparto el día anterior
 psqlx -c "create extension if not exists pg_cron" -c "select cron.schedule('cierre-reparto', '5 0 * * *', 'select public.cerrar_reparto()')" >/dev/null
 
+# Node: usa el del servidor si está instalado; si no, un contenedor (trabajando sobre una copia,
+# así no se pisan las librerías de la carpeta del repo).
+node_run() { # node_run "<variables>" "<comandos>"   (en una copia de app/ con sus dependencias)
+  if command -v node >/dev/null && command -v npm >/dev/null; then
+    (cd "$APP" && npm ci --silent --no-audit --no-fund && env $1 sh -c "$2")
+  else
+    docker run --rm --network supabase_default -v "$APP":/src:ro node:22-alpine sh -c \
+      "mkdir /app && cd /src && tar --exclude=node_modules --exclude=servidor -cf - . | tar -xf - -C /app && cd /app && npm ci --silent --no-audit --no-fund && env $1 sh -c '$2'"
+  fi
+}
+if command -v node >/dev/null; then API_INTERNA="http://127.0.0.1:8000"; else API_INTERNA="http://kong:8000"; fi
+
 # 5. Usuarios, productos y clientes (no duplica)
 echo "== Datos iniciales =="
-docker run --rm --network supabase_default -v "$APP":/app -w /app \
-  -e SUPABASE_URL=http://kong:8000 -e SUPABASE_SERVICE_ROLE_KEY="$SERVICE_ROLE_KEY" -e CLAVE_INICIAL="$CLAVE_INICIAL" \
-  node:22-alpine sh -c "npm ci --silent --no-audit --no-fund && node scripts/cargar_datos.mjs"
+node_run "SUPABASE_URL=$API_INTERNA SUPABASE_SERVICE_ROLE_KEY=$SERVICE_ROLE_KEY CLAVE_INICIAL=$CLAVE_INICIAL" "node scripts/cargar_datos.mjs"
 
 # 6. Publicar la app
 echo "== Publicando la app =="
-docker run --rm -v "$APP":/app -w /app \
-  -e VITE_SUPABASE_URL="https://$DOMINIO" -e VITE_SUPABASE_ANON_KEY="$ANON_KEY" \
-  node:22-alpine sh -c "npm ci --silent --no-audit --no-fund && npx vite build --outDir /tmp/dist --emptyOutDir >/dev/null && rm -rf /app/servidor/app-web/* && cp -r /tmp/dist/. /app/servidor/app-web/"
+rm -rf "$AQUI/app-web.nuevo"; mkdir -p "$AQUI/app-web.nuevo"
+if command -v node >/dev/null; then
+  node_run "VITE_SUPABASE_URL=https://$DOMINIO VITE_SUPABASE_ANON_KEY=$ANON_KEY" "npx vite build --outDir '$AQUI/app-web.nuevo' --emptyOutDir >/dev/null"
+else
+  docker run --rm -v "$APP":/src:ro -v "$AQUI/app-web.nuevo":/out node:22-alpine sh -c \
+    "mkdir /app && cd /src && tar --exclude=node_modules --exclude=servidor -cf - . | tar -xf - -C /app && cd /app && npm ci --silent --no-audit --no-fund && VITE_SUPABASE_URL=https://$DOMINIO VITE_SUPABASE_ANON_KEY=$ANON_KEY npx vite build --outDir /out --emptyOutDir >/dev/null"
+fi
+rm -rf "$AQUI/app-web"; mv "$AQUI/app-web.nuevo" "$AQUI/app-web"
 "${DC[@]}" restart web >/dev/null
 
 cat <<EOF
