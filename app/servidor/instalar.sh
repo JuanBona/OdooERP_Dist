@@ -49,24 +49,25 @@ mkdir -p "$AQUI/app-web"
 "${DC[@]}" up -d
 echo -n "Esperando la base"; until docker exec supabase-db pg_isready -U postgres -h localhost >/dev/null 2>&1; do echo -n .; sleep 2; done; echo
 
-# 3. Migraciones (cada una se aplica una sola vez)
-echo "== Base de datos =="
 psqlx() { docker exec -i supabase-db psql -U postgres -d postgres -v ON_ERROR_STOP=1 -q "$@"; }
+
+# 3. Esperar que todo Supabase esté listo (la API responde y el servicio de fotos creó sus tablas)
+echo -n "Esperando la API"; until curl -fsS -o /dev/null -H "apikey: $ANON_KEY" http://127.0.0.1:8000/auth/v1/health 2>/dev/null; do echo -n .; sleep 3; done; echo
+echo -n "Esperando el servicio de fotos"; until [ "$(psqlx -tAc "select to_regclass('storage.buckets') is not null")" = "t" ]; do echo -n .; sleep 3; done; echo
+
+# 4. Migraciones: cada una se aplica una sola vez y entera (si falla, no queda a medias)
+echo "== Base de datos =="
 psqlx -c "create table if not exists public.rincon_migraciones (archivo text primary key, aplicada timestamptz default now())"
 for f in "$APP"/supabase/migrations/*.sql; do
   n="$(basename "$f")"
   if [ "$(psqlx -tAc "select 1 from public.rincon_migraciones where archivo = '$n'")" != "1" ]; then
     echo "  aplicando $n"
-    psqlx < "$f"
-    psqlx -c "insert into public.rincon_migraciones(archivo) values ('$n')"
+    { cat "$f"; echo; echo "insert into public.rincon_migraciones(archivo) values ('$n');"; } | psqlx -1
   fi
 done
 psqlx -c "revoke all on public.rincon_migraciones from anon, authenticated"
 # Entregas automáticas: 00:05 de cada día pasa a Entregado lo que salió en reparto el día anterior
 psqlx -c "create extension if not exists pg_cron" -c "select cron.schedule('cierre-reparto', '5 0 * * *', 'select public.cerrar_reparto()')" >/dev/null
-
-# 4. Esperar que la API responda
-echo -n "Esperando la API"; until docker exec supabase-db sh -c "true" && curl -fsS -o /dev/null -H "apikey: $ANON_KEY" http://127.0.0.1:8000/rest/v1/ 2>/dev/null; do echo -n .; sleep 3; done; echo
 
 # 5. Usuarios, productos y clientes (no duplica)
 echo "== Datos iniciales =="

@@ -95,7 +95,7 @@ end $$;
 
 -- Fotos de productos en Storage (bucket público "productos"): suben solo Administración y Gerencia.
 do $$ begin
-  if exists (select 1 from pg_namespace where nspname = 'storage') then
+  if to_regclass('storage.buckets') is not null then
     insert into storage.buckets (id, name, public) values ('productos', 'productos', true) on conflict (id) do nothing;
     execute $p$create policy "fotos subir" on storage.objects for insert to authenticated
       with check (bucket_id = 'productos' and public.mi_rol() in ('admin','gerencia'))$p$;
