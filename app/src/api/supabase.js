@@ -49,6 +49,9 @@ const nombreDe = id => db.usuarios.find(u => u.id === id)?.nombre || "—";
 const mapMov = m => ({ id: m.id, fecha: m.fecha, hora: m.hora, tipo: m.tipo, concepto: m.concepto, monto: num(m.monto), persona: m.persona, detalle: m.detalle, vuelve: m.vuelve, vuelveFecha: m.vuelve_fecha || "", vendedorId: m.vendedor_id, cobroId: m.cobro_id, usuario: nombreDe(m.usuario),
   devoluciones: (m.caja_devoluciones || []).map(d => ({ fecha: d.hora.slice(0, 10), hora: d.hora, monto: num(d.monto), como: d.como, usuario: nombreDe(d.usuario) })) });
 
+const DIAS_HISTORIAL = 60;
+const desde = () => { const d = new Date(); d.setDate(d.getDate() - DIAS_HISTORIAL); return d.toISOString().slice(0, 10); };
+
 async function todo(q) { // trae todas las filas (Supabase devuelve de a 1000)
   const out = []; let desde = 0;
   for (;;) { const { data, error } = await q().range(desde, desde + 999); err(error); out.push(...data); if (data.length < 1000) return out; desde += 1000; }
@@ -58,8 +61,14 @@ const cargas = {
   usuarios: async () => { db.usuarios = (await todo(() => sb.from("perfiles").select("*").order("nombre"))).map(mapUsuario); },
   productos: async () => { db.productos = (await todo(() => sb.from("productos").select("*").order("id"))).map(mapProducto); },
   clientes: async () => { db.clientes = (await todo(() => sb.from("clientes").select("*").order("codigo"))).map(mapCliente); },
-  pedidos: async () => { db.pedidos = (await todo(() => sb.from("pedidos").select("*, pedido_lineas(*)").order("id", { ascending: false }))).map(mapPedido); },
-  cobros: async () => { db.cobros = (await todo(() => sb.from("cobros").select("*").order("id", { ascending: false }))).map(mapCobro); },
+  // Solo lo reciente (para que entrar sea rápido y no se descargue todo el historial):
+  // pedidos de los últimos 60 días + los que siguen abiertos, y cobros de los últimos 60 días.
+  pedidos: async () => {
+    db.pedidos = (await todo(() => sb.from("pedidos").select("*, pedido_lineas(*)")
+      .or(`fecha.gte.${desde()},estado.in.(porAutorizar,pendiente,preparando,preparado,enReparto)`)
+      .order("id", { ascending: false }))).map(mapPedido);
+  },
+  cobros: async () => { db.cobros = (await todo(() => sb.from("cobros").select("*").gte("fecha", desde()).order("id", { ascending: false }))).map(mapCobro); },
   caja: async () => {
     if (!["admin", "gerencia"].includes(yo?.rol)) { db.caja = []; db.arqueos = []; return; }
     db.caja = (await todo(() => sb.from("caja_movimientos").select("*, caja_devoluciones(*)").order("id", { ascending: false }))).map(mapMov);

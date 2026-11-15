@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { useApp } from "../App.jsx";
 import { fmt } from "../lib/reglas";
+import { api } from "../api";
 
 // Resumen del mes para Gerencia. No pide cargar nada nuevo: sale de pedidos, cobros y gastos.
 const mesActual = () => new Date().toISOString().slice(0, 7);
@@ -51,7 +52,7 @@ export default function Resumen() {
     <>
       <div className="row between" style={{ marginBottom: 14, flexWrap: "wrap" }}>
         <div><h1>Resumen del mes</h1><p className="muted">Sale solo de lo que ya se carga: pedidos, cobros y gastos.</p></div>
-        <div className="row"><button className="btn sec sm" aria-label="Mes anterior" onClick={() => setMes(mover(mes, -1))}>‹</button>
+        <div className="row"><button className="btn sec sm" aria-label="Mes anterior" disabled={api.modo === "supabase" && mes <= mover(mesActual(), -1)} title={api.modo === "supabase" && mes <= mover(mesActual(), -1) ? "La app guarda en la tablet los últimos 60 días" : ""} onClick={() => setMes(mover(mes, -1))}>‹</button>
           <b style={{ minWidth: 140, textAlign: "center" }}>{nombreMes(mes)}</b>
           <button className="btn sec sm" aria-label="Mes siguiente" disabled={mes >= mesActual()} onClick={() => setMes(mover(mes, 1))}>›</button></div>
       </div>
