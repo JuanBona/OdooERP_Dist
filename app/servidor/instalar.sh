@@ -92,7 +92,7 @@ if command -v node >/dev/null; then
   node_run "VITE_SUPABASE_URL=https://$DOMINIO VITE_SUPABASE_ANON_KEY=$ANON_KEY" "npx vite build --outDir '$AQUI/app-web.nuevo' --emptyOutDir >/dev/null"
 else
   docker run --rm -v "$APP":/src:ro -v "$AQUI/app-web.nuevo":/out node:22-alpine sh -c \
-    "mkdir /app && cd /src && tar --exclude=node_modules --exclude=servidor -cf - . | tar -xf - -C /app && cd /app && npm ci --silent --no-audit --no-fund && VITE_SUPABASE_URL=https://$DOMINIO VITE_SUPABASE_ANON_KEY=$ANON_KEY npx vite build --outDir /out --emptyOutDir >/dev/null"
+    "mkdir /app && cd /src && tar --exclude=node_modules --exclude=servidor -cf - . | tar -xf - -C /app && cd /app && npm ci --silent --no-audit --no-fund && VITE_SUPABASE_URL=https://$DOMINIO VITE_SUPABASE_ANON_KEY=$ANON_KEY npx vite build --outDir /out --emptyOutDir >/dev/null && chown -R $(id -u):$(id -g) /out"   # el contenedor corre como root: sin esto la app-web queda de root y la proxima corrida no puede borrarla
 fi
 rm -rf "$AQUI/app-web"; mv "$AQUI/app-web.nuevo" "$AQUI/app-web"
 "${DC[@]}" restart web >/dev/null
