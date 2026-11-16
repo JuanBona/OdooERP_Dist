@@ -69,4 +69,7 @@ export const puede = {
   editarPrecio: u => ["admin", "gerencia"].includes(u.rol),
   verFinanzas: u => u.rol === "gerencia",
   administrar: u => ["admin", "gerencia"].includes(u.rol),
+  // Vendedor: da de alta clientes (quedan a su nombre) y edita los suyos y los sin asignar.
+  crearCliente: u => ["vendedor", "admin", "gerencia"].includes(u.rol),
+  editarCliente: (u, c) => ["admin", "gerencia"].includes(u.rol) || (u.rol === "vendedor" && (!c.vendedorId || c.vendedorId === u.id)),
 };

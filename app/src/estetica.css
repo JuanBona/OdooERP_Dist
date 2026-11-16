@@ -120,3 +120,8 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--brand);b
   .pcard .pimg{height:112px!important}
 }
 @media (prefers-reduced-motion:reduce){*{transition:none!important}}
+
+/* Botón redondo "+" (agregar) */
+.btn-circulo{width:52px;height:52px;border-radius:50%;flex:none;display:grid;place-items:center;background:var(--brand);color:#fff;box-shadow:0 4px 14px rgba(192,48,40,.35);transition:transform .1s,filter .15s}
+.btn-circulo:hover{filter:brightness(1.07)}
+.btn-circulo:active{transform:scale(.94)}

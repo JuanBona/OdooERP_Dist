@@ -59,6 +59,24 @@ do $$ begin insert into caja_movimientos(tipo, concepto, monto) values ('ingreso
 exception when insufficient_privilege then perform chequear(true, 'vendedor no puede cargar en la caja'); end $$;
 reset role;
 
+
+-- ===== Vendedor da de alta y edita clientes =====
+select como('00000000-0000-0000-0000-000000000001'); set role authenticated;
+insert into clientes(nombre, dir, vendedor_id, saldo) values ('Kiosco Nuevo', 'San Martín 1', '00000000-0000-0000-0000-000000000001', 99999);
+select chequear((select saldo from clientes where nombre = 'Kiosco Nuevo') = 0, 'cliente nuevo del vendedor arranca con saldo 0 aunque mande otro');
+select chequear((select codigo from clientes where nombre = 'Kiosco Nuevo') = 4, 'código automático: el siguiente libre (4)');
+update clientes set dir = 'San Martín 999', saldo = 500000 where nombre = 'Kiosco Nuevo';
+select chequear((select dir from clientes where nombre = 'Kiosco Nuevo') = 'San Martín 999', 'vendedor edita la dirección de su cliente');
+select chequear((select saldo from clientes where nombre = 'Kiosco Nuevo') = 0, 'vendedor no puede cambiar el saldo');
+update clientes set nombre = 'HACKEADO' where codigo = 3;
+reset role;
+select chequear((select nombre from clientes where codigo = 3) = 'Cliente de V2', 'vendedor no puede editar clientes de otro vendedor');
+select como('00000000-0000-0000-0000-000000000001'); set role authenticated;
+do $$ begin insert into clientes(nombre, vendedor_id) values ('Para V2', '00000000-0000-0000-0000-000000000002');
+  perform chequear((select vendedor_id from clientes where nombre = 'Para V2') = '00000000-0000-0000-0000-000000000001', 'cliente creado por el vendedor queda a su nombre aunque elija otro');
+exception when others then perform chequear(true, 'vendedor no puede crear clientes para otro vendedor'); end $$;
+reset role;
+
 -- ===== Vendedor 2 no ve pedidos de V1 =====
 select como('00000000-0000-0000-0000-000000000002'); set role authenticated;
 select chequear((select count(*) from pedidos) = 0, 'vendedor 2 no ve pedidos de vendedor 1');

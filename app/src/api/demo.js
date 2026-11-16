@@ -200,6 +200,12 @@ export const api = {
   },
 
   guardarCliente(user, cli) {
+    if (user.rol === "vendedor") { // mismas reglas que la base
+      const viejo = cli.id ? db.clientes.find(c => c.id === cli.id) : null;
+      if (viejo && viejo.vendedorId && viejo.vendedorId !== user.id) throw new Error("Ese cliente es de otro vendedor.");
+      const { saldo, ultimoPago, codigo, ...resto } = cli;
+      cli = { ...resto, vendedorId: viejo?.vendedorId || user.id };
+    }
     if (cli.id) {
       const i = db.clientes.findIndex(c => c.id === cli.id);
       db.clientes[i] = { ...db.clientes[i], ...cli };

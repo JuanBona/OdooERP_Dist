@@ -22,9 +22,9 @@ export function Clientes() {
 
   return (
     <>
-      <div className="row between" style={{ marginBottom: 12, flexWrap: "wrap" }}>
-        <div><h1>Clientes</h1><p className="muted">Elegí un cliente para tomarle el pedido.</p></div>
-        {puede.administrar(user) && <button className="btn sec" onClick={() => setEditando({ nombre: "", dir: "", tel: "", localidad: "", dia: "", vendedorId: null, obs: "" })}><Icon n="mas" s={18} /> Nuevo cliente</button>}
+      <div className="row between" style={{ marginBottom: 12, alignItems: "flex-start" }}>
+        <div style={{ flex: 1, minWidth: 0 }}><h1>Clientes</h1><p className="muted">Elegí un cliente para tomarle el pedido, o tocá + para agregar uno.</p></div>
+        {puede.crearCliente(user) && <button className="btn-circulo" title="Agregar cliente" aria-label="Agregar cliente" onClick={() => setEditando({ nombre: "", dir: "", tel: "", localidad: "", dia: "", vendedorId: user.rol === "vendedor" ? user.id : null, obs: "" })}><Icon n="mas" s={24} /></button>}
       </div>
       <div className="filters">
         <input type="search" placeholder="Buscar por nombre, dirección o código…" value={q} onChange={e => setQ(e.target.value)} />
@@ -58,7 +58,7 @@ export function EditarCliente({ c, onClose }) {
   const vendedores = db.usuarios.filter(u => u.rol === "vendedor");
   const guardar = async () => {
     if (!f.nombre.trim()) return toast("Poné el nombre del cliente");
-    try { await api.guardarCliente(user, f); toast("Cliente guardado"); onClose(); } catch (e) { toast(e.message); }
+    try { await api.guardarCliente(user, f); toast(c.id ? "Cliente guardado" : "Cliente agregado"); onClose(); } catch (e) { toast(e.message); }
   };
   return (
     <div className="modal-back" onClick={onClose}>
@@ -70,7 +70,7 @@ export function EditarCliente({ c, onClose }) {
           <div className="field"><label htmlFor="ec-loc">Localidad</label><input id="ec-loc" list="locs" value={f.localidad} onChange={e => set("localidad", e.target.value)} />
             <datalist id="locs">{[...new Set(db.clientes.map(x => x.localidad).filter(Boolean))].map(l => <option key={l} value={l} />)}</datalist></div>
           <div className="field"><label htmlFor="ec-dia">Día de visita</label><select id="ec-dia" value={f.dia} onChange={e => set("dia", e.target.value)}><option value="">—</option>{DIAS.map(d => <option key={d}>{d}</option>)}</select></div>
-          <div className="field"><label htmlFor="ec-ven">Vendedor</label><select id="ec-ven" value={f.vendedorId ?? ""} onChange={e => set("vendedorId", e.target.value ? +e.target.value : null)}><option value="">Sin asignar</option>{vendedores.map(v => <option key={v.id} value={v.id}>{v.nombre}</option>)}</select></div>
+          {user.rol !== "vendedor" && <div className="field"><label htmlFor="ec-ven">Vendedor</label><select id="ec-ven" value={f.vendedorId ?? ""} onChange={e => set("vendedorId", e.target.value ? +e.target.value : null)}><option value="">Sin asignar</option>{vendedores.map(v => <option key={v.id} value={v.id}>{v.nombre}</option>)}</select></div>}
           <div className="field"><label htmlFor="ec-tel">Teléfono</label><input id="ec-tel" value={f.tel} onChange={e => set("tel", e.target.value)} /></div>
         </div>
         <div className="field"><label htmlFor="ec-obs">Observaciones para el reparto</label><textarea id="ec-obs" rows="2" value={f.obs} onChange={e => set("obs", e.target.value)} /></div>
@@ -117,7 +117,7 @@ export function ClienteDetalle() {
         <div className="row" style={{ marginTop: 14, flexWrap: "wrap" }}>
           <button className="btn" onClick={() => tomarPedido()}><Icon n="mas" s={18} /> Tomar pedido</button>
           <button className="btn sec" onClick={() => setCobro(true)}><Icon n="plata" s={18} /> Registrar cobro</button>
-          {puede.administrar(user) && <button className="btn sec" onClick={() => setEditando(true)}><Icon n="lapiz" s={16} /> Editar</button>}
+          {puede.editarCliente(user, c) && <button className="btn sec" onClick={() => setEditando(true)}><Icon n="lapiz" s={16} /> Editar</button>}
         </div>
       </div>
 

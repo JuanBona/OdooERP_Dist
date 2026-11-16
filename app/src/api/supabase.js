@@ -164,8 +164,10 @@ export const api = {
     await recargar("productos");
   },
   async guardarCliente(user, c) {
-    const fila = { nombre: c.nombre, dir: c.dir, tel: c.tel, localidad: c.localidad, dia: c.dia, vendedor_id: c.vendedorId, obs: c.obs };
-    if (!c.id) fila.codigo = Math.max(0, ...db.clientes.map(x => x.codigo || 0)) + 1;
+    const fila = { nombre: c.nombre, dir: c.dir, tel: c.tel, localidad: c.localidad, dia: c.dia, obs: c.obs };
+    // El vendedor no elige vendedor: la base lo deja a su nombre. El código lo pone la base.
+    if (user.rol !== "vendedor") fila.vendedor_id = c.vendedorId;
+    else if (!c.id) fila.vendedor_id = user.id;
     const { error } = c.id ? await sb.from("clientes").update(fila).eq("id", c.id) : await sb.from("clientes").insert(fila); err(error);
     await recargar("clientes");
   },
