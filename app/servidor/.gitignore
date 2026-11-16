@@ -1,0 +1,7 @@
+supabase/.env
+supabase/volumes/db/data/
+supabase/volumes/storage/
+app-web/
+supabase/.env.old
+supabase/.env.*.old
+app-web.nuevo/

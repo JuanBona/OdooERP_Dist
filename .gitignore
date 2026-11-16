@@ -9,6 +9,8 @@ __pycache__/
 *.sql
 *.dump
 !backup.sql
+# Scripts de init de Supabase (los monta docker; sin ellos Docker crea directorios y los roles quedan sin clave)
+!app/servidor/supabase/volumes/db/*.sql
 
 # OS
 .DS_Store

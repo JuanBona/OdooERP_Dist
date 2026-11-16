@@ -1,0 +1,29 @@
+Fotos de Open Food Facts (https://openfoodfacts.org), licencia CC BY-SA 3.0.
+Se pueden reemplazar por fotos propias desde Artículos.
+
+10.jpg  AGUA SABORIZADA IVESS 1500CC X 6  <-  https://world.openfoodfacts.org/product/7797257000831
+31.jpg  CERVEZA CORONA bot. 750 CC X 12  <-  https://world.openfoodfacts.org/product/7501064191398
+32.jpg  CERVEZA CORONA bot. 330 CC X 24  <-  https://world.openfoodfacts.org/product/7501064191398
+36.jpg  CERVEZA STELLA ARTOIS 1l x 12  <-  https://world.openfoodfacts.org/product/5410228275671
+40.jpg  GASEOSA COCA COLA ZERO 6 X 1500 CC.  <-  https://world.openfoodfacts.org/product/91217783
+41.jpg  GASEOSA COCA COLA 1500 CC X 6  <-  https://world.openfoodfacts.org/product/7790895650833
+42.jpg  GASEOSA COCA COLA 1750 CC X 8  <-  https://world.openfoodfacts.org/product/7790895650833
+43.jpg  GASEOSA COCA COLA RET. 8 X 2000 CC.  <-  https://world.openfoodfacts.org/product/7790895650833
+44.jpg  GASEOSA COCA-FANTA-SPRITE 2250 X 8  <-  https://world.openfoodfacts.org/product/7790895650833
+45.jpg  GASEOSA COCA COLA 2250 CC X 6  <-  https://world.openfoodfacts.org/product/7790895650833
+46.jpg  GASEOSA COCA COLA 500CC X 12  <-  https://world.openfoodfacts.org/product/7790895650833
+48.jpg  GASEOSA FANTA NARANJA ZERO 6 X 1500 CC  <-  https://world.openfoodfacts.org/product/5449000235367
+49.jpg  GASEOSA FANTA 6 X 1500 CC  <-  https://world.openfoodfacts.org/product/5449000052926
+51.jpg  GASEOSA PEPSI 6 X 1500 CC  <-  https://world.openfoodfacts.org/product/5601151974049
+52.jpg  GASEOSA PEPSI 8 X 2000 CC  <-  https://world.openfoodfacts.org/product/5601151974049
+54.jpg  GASEOSA PEPSI 500 X 6  <-  https://world.openfoodfacts.org/product/5601151974049
+60.jpg  GASEOSA SPRITE 12 X 500 CC.  <-  https://world.openfoodfacts.org/product/5449000110671
+61.jpg  GASEOSA SPRITE ZERO 6 X 1500 CC  <-  https://world.openfoodfacts.org/product/5000112576900
+72.jpg  PLAYADITO 500GRS. X 10  <-  https://world.openfoodfacts.org/product/7793704000232
+73.jpg  PLAYADITO 1 KILO. X 5  <-  https://world.openfoodfacts.org/product/7793704000232
+88.jpg  SPEED 269cc X 24  <-  https://world.openfoodfacts.org/product/7702090050974
+123.jpg  CYNAR 750 X 6  <-  https://world.openfoodfacts.org/product/8002250800449
+129.jpg  VODKA ABSOLUT SABORIZADO X 6  <-  https://world.openfoodfacts.org/product/7312040350209
+134.jpg  VODKA SMIRNOFF 700 X 6  <-  https://world.openfoodfacts.org/product/6001398119545
+136.jpg  RON MALIBU X 6  <-  https://world.openfoodfacts.org/product/8410024700015
+137.jpg  RON HAVANA CLUB X 6  <-  https://world.openfoodfacts.org/product/8501110080453

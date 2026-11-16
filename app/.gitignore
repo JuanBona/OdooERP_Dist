@@ -1,0 +1,7 @@
+node_modules
+dist
+.env
+# Los .sql de la base de la app sí van al repo (el .gitignore raíz los ignora por los backups de Odoo)
+!supabase/**/*.sql
+supabase/.temp
+supabase/.branches

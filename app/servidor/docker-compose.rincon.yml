@@ -1,0 +1,40 @@
+# Ajustes de Rincón del Sur sobre el Docker oficial de Supabase (supabase/docker-compose.yml).
+# Se usa siempre junto con el oficial:
+#   docker compose -f supabase/docker-compose.yml -f docker-compose.rincon.yml up -d
+# (instalar.sh ya lo hace).
+
+services:
+  # No usamos funciones en el servidor ni el pooler: se apagan para ahorrar memoria.
+  functions:
+    profiles: ["sin-uso"]
+  supavisor:
+    profiles: ["sin-uso"]
+
+  # El gateway de Supabase queda solo para adentro del servidor (y el panel por túnel SSH).
+  api-gw:
+    ports: !override
+      - "127.0.0.1:8000:8000"
+
+  # La app + HTTPS automático. Un solo dominio: la app en "/" y Supabase en /auth, /rest, /realtime, /storage.
+  web:
+    image: caddy:2.8-alpine
+    container_name: rincon-web
+    restart: unless-stopped
+    depends_on:
+      api-gw:
+        condition: service_started
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    environment:
+      DOMINIO: ${DOMINIO}
+    volumes:
+      - ../Caddyfile:/etc/caddy/Caddyfile:ro   # rutas relativas a supabase/ (carpeta del compose principal)
+      - ../app-web:/srv/app:ro
+      - caddy-data:/data
+      - caddy-config:/config
+
+volumes:
+  caddy-data:
+  caddy-config:

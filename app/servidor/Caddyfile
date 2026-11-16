@@ -1,0 +1,20 @@
+# Un solo dominio para todo. Caddy saca el certificado HTTPS solo (Let's Encrypt).
+# Con DOMINIO=localhost usa un certificado interno (para probar).
+{$DOMINIO} {
+	encode zstd gzip
+
+	# Supabase (login, datos, tiempo real y fotos)
+	@supabase path /auth/v1/* /rest/v1/* /realtime/v1/* /storage/v1/*
+	handle @supabase {
+		reverse_proxy api-gw:8000
+	}
+
+	# La app (React). Cualquier otra ruta devuelve index.html.
+	handle {
+		root * /srv/app
+		@noCache path /index.html /sw.js /manifest.webmanifest
+		header @noCache Cache-Control "no-cache"
+		try_files {path} /index.html
+		file_server
+	}
+}
