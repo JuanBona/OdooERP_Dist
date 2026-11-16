@@ -14,17 +14,21 @@ const seed = JSON.parse(readFileSync(new URL("../src/seed.json", import.meta.url
 const DOMINIO = "rincondelsur.app";
 const ok = (r, que) => { if (r.error) { console.error("Error en", que, r.error.message); process.exit(1); } return r.data; };
 
+// Mismos usuarios que scripts/usuarios.mjs (para cambiar claves o nombres usar ese script).
 const USUARIOS = [
-  ["vendedor1", "Vendedor 1", "vendedor"], ["vendedor2", "Vendedor 2", "vendedor"],
+  ["piniya", "Piniya", "vendedor"], ["javier", "Javier", "vendedor"], ["nico", "Nico", "vendedor"],
   ["deposito", "Depósito", "deposito"], ["admin", "Administración", "admin"], ["gerencia", "Gerencia", "gerencia"],
 ];
 
 // 1. Usuarios (login: usuario + clave; por dentro el mail es usuario@rincondelsur.app)
+// Solo en la primera instalación: si ya hay usuarios, no toca nada (se manejan con scripts/usuarios.mjs).
 const existentes = ok(await sb.auth.admin.listUsers({ perPage: 1000 }), "listar usuarios").users;
-for (const [usuario, nombre, rol] of USUARIOS) {
+if (existentes.length) console.log("usuarios: ya hay", existentes.length, "→ no se tocan (para cambiarlos: servidor/usuarios.sh)");
+else for (const [usuario, nombre, rol] of USUARIOS) {
   const email = `${usuario}@${DOMINIO}`;
   let u = existentes.find(x => x.email === email);
-  if (!u) u = ok(await sb.auth.admin.createUser({ email, password: CLAVE_INICIAL, email_confirm: true }), "crear " + usuario).user;
+  if (u) { console.log("usuario", usuario, "ya existe"); continue; } // no pisa nombre, rol ni clave
+  u = ok(await sb.auth.admin.createUser({ email, password: CLAVE_INICIAL, email_confirm: true }), "crear " + usuario).user;
   ok(await sb.from("perfiles").upsert({ id: u.id, nombre, rol, usuario }), "perfil " + usuario);
   console.log("usuario", usuario, "→", rol);
 }

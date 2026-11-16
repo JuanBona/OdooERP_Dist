@@ -4,14 +4,15 @@
 import seed from "../seed.json";
 import { calcPedido, hoyISO, nuevoEstadoPedido } from "../lib/reglas";
 
-const KEY = "rds-demo-v3";
+const KEY = "rds-demo-v4";
 const listeners = new Set();
 let db = load();
 
 function inicial() {
   const usuarios = [
-    { id: 1, nombre: "Vendedor 1", usuario: "vendedor1", rol: "vendedor", comisionPct: 0 },
-    { id: 2, nombre: "Vendedor 2", usuario: "vendedor2", rol: "vendedor", comisionPct: 0 },
+    { id: 1, nombre: "Piniya", usuario: "piniya", rol: "vendedor", comisionPct: 0 },
+    { id: 2, nombre: "Javier", usuario: "javier", rol: "vendedor", comisionPct: 0 },
+    { id: 6, nombre: "Nico", usuario: "nico", rol: "vendedor", comisionPct: 0 },
     { id: 3, nombre: "Depósito", usuario: "deposito", rol: "deposito" },
     { id: 4, nombre: "Administración", usuario: "admin", rol: "admin" },
     { id: 5, nombre: "Gerencia", usuario: "gerencia", rol: "gerencia" },

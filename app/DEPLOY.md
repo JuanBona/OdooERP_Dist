@@ -36,7 +36,7 @@ npx supabase db push --db-url "postgresql://postgres:<POSTGRES_PASSWORD>@<servid
 SUPABASE_URL=https://api.<dominio> SUPABASE_SERVICE_ROLE_KEY=<SERVICE_ROLE_KEY> CLAVE_INICIAL=<clave> node scripts/cargar_datos.mjs
 ```
 
-Crea los 5 usuarios (vendedor1, vendedor2, deposito, admin, gerencia) con la clave inicial,
+Crea los usuarios (piniya, javier, nico, deposito, admin, gerencia) con la clave inicial (solo la primera vez; para cambiar usuarios o claves: `servidor/usuarios.sh`),
 los 182 productos y los 776 clientes. **Cambiar las claves** después desde el panel de Supabase.
 
 Entregas automáticas (pasa a Entregado lo que salió en reparto el día anterior), en el SQL editor:

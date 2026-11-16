@@ -102,7 +102,8 @@ cat <<EOF
 ==============================================================
  Listo: https://$DOMINIO
 
- Usuarios: vendedor1, vendedor2, deposito, admin, gerencia
+ Usuarios: piniya, javier, nico, deposito, admin, gerencia
+ Para cambiar usuarios o claves: ./usuarios.sh
  Clave inicial de todos: $CLAVE_INICIAL   (cambiarla desde el panel)
 
  Panel de Supabase (usuarios, claves, datos), solo por túnel SSH:
