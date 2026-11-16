@@ -70,7 +70,7 @@ export function EditarCliente({ c, onClose }) {
           <div className="field"><label htmlFor="ec-loc">Localidad</label><input id="ec-loc" list="locs" value={f.localidad} onChange={e => set("localidad", e.target.value)} />
             <datalist id="locs">{[...new Set(db.clientes.map(x => x.localidad).filter(Boolean))].map(l => <option key={l} value={l} />)}</datalist></div>
           <div className="field"><label htmlFor="ec-dia">Día de visita</label><select id="ec-dia" value={f.dia} onChange={e => set("dia", e.target.value)}><option value="">—</option>{DIAS.map(d => <option key={d}>{d}</option>)}</select></div>
-          {user.rol !== "vendedor" && <div className="field"><label htmlFor="ec-ven">Vendedor</label><select id="ec-ven" value={f.vendedorId ?? ""} onChange={e => set("vendedorId", e.target.value ? +e.target.value : null)}><option value="">Sin asignar</option>{vendedores.map(v => <option key={v.id} value={v.id}>{v.nombre}</option>)}</select></div>}
+          {user.rol !== "vendedor" && <div className="field"><label htmlFor="ec-ven">Vendedor</label><select id="ec-ven" value={f.vendedorId ?? ""} onChange={e => set("vendedorId", vendedores.find(v => String(v.id) === e.target.value)?.id ?? null)}><option value="">Sin asignar</option>{vendedores.map(v => <option key={v.id} value={v.id}>{v.nombre}</option>)}</select></div>}
           <div className="field"><label htmlFor="ec-tel">Teléfono</label><input id="ec-tel" value={f.tel} onChange={e => set("tel", e.target.value)} /></div>
         </div>
         <div className="field"><label htmlFor="ec-obs">Observaciones para el reparto</label><textarea id="ec-obs" rows="2" value={f.obs} onChange={e => set("obs", e.target.value)} /></div>
