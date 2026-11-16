@@ -1,6 +1,6 @@
 // Service worker: deja la app abierta y usable sin señal.
 // Estrategia: la app (HTML/JS/CSS/imágenes) se sirve desde caché y se actualiza en segundo plano.
-const CACHE = "rds-v2";
+const CACHE = "rds-v3";
 
 self.addEventListener("install", e => {
   // Guarda el HTML y todos los archivos que referencia (JS, CSS), así abre aunque no haya señal.
@@ -19,7 +19,11 @@ self.addEventListener("activate", e => {
 
 self.addEventListener("fetch", e => {
   const req = e.request;
-  if (req.method !== "GET" || new URL(req.url).origin !== location.origin) return; // la API de Supabase no se cachea
+  const url = new URL(req.url);
+  if (req.method !== "GET" || url.origin !== location.origin) return;
+  // La API de Supabase vive en el mismo origen (proxy): nunca se cachea. Cachearla por URL, ignorando
+  // headers y query, devolvía la respuesta de otra consulta (objeto en vez de lista) y rompía el ingreso.
+  if (/^\/(rest|auth|storage|realtime|functions)\//.test(url.pathname)) return;
   e.respondWith(
     caches.match(req, { ignoreVary: true, ignoreSearch: true }).then(hit => {
       const red = fetch(req).then(res => {
