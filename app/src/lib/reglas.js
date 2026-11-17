@@ -154,7 +154,7 @@ export const faltanDatosCheque = ch => !ch || !String(ch.numero || "").trim() ||
 // Precio de venta para ganar `pct` % sobre el costo (costo 100 y 30% → 130), redondeado al peso.
 export const precioConGanancia = (costo, pct) => Math.round(+costo * (1 + +pct / 100));
 // % que se gana hoy sobre el costo, con un decimal (null si no hay costo).
-export const gananciaPct = (costo, precio) => (costo > 0 ? Math.round((precio - costo) / costo * 1000) / 10 : null);
+export const gananciaPct = (costo, precio, decimales = 1) => (costo > 0 ? Math.round((precio - costo) / costo * 100 * 10 ** decimales) / 10 ** decimales : null);
 
 // Salidas de caja que no son un gasto del negocio: lo que se lleva el dueño, y los pagos a proveedores
 // (esa mercadería ya se descuenta con el costo de lo vendido; contarlos otra vez la restaría dos veces).
