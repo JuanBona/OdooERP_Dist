@@ -15,6 +15,7 @@ import Resumen from "./views/Resumen.jsx";
 import HojaRuta from "./views/HojaRuta.jsx";
 import Feriados from "./views/Feriados.jsx";
 import { sincronizar, useConexion } from "./lib/offline";
+import { guardarScroll, olvidarVistas } from "./lib/vista";
 import { Icon, Avatar } from "./views/icons.jsx";
 
 const Ctx = createContext(null);
@@ -39,6 +40,8 @@ export default function App() {
   const [nav, setNav] = useState({ view: "inicio", params: {} });
   const [cart, setCart] = useState({ clienteId: null, items: {}, manual: {}, obs: "" });
   const [msg, setMsg] = useState(null);
+  const [versionNueva, setVersionNueva] = useState(false);
+  useEffect(() => { const f = () => setVersionNueva(true); window.addEventListener("rds-version-nueva", f); return () => window.removeEventListener("rds-version-nueva", f); }, []);
   const [dark, setDark] = useState(() => { try { return localStorage.getItem("rds-dark") === "1"; } catch { return false; } });
 
   useEffect(() => {
@@ -47,7 +50,8 @@ export default function App() {
   }, [dark]);
 
   const { online, outbox } = useConexion();
-  const go = (view, params = {}) => { setNav({ view, params }); window.scrollTo(0, 0); };
+  // Al cambiar de pantalla se recuerda cuánto se había bajado (para volver al mismo lugar) y se sube arriba de todo.
+  const go = (view, params = {}) => { guardarScroll(nav.view, window.scrollY); setNav({ view, params }); window.scrollTo(0, 0); };
   const toast = m => { setMsg(m); setTimeout(() => setMsg(null), 3200); };
 
   // Al volver la señal se envían solos los pedidos que quedaron esperando.
@@ -57,6 +61,7 @@ export default function App() {
   // Si ya había entrado en este dispositivo (modo Supabase), entra directo.
   useEffect(() => { api.sesionGuardada?.().then(u => u && login(u)).catch(() => {}); }, []);
   const login = u => {
+    olvidarVistas();
     setUser(u);
     setCart({ clienteId: null, items: {}, manual: {}, obs: "" });
     go(u.rol === "deposito" ? "deposito" : "inicio");
@@ -80,7 +85,7 @@ export default function App() {
           <div><div className="who-n">{user.nombre}</div><div className="sub">{ROLES[user.rol]}</div></div>
         </div>
         <button className="iconbtn" title={dark ? "Modo claro" : "Modo oscuro"} aria-label="Cambiar modo" onClick={() => setDark(!dark)}><Icon n={dark ? "sol" : "luna"} s={18} /></button>
-        <button className="iconbtn" title="Salir" aria-label="Salir" onClick={() => { api.salir?.(); setUser(null); }}><Icon n="salir" s={18} /></button>
+        <button className="iconbtn" title="Salir" aria-label="Salir" onClick={() => { api.salir?.(); olvidarVistas(); setUser(null); }}><Icon n="salir" s={18} /></button>
       </div>
       {tabs.length > 1 && (
         <nav className={"tabs" + (tabs.length > 5 ? " muchas" : "")}>
@@ -90,6 +95,12 @@ export default function App() {
             </button>
           ))}
         </nav>
+      )}
+      {versionNueva && (
+        <div className="offline-bar" role="status" style={{ justifyContent: "space-between" }}>
+          <span>Hay una versión nueva de la app.</span>
+          <button className="btn sm" onClick={() => window.location.reload()}>Actualizar ahora</button>
+        </div>
       )}
       {(!online || outbox.length > 0) && (
         <div className="offline-bar" role="status">

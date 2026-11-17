@@ -1,10 +1,11 @@
 import { Icon, Avatar } from "./icons.jsx";
-import React, { useState } from "react";
+import React, { useEffect } from "react";
 import { useApp } from "../App.jsx";
 import { api } from "../api";
 import { camionesDeSemana } from "../lib/reglas";
 import { ChipEstado } from "./ui.jsx";
 import { PorVendedor, SemanaNav, semanaDeHoy, useAbiertos } from "./Pedidos.jsx";
+import { useRestaurarScroll, useVista } from "../lib/vista";
 
 // Cuándo se autorizó el pedido (lo que carga Administración entra ya autorizado: cuenta cuando se cargó).
 const cuandoEntro = p => new Date([...p.historial].reverse().find(h => h.txt.startsWith("Autorizado"))?.fecha || p.creado).getTime();
@@ -33,9 +34,12 @@ function resumenDeposito(ps) {
 }
 
 export function Deposito() {
-  const { db } = useApp();
-  const [semana, setSemana] = useState(semanaDeHoy);
-  const [abierto, toggle] = useAbiertos();
+  const { db, params } = useApp();
+  const [semana, setSemana] = useVista("deposito.semana", semanaDeHoy);
+  const [abierto, toggle] = useAbiertos("deposito");
+  // Al volver de un pedido queda en la misma semana, con los mismos camiones abiertos y en el mismo lugar.
+  useRestaurarScroll("deposito", params.volver);
+  useEffect(() => { if (!params.volver) setSemana(semanaDeHoy()); }, []); // eslint-disable-line react-hooks/exhaustive-deps
   const dias = camionesDeSemana(semana);
   // Solo lo autorizado (en la base, Depósito ni siquiera ve lo que espera autorización).
   const todos = db.pedidos.filter(p => ["pendiente", "preparando", "preparado"].includes(p.estado)).sort(ordenDeposito);
@@ -64,7 +68,7 @@ export function DepoPedido() {
   const completo = p.hechos.length === p.lineas.length;
   return (
     <>
-      <button className="btn sm sec" onClick={() => go("deposito")}><Icon n="atras" s={16} /> Preparación</button>
+      <button className="btn sm sec" onClick={() => go("deposito", { volver: true })}><Icon n="atras" s={16} /> Preparación</button>
       <div className="row between" style={{ margin: "12px 0", flexWrap: "wrap" }}>
         <div><div className="eyebrow">Pedido #{p.id}</div><h1>{c.nombre}</h1><p className="muted">{c.dir} {c.localidad}</p>{c.obs && <p className="muted"><Icon n="nota" s={15} style={{ verticalAlign: "-2px" }} /> {c.obs}</p>}</div>
         <ChipEstado e={p.estado} />
@@ -80,9 +84,9 @@ export function DepoPedido() {
       })}
       {p.obs && <p className="muted"><Icon n="nota" s={15} style={{ verticalAlign: "-2px" }} /> {p.obs}</p>}
       {editable && <button className="btn blk" style={{ marginTop: 12, opacity: completo ? 1 : .5 }} disabled={!completo}
-        onClick={async () => { try { await api.cambiarEstado(user, p.id, "preparado", "Preparado"); toast("Pedido #" + p.id + " listo para salir"); go("deposito"); } catch (e) { toast(e.message); } }}>
+        onClick={async () => { try { await api.cambiarEstado(user, p.id, "preparado", "Preparado"); toast("Pedido #" + p.id + " listo para salir"); go("deposito", { volver: true }); } catch (e) { toast(e.message); } }}>
         {completo ? "✓ Pedido preparado" : `Faltan ${p.lineas.length - p.hechos.length} productos`}</button>}
-      {p.estado === "preparado" && <button className="btn sec blk" style={{ marginTop: 12 }} onClick={() => go("pedido", { id: p.id })}>Ver pedido e imprimir remito</button>}
+      {p.estado === "preparado" && <button className="btn sec blk" style={{ marginTop: 12 }} onClick={() => go("pedido", { id: p.id, desde: "deposito" })}>Ver pedido e imprimir remito</button>}
     </>
   );
 }

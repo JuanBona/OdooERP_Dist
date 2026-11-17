@@ -1,17 +1,23 @@
-import React, { useState } from "react";
+import React, { useEffect } from "react";
 import { Avatar, Icon } from "./icons.jsx";
 import { useApp } from "../App.jsx";
 import { ChipCuenta } from "./ui.jsx";
-import { DIAS_VISITA, clientesDelDia, diaSemana, fechaCorta, feriadoDe, habilVecino, hoyISO, nombreDia, proximoHabil } from "../lib/reglas";
+import { useConexion } from "../lib/offline";
+import { useRestaurarScroll, useVista } from "../lib/vista";
+import { DIAS_VISITA, clientesDelDia, diaSemana, fechaCorta, feriadoDe, habilVecino, hoyISO, isoLocal, nombreDia, proximoHabil } from "../lib/reglas";
 
 const cap = t => t.charAt(0).toUpperCase() + t.slice(1);
 
 // Hoja de ruta del vendedor: los clientes que le toca visitar ese día (según el día de visita de cada cliente y
 // los cambios por feriado). Al tocar un cliente se abre su ficha, con la deuda, para tomarle el pedido.
 export default function HojaRuta() {
-  const { db, user, go, setCart } = useApp();
+  const { db, user, go, setCart, params } = useApp();
+  const { outbox } = useConexion();
   const hoy = hoyISO();
-  const [fecha, setFecha] = useState(() => proximoHabil(hoy)); // sábado y domingo muestran el lunes
+  const [fecha, setFecha] = useVista("hoja.fecha", () => proximoHabil(hoy)); // sábado y domingo muestran el lunes
+  // Al volver de un cliente o de un pedido queda en el mismo día y en el mismo lugar; entrando de cero, en hoy.
+  useRestaurarScroll("hoja", params.volver);
+  useEffect(() => { if (!params.volver) setFecha(proximoHabil(hoy)); }, []); // eslint-disable-line react-hooks/exhaustive-deps
   const mios = db.clientes.filter(c => c.vendedorId === user.id);
   const delDia = clientesDelDia(mios, fecha, db.excepciones)
     .sort((a, b) => (a.localidad || "").localeCompare(b.localidad || "") || a.nombre.localeCompare(b.nombre));
@@ -19,10 +25,13 @@ export default function HojaRuta() {
   const feriado = feriadoDe(db.feriados, fecha);
   const cambios = db.excepciones.filter(e => (e.desde === fecha || e.hasta === fecha) && (e.vendedorId == null || e.vendedorId === user.id));
 
-  // Con pedido: ya se le cargó uno ese día (que no esté anulado).
-  const conPedido = c => db.pedidos.some(p => p.clienteId === c.id && p.fecha === fecha && p.estado !== "anulado");
+  // Con pedido: ya se le cargó uno ese día (que no esté anulado), o quedó guardado sin señal esperando enviarse.
+  const conPedido = c => db.pedidos.some(p => p.clienteId === c.id && p.fecha === fecha && p.estado !== "anulado")
+    || outbox.some(o => o.user?.id === user.id && (o.tipo || "pedido") === "pedido" && o.data?.clienteId === c.id && isoLocal(new Date(o.creado)) === fecha);
   const cargados = delDia.filter(conPedido).length;
-  const pedido = c => { setCart({ clienteId: c.id, items: {}, manual: {}, obs: "" }); go("catalogo"); };
+  // Los que faltan visitar arriba; los que ya tienen pedido, abajo y apagados.
+  const porVisitar = delDia.filter(c => !conPedido(c)), yaCargados = delDia.filter(conPedido);
+  const pedido = c => { setCart({ clienteId: c.id, items: {}, manual: {}, obs: "", origen: "hoja" }); go("catalogo"); }; // al terminar la venta vuelve acá
 
   return (
     <>
@@ -44,26 +53,19 @@ export default function HojaRuta() {
       ))}
 
       <div className="sec-h" style={{ marginTop: 6 }}>
-        <h2>{delDia.length} {delDia.length === 1 ? "cliente" : "clientes"}</h2>
-        {delDia.length > 0 && <span className="muted">{cargados} con pedido cargado</span>}
+        <h2>{porVisitar.length} {porVisitar.length === 1 ? "cliente por visitar" : "clientes por visitar"}</h2>
+        {delDia.length > 0 && <span className="muted">{cargados} de {delDia.length} con pedido cargado</span>}
       </div>
       <div className="card">
         {delDia.length === 0 && <div className="empty">No tenés clientes para visitar este día.</div>}
-        {delDia.map(c => (
-          <div key={c.id} className="list-item" onClick={() => go("cliente", { id: c.id, desde: "hoja" })}>
-            <Avatar txt={c.nombre} />
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <b>{c.nombre}</b>
-              <div className="muted">{c.dir}{c.localidad ? " · " + c.localidad : ""}</div>
-              <div style={{ marginTop: 4 }}><ChipCuenta c={c} /></div>
-            </div>
-            <div style={{ textAlign: "right" }}>
-              {conPedido(c) && <span className="chip st-entregado" style={{ marginBottom: 6 }}>✓ Pedido cargado</span>}
-              <div><button className="btn sm" onClick={e => { e.stopPropagation(); pedido(c); }}><Icon n="mas" s={15} /> Pedido</button></div>
-            </div>
-          </div>
-        ))}
+        {delDia.length > 0 && porVisitar.length === 0 && <div className="empty">Ya cargaste el pedido de todos. 🎉</div>}
+        {porVisitar.map(c => <ClienteFila key={c.id} c={c} cargado={false} onPedido={pedido} />)}
       </div>
+
+      {yaCargados.length > 0 && <>
+        <div className="sec-h"><h2>Ya con pedido</h2><span className="muted">{yaCargados.length}</span></div>
+        <div className="card">{yaCargados.map(c => <ClienteFila key={c.id} c={c} cargado onPedido={pedido} />)}</div>
+      </>}
 
       {sinDia > 0 && (
         <p className="muted" style={{ marginTop: 12 }}>
@@ -71,5 +73,25 @@ export default function HojaRuta() {
         </p>
       )}
     </>
+  );
+}
+
+// Un cliente de la hoja. Los que ya tienen pedido quedan apagados y sin el botón de pedido (siguen abriendo la ficha).
+function ClienteFila({ c, cargado, onPedido }) {
+  const { go } = useApp();
+  return (
+    <div className="list-item" style={cargado ? { opacity: 0.55 } : null} onClick={() => go("cliente", { id: c.id, desde: "hoja" })}>
+      <Avatar txt={c.nombre} />
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <b>{c.nombre}</b>
+        <div className="muted">{c.dir}{c.localidad ? " · " + c.localidad : ""}</div>
+        <div style={{ marginTop: 4 }}><ChipCuenta c={c} /></div>
+      </div>
+      <div style={{ textAlign: "right" }}>
+        {cargado
+          ? <span className="chip st-entregado">✓ Pedido cargado</span>
+          : <button className="btn sm" onClick={e => { e.stopPropagation(); onPedido(c); }}><Icon n="mas" s={15} /> Pedido</button>}
+      </div>
+    </div>
   );
 }

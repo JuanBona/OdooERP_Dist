@@ -3,7 +3,8 @@
 export const fmt = n => "$ " + Math.round(n || 0).toLocaleString("es-AR");
 // Fecha de hoy según el reloj del dispositivo (no UTC: pasadas las 21 hs ya sería "mañana").
 const dos = n => String(n).padStart(2, "0");
-export const hoyISO = () => { const d = new Date(); return `${d.getFullYear()}-${dos(d.getMonth() + 1)}-${dos(d.getDate())}`; };
+export const isoLocal = d => `${d.getFullYear()}-${dos(d.getMonth() + 1)}-${dos(d.getDate())}`;
+export const hoyISO = () => isoLocal(new Date());
 
 // Fechas como texto "AAAA-MM-DD", sin zonas horarias de por medio.
 const aFecha = iso => new Date(iso + "T12:00:00Z");
