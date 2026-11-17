@@ -308,6 +308,17 @@ select chequear((select ganancia from ganancia_cobrada(date '2000-01-01', date '
   and (select cobrado_sin_costo from ganancia_cobrada(date '2000-01-01', date '2100-01-01', current_setting('t.c93')::bigint)) = 1000, 'la deuda vieja se paga primero: 1500 = 1000 viejos (sin costo) + 500 de la venta (gana 200)');
 reset role;
 
+-- ===== Depósito ve el nombre de los vendedores, pero no sus comisiones =====
+select como('00000000-0000-0000-0000-000000000003'); set role authenticated;
+select chequear((select count(*) from perfiles) = 1, 'depósito solo lee su propio perfil');
+select chequear((select count(*) from lista_vendedores) = 2, 'depósito ve la lista de los 2 vendedores (para agrupar los pedidos)');
+select chequear((select string_agg(nombre, ',' order by nombre) from lista_vendedores) = 'Vendedor 1,Vendedor 2', 'la lista trae los nombres');
+reset role;
+select chequear((select count(*) from information_schema.columns where table_name = 'lista_vendedores' and column_name = 'comision_pct') = 0, 'la lista de vendedores no incluye las comisiones');
+select como('00000000-0000-0000-0000-000000000001'); set role authenticated;
+select chequear((select count(*) from perfiles) = 1, 'un vendedor tampoco lee los perfiles de los demás');
+reset role;
+
 -- ===== Depósito =====
 select como('00000000-0000-0000-0000-000000000003'); set role authenticated;
 select tildar(1, 0);
