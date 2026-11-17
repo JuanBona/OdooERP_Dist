@@ -33,7 +33,7 @@ const encolar = (tipo, user, data) => {
 // El identificador viaja con el envío: si se reintenta, el servidor no lo duplica.
 const ENVIAR = {
   pedido: (user, d) => api.crearPedido(user, d),
-  cobro: (user, d) => api.registrarCobro(user, d.clienteId, d.monto, d.medio, d.uid),
+  cobro: (user, d) => api.registrarCobro(user, d.clienteId, d.monto, d.medio, d.uid, d.cheque),
 };
 
 async function enviar(tipo, user, data) {

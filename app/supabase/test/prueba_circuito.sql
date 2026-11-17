@@ -198,6 +198,116 @@ select chequear((select count(*) from caja_pendientes) = 0, 'vendedor no ve los 
 select chequear(mi_a_rendir() = 5000, 'vendedor ve lo suyo para entregar (5000)');
 reset role;
 
+-- ===== Costo de los productos =====
+insert into producto_costos(producto_id, costo) values (1, 40000);
+select como('00000000-0000-0000-0000-000000000001'); set role authenticated;
+select crear_pedido(1, '[{"producto_id":1,"cant":1}]', '', 'costo-1');
+select chequear((select count(*) from producto_costos) = 0, 'el vendedor no ve el costo de los productos');
+select chequear((select count(*) from linea_costos) = 0, 'el vendedor no ve el costo de las líneas');
+do $$ begin insert into producto_costos(producto_id, costo) values (2, 1); raise exception 'debió fallar';
+exception when insufficient_privilege then perform chequear(true, 'el vendedor no puede cargar costos'); end $$;
+reset role;
+select chequear((select costo from linea_costos where linea_id = (select max(id) from pedido_lineas)) = 40000, 'la línea del pedido guarda el costo al venderse');
+select como('00000000-0000-0000-0000-000000000004'); set role authenticated;
+update producto_costos set costo = 50000 where producto_id = 1;
+select chequear((select costo from producto_costos where producto_id = 1) = 50000, 'administración cambia el costo');
+select chequear((select costo from linea_costos where linea_id = (select max(id) from pedido_lineas)) = 40000, 'cambiar el costo no reescribe lo ya vendido');
+reset role;
+
+-- ===== Tres cajas: cobros por medio, salidas, pases y conteos =====
+select como('00000000-0000-0000-0000-000000000001'); set role authenticated;
+select registrar_cobro(1, 5000, 'Transferencia', 'tr-1');
+do $$ begin perform registrar_cobro(1, 7000, 'Cheque', 'ch-0'); raise exception 'debió fallar';
+exception when others then perform chequear(sqlerrm like 'Poné el número%', 'un cobro con cheque sin sus datos no se acepta'); end $$;
+select registrar_cobro(1, 7000, 'Cheque', 'ch-1', '{"numero":"0001234","banco":"Banco Nación","cobro":"2026-12-15"}');
+select chequear(mi_a_rendir() = 5000, 'transferencias y cheques no suman efectivo que el vendedor tenga que entregar');
+do $$ begin perform pasar_entre_cajas('efectivo', 'transferencia', 100); raise exception 'debió fallar';
+exception when others then perform chequear(sqlerrm like 'Solo Administración%', 'el vendedor no pasa plata entre cajas'); end $$;
+reset role;
+select como('00000000-0000-0000-0000-000000000004'); set role authenticated;
+select chequear(saldo_caja('transferencia') = 5000, 'la transferencia entra sola a su caja');
+select chequear(saldo_caja('cheques') = 7000, 'el cheque entra solo a su caja');
+select chequear((select cheque_numero || '/' || cheque_banco || '/' || cheque_cobro from caja_movimientos where caja = 'cheques') = '0001234/Banco Nación/2026-12-15', 'el cheque queda con número, banco y fecha de cobro');
+select chequear(saldo_caja() = 16500, 'el saldo de efectivo no cambia con transferencias ni cheques');
+do $$ begin insert into caja_movimientos(tipo, concepto, monto, caja) values ('ingreso', 'Otro ingreso', 100, 'cheques'); raise exception 'debió fallar';
+exception when check_violation then perform chequear(true, 'un movimiento a mano en cheques sin datos no se acepta'); end $$;
+insert into caja_movimientos(tipo, concepto, monto, persona, caja) values ('egreso', 'Gasto varios', -2000, 'Kiosco', 'transferencia');
+select chequear(saldo_caja('transferencia') = 3000, 'una salida resta de la caja que se eligió');
+select pasar_entre_cajas('efectivo', 'transferencia', 1500, 'depósito en el banco');
+select chequear(saldo_caja() = 15000 and saldo_caja('transferencia') = 4500, 'el pase entre cajas mueve la plata');
+do $$ begin perform pasar_entre_cajas('efectivo', 'cheques', 100); raise exception 'debió fallar';
+exception when others then perform chequear(sqlerrm like 'Poné el número%', 'un pase hacia cheques pide los datos del cheque'); end $$;
+do $$ begin perform pasar_entre_cajas('efectivo', 'efectivo', 100); raise exception 'debió fallar';
+exception when others then perform chequear(sqlerrm like 'Elegí dos cajas%', 'el pase pide dos cajas distintas'); end $$;
+select pasar_entre_cajas('cheques', 'efectivo', 7000, 'cheque cobrado', '{"numero":"0001234","banco":"Banco Nación","cobro":"2026-12-15"}');
+select chequear(saldo_caja('cheques') = 0 and saldo_caja() = 22000, 'cobrar un cheque lo pasa a la caja de efectivo');
+select chequear((select count(*) from caja_movimientos where concepto = 'Pase entre cajas' and tipo = 'ajuste') = 4, 'los pases son ajustes: no cuentan como gasto ni como ingreso');
+select chequear(contar_caja(4500, '', 'transferencia') = 0, 'contar la caja de transferencia cuadra');
+select chequear((select caja from caja_arqueos order by id desc limit 1) = 'transferencia', 'el conteo queda en la caja que se contó');
+insert into caja_devoluciones(movimiento_id, monto, como) values ((select id from caja_movimientos where concepto = 'Préstamo'), 1000, 'Transferencia');
+select chequear(saldo_caja('transferencia') = 5500 and saldo_caja() = 22000, 'lo que vuelve por transferencia entra a la caja de transferencia');
+reset role;
+
+-- ===== La ganancia de un cobro usa el precio y el costo de la venta original =====
+-- Una Coca se vende a 100 (costo 60); después sube a 120 (costo 80) y recién ahí se cobra la venta vieja.
+insert into productos(nombre, categoria, precio, stock, tramos, stock_contado) values ('COCA 1.5L', 'Bebidas', 100, 100, '[]', true);
+insert into producto_costos(producto_id, costo) values ((select id from productos where nombre = 'COCA 1.5L'), 60);
+insert into clientes(codigo, nombre, vendedor_id, saldo) values (90, 'Cliente Coca', '00000000-0000-0000-0000-000000000001', 0), (91, 'Cliente sin costo', '00000000-0000-0000-0000-000000000001', 0);
+select set_config('t.coca', (select id::text from productos where nombre = 'COCA 1.5L'), false);
+select set_config('t.c90', (select id::text from clientes where codigo = 90), false);
+select set_config('t.c91', (select id::text from clientes where codigo = 91), false);
+select como('00000000-0000-0000-0000-000000000001'); set role authenticated;
+select crear_pedido(current_setting('t.c90')::bigint, ('[{"producto_id":' || current_setting('t.coca') || ',"cant":10}]')::jsonb, '', 'coca-1');   -- 10 × 100 = 1000, costo 600
+select crear_pedido(current_setting('t.c91')::bigint, '[{"producto_id":3,"cant":1}]', '', 'sc-1');                                                  -- producto sin costo: 9000
+reset role;
+select como('00000000-0000-0000-0000-000000000004'); set role authenticated;
+update productos set precio = 120 where nombre = 'COCA 1.5L';
+update producto_costos set costo = 80 where producto_id = current_setting('t.coca')::bigint;
+select registrar_cobro(current_setting('t.c90')::bigint, 1000, 'Efectivo');    -- cobra la venta vieja, ya con el precio nuevo
+select registrar_cobro(current_setting('t.c91')::bigint, 9000, 'Efectivo');
+do $$ begin perform ganancia_cobrada(date '2000-01-01', date '2100-01-01'); raise exception 'debió fallar';
+exception when others then perform chequear(sqlerrm like 'Solo Gerencia%', 'administración no ve la ganancia'); end $$;
+reset role;
+select como('00000000-0000-0000-0000-000000000005'); set role authenticated;
+select chequear((select ganancia from ganancia_cobrada(date '2000-01-01', date '2100-01-01', current_setting('t.c90')::bigint)) = 400,
+  'cobrar una venta hecha a 100 gana 400 con el precio de entonces (con el precio nuevo serían 333)');
+select chequear((select cobrado from ganancia_cobrada(date '2000-01-01', date '2100-01-01', current_setting('t.c90')::bigint)) = 1000, 'lo cobrado de esa venta es 1000');
+select chequear((select cobrado_sin_costo from ganancia_cobrada(date '2000-01-01', date '2100-01-01', current_setting('t.c91')::bigint)) = 9000
+  and (select ganancia from ganancia_cobrada(date '2000-01-01', date '2100-01-01', current_setting('t.c91')::bigint)) = 0, 'cobrar una venta sin costo no suma ganancia y se informa aparte');
+reset role;
+select como('00000000-0000-0000-0000-000000000001'); set role authenticated;
+select crear_pedido(current_setting('t.c90')::bigint, ('[{"producto_id":' || current_setting('t.coca') || ',"cant":10}]')::jsonb, '', 'coca-2');   -- 10 × 120 = 1200, costo 800
+reset role;
+select como('00000000-0000-0000-0000-000000000004'); set role authenticated;
+select registrar_cobro(current_setting('t.c90')::bigint, 600, 'Transferencia');   -- paga la mitad de la segunda venta
+reset role;
+select como('00000000-0000-0000-0000-000000000005'); set role authenticated;
+select chequear((select ganancia from ganancia_cobrada(date '2000-01-01', date '2100-01-01', current_setting('t.c90')::bigint)) = 600,
+  'los cobros pagan primero las ventas más viejas: 1000 de la primera (400) + 600 de la segunda (la mitad de 400) = 600');
+select chequear((select ganancia from ganancia_cobrada(date '2000-01-01', date '2000-01-02', current_setting('t.c90')::bigint)) = 0, 'fuera del período no suma');
+reset role;
+
+-- Deuda anterior al sistema: se paga primero y no tiene costo conocido.
+insert into productos(nombre, categoria, precio, stock, tramos, stock_contado) values ('AGUA X', 'Bebidas', 100, 100, '[]', true);
+insert into producto_costos(producto_id, costo) values ((select id from productos where nombre = 'AGUA X'), 60);
+insert into clientes(codigo, nombre, vendedor_id, saldo) values (92, 'Deuda vieja sola', '00000000-0000-0000-0000-000000000001', -5000), (93, 'Deuda vieja y venta', '00000000-0000-0000-0000-000000000001', -1000);
+select set_config('t.c92', (select id::text from clientes where codigo = 92), false);
+select set_config('t.c93', (select id::text from clientes where codigo = 93), false);
+select set_config('t.agua', (select id::text from productos where nombre = 'AGUA X'), false);
+select como('00000000-0000-0000-0000-000000000001'); set role authenticated;
+select crear_pedido(current_setting('t.c93')::bigint, ('[{"producto_id":' || current_setting('t.agua') || ',"cant":10}]')::jsonb, '', 'agua-1');  -- 1000, costo 600
+reset role;
+select como('00000000-0000-0000-0000-000000000004'); set role authenticated;
+select registrar_cobro(current_setting('t.c92')::bigint, 3000, 'Efectivo');
+select registrar_cobro(current_setting('t.c93')::bigint, 1500, 'Efectivo');
+reset role;
+select como('00000000-0000-0000-0000-000000000005'); set role authenticated;
+select chequear((select ganancia from ganancia_cobrada(date '2000-01-01', date '2100-01-01', current_setting('t.c92')::bigint)) = 0
+  and (select cobrado_sin_costo from ganancia_cobrada(date '2000-01-01', date '2100-01-01', current_setting('t.c92')::bigint)) = 3000, 'cobrar una deuda anterior al sistema no suma ganancia');
+select chequear((select ganancia from ganancia_cobrada(date '2000-01-01', date '2100-01-01', current_setting('t.c93')::bigint)) = 200
+  and (select cobrado_sin_costo from ganancia_cobrada(date '2000-01-01', date '2100-01-01', current_setting('t.c93')::bigint)) = 1000, 'la deuda vieja se paga primero: 1500 = 1000 viejos (sin costo) + 500 de la venta (gana 200)');
+reset role;
+
 -- ===== Depósito =====
 select como('00000000-0000-0000-0000-000000000003'); set role authenticated;
 select tildar(1, 0);

@@ -2,7 +2,8 @@ import { Icon, Avatar } from "./icons.jsx";
 import React from "react";
 import { useApp } from "../App.jsx";
 import { api } from "../api";
-import { fechaCorta, fmt, hoyISO, nombreCamion, puede, tieneAlerta } from "../lib/reglas";
+import { useGanancia } from "../lib/useGanancia";
+import { calcProfit, fechaCorta, fmt, hoyISO, nombreCamion, puede, tieneAlerta } from "../lib/reglas";
 import { ChipCuenta, ChipEstado, ProdImg } from "./ui.jsx";
 
 export const misClientes = (db, user) =>
@@ -16,6 +17,8 @@ export default function Inicio() {
   const alertas = misClientes(db, user).filter(tieneAlerta);
   const cuenta = e => db.pedidos.filter(p => p.estado === e).length;
   const bajos = db.productos.filter(p => p.activo && p.stockContado !== false && p.stock <= p.stockMin);
+  const g = useGanancia(db, hoy.slice(0, 7), puede.verFinanzas(user));
+  const pr = puede.verFinanzas(user) && g ? calcProfit(db, hoy.slice(0, 7), g) : null; // profit del mes en curso (solo Gerencia)
 
   return (
     <>
@@ -25,9 +28,16 @@ export default function Inicio() {
       </div>
 
       <div className="grid g3" style={{ marginBottom: 16 }}>
+        {pr && (
+          <div className="card kpi" style={{ cursor: "pointer", borderColor: "var(--brand)" }} onClick={() => go("resumen")}>
+            <div className="num" style={{ color: pr.profit >= 0 ? "var(--entr)" : "var(--danger)" }}>{fmt(pr.profit)}</div>
+            <div className="lbl">Profit del mes</div>
+            <div className="muted" style={{ fontSize: 12, marginTop: 4 }}>{pr.conCostos ? `Ganancia ${fmt(pr.ganancia)} − gastos ${fmt(pr.gastos)} − comisiones ${fmt(pr.comisiones)}` : "Sin cobros de ventas con costo todavía: cargá los costos en Artículos"}</div>
+          </div>
+        )}
         <div className="card kpi"><div className="num">{deHoy.length}</div><div className="lbl">Pedidos de hoy</div></div>
         {user.rol === "vendedor" && <div className="card kpi"><div className="num" style={{ color: "var(--listo)" }}>{fmt(api.aRendir(user.id))}</div><div className="lbl">Efectivo cobrado para entregar en el depósito</div></div>}
-        {["admin", "gerencia"].includes(user.rol) && <div className="card kpi" style={{ cursor: "pointer" }} onClick={() => go("caja")}><div className="num">{fmt(api.saldoCaja())}</div><div className="lbl">En la caja del depósito</div></div>}
+        {["admin", "gerencia"].includes(user.rol) && <div className="card kpi" style={{ cursor: "pointer" }} onClick={() => go("caja")}><div className="num">{fmt(api.saldoCaja())}</div><div className="lbl">En la caja de efectivo del depósito</div></div>}
         <div className="card kpi"><div className="num">{fmt(deHoy.reduce((s, p) => s + p.total, 0))}</div><div className="lbl">Vendido hoy</div></div>
         {user.rol !== "vendedor" && <>
           <div className="card kpi" style={{ cursor: "pointer" }} onClick={() => go("pedidos", { estado: "porAutorizar" })}>
