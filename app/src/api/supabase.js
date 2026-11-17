@@ -64,7 +64,13 @@ async function todo(q) { // trae todas las filas (Supabase devuelve de a 1000)
 }
 
 const cargas = {
-  usuarios: async () => { db.usuarios = (await todo(() => sb.from("perfiles").select("*").order("nombre"))).map(mapUsuario); },
+  // Administración y Gerencia leen todos los perfiles. Los demás roles solo pueden leer el suyo, pero Depósito necesita los
+  // nombres de los vendedores para agrupar los pedidos: los toma de una vista que no incluye las comisiones.
+  usuarios: async () => {
+    const todos = ["admin", "gerencia"].includes(yo?.rol);
+    db.usuarios = (await todo(() => sb.from(todos ? "perfiles" : "lista_vendedores").select("*").order("nombre"))).map(mapUsuario);
+    if (!todos && yo && !db.usuarios.some(u => u.id === yo.id)) db.usuarios.push(yo);
+  },
   productos: async () => { db.productos = (await todo(() => sb.from("productos").select("*, producto_costos(costo)").order("id"))).map(mapProducto); },
   clientes: async () => { db.clientes = (await todo(() => sb.from("clientes").select("*").order("codigo"))).map(mapCliente); },
   // Solo lo reciente (para que entrar sea rápido y no se descargue todo el historial):
