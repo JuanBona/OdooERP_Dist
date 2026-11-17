@@ -141,3 +141,76 @@ export const puede = {
   // Mover un pedido a otro camión: vendedor (los suyos), Administración y Gerencia.
   cambiarCamion: (u, p) => !cerrado(p) && (["admin", "gerencia"].includes(u.rol) || (u.rol === "vendedor" && p.vendedorId === u.id)),
 };
+
+// ---- Cajas ----
+export const CAJAS = [["efectivo", "Efectivo"], ["transferencia", "Transferencia"], ["cheques", "Cheques"]];
+export const nombreCaja = id => CAJAS.find(c => c[0] === id)?.[1] || id;
+// Lo que vuelve de una salida entra a la caja del medio con que volvió (Efectivo o Transferencia).
+export const CAJA_DE_DEVOLUCION = { Efectivo: "efectivo", Transferencia: "transferencia" };
+export const faltanDatosCheque = ch => !ch || !String(ch.numero || "").trim() || !String(ch.banco || "").trim() || !ch.cobro;
+
+// ---- Precio y ganancia ----
+// Precio de venta para ganar `pct` % sobre el costo (costo 100 y 30% → 130), redondeado al peso.
+export const precioConGanancia = (costo, pct) => Math.round(+costo * (1 + +pct / 100));
+// % que se gana hoy sobre el costo, con un decimal (null si no hay costo).
+export const gananciaPct = (costo, precio) => (costo > 0 ? Math.round((precio - costo) / costo * 1000) / 10 : null);
+
+// Salidas de caja que no son un gasto del negocio: lo que se lleva el dueño, y los pagos a proveedores
+// (esa mercadería ya se descuenta con el costo de lo vendido; contarlos otra vez la restaría dos veces).
+const NO_ES_GASTO = ["Retiro del dueño", "Pago a proveedor"];
+
+// Ganancia de lo cobrado en un mes ("AAAA-MM"), valuada con el PRECIO y el COSTO DE LA VENTA ORIGINAL.
+// Un cobro llega después de la venta y los precios pueden haber cambiado: si el cliente pagó una Coca que
+// compró a 100, se cuenta con ese 100 aunque hoy valga 120. Para eso cada cobro paga primero las ventas más
+// viejas del cliente y gana lo que se ganó en esas ventas (cada pedido guarda el costo con que se vendió).
+//  · Una deuda anterior al sistema (saldo inicial) se paga primero y no tiene costo conocido.
+//  · Lo cobrado de ventas sin costo cargado, o de más (adelantos), no suma ganancia: sale en cobradoSinCosto.
+// Misma cuenta que la función ganancia_cobrada de la base (que es la que usa la app real, porque necesita
+// todo el historial); esta versión es la del modo demo. Devuelve { cobrado, ganancia, cobradoSinCosto }.
+export function gananciaCobrada(db, mes) {
+  const enMes = f => !!f && f.startsWith(mes);
+  const porFechaYId = (a, b) => a.fecha.localeCompare(b.fecha) || a.id - b.id;
+  let cobrado = 0, ganancia = 0, conocido = 0;
+  db.clientes.forEach(c => {
+    const ventas = db.pedidos.filter(p => p.clienteId === c.id && !["anulado", "rechazado"].includes(p.estado) && p.total > 0).sort(porFechaYId);
+    const cobros = db.cobros.filter(k => k.clienteId === c.id).sort(porFechaYId);
+    const entregado = ventas.filter(p => p.estado === "entregado").reduce((s, p) => s + p.total, 0);
+    const s0 = c.saldo + entregado - cobros.reduce((s, k) => s + k.monto, 0); // saldo con el que arrancó el cliente
+    // Cola de deudas, de la más vieja a la más nueva: gan y conoc son lo que se gana y lo que tiene costo, por peso.
+    const deudas = [];
+    if (s0 < 0) deudas.push({ resta: -s0, gan: 0, conoc: 0 });
+    ventas.forEach(p => {
+      let conoc = 0, gan = 0;
+      p.lineas.forEach(l => { if (l.costo != null) { conoc += l.total; gan += l.total - l.costo * l.cant; } });
+      deudas.push({ resta: p.total, gan: gan / p.total, conoc: conoc / p.total });
+    });
+    // Cola de pagos (un saldo a favor inicial paga primero y no es de ningún mes).
+    const pagos = [];
+    if (s0 > 0) pagos.push({ monto: s0, delMes: false });
+    cobros.forEach(k => pagos.push({ monto: k.monto, delMes: enMes(k.fecha) }));
+    let i = 0;
+    pagos.forEach(pago => {
+      if (pago.delMes) cobrado += pago.monto;
+      let falta = pago.monto;
+      while (falta > 1e-9 && i < deudas.length) {
+        const x = Math.min(falta, deudas[i].resta);
+        if (pago.delMes) { ganancia += x * deudas[i].gan; conocido += x * deudas[i].conoc; }
+        deudas[i].resta -= x; falta -= x;
+        if (deudas[i].resta <= 1e-9) i++;
+      }
+    });
+  });
+  return { cobrado, ganancia: Math.round(ganancia), cobradoSinCosto: Math.round(cobrado - conocido) };
+}
+
+// Profit de un mes: la ganancia de lo cobrado (g, de gananciaCobrada) menos los gastos del mes (salidas de las
+// 3 cajas que no vuelven) y las comisiones. Los pases entre cajas, lo que vuelve (préstamos), los retiros del
+// dueño y los pagos a proveedores no son gastos (la mercadería ya está en el costo de lo vendido).
+export function calcProfit(db, mes, g) {
+  const enMes = f => !!f && f.startsWith(mes);
+  const comisiones = db.cobros.filter(c => enMes(c.fecha)).reduce((s, c) => s + (c.comision || 0), 0);
+  const gastos = db.caja.filter(m => enMes(m.fecha) && m.tipo === "egreso" && !m.vuelve && !NO_ES_GASTO.includes(m.concepto)).reduce((s, m) => s - m.monto, 0);
+  return { cobrado: g.cobrado, ganancia: g.ganancia, cobradoSinCosto: g.cobradoSinCosto, gastos, comisiones,
+    profit: g.ganancia - gastos - comisiones, conCostos: g.cobrado - g.cobradoSinCosto > 0,
+    productosSinCosto: db.productos.filter(p => p.activo && p.costo == null).length };
+}

@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { useApp } from "../App.jsx";
-import { fmt } from "../lib/reglas";
+import { calcProfit, fmt } from "../lib/reglas";
+import { useGanancia } from "../lib/useGanancia";
 import { api } from "../api";
 
 // Resumen del mes para Gerencia. No pide cargar nada nuevo: sale de pedidos, cobros y gastos.
@@ -33,6 +34,8 @@ export default function Resumen() {
   const cobrado = sum(cobros, c => c.monto);
   const gastado = sum(gastos, g => g.monto);
   const comisiones = sum(cobros, c => c.comision || 0);
+  const g = useGanancia(db, mes);
+  const pr = g ? calcProfit(db, mes, g) : null; // null mientras se calcula
   const deuda = sum(db.clientes.filter(c => c.saldo < 0), c => -c.saldo);
 
   const vendedores = db.usuarios.filter(u => u.rol === "vendedor").map(u => ({
@@ -63,9 +66,17 @@ export default function Resumen() {
         <div className="card kpi"><div className="num" style={{ color: "var(--danger)" }}>{fmt(gastado)}</div><div className="lbl">Gastos</div></div>
         <div className="card kpi"><div className="num">{fmt(comisiones)}</div><div className="lbl">Comisiones a pagar</div></div>
         <div className="card kpi" style={{ borderColor: "var(--brand)" }}><div className="num">{fmt(cobrado - gastado - comisiones)}</div><div className="lbl">Lo que quedó (cobrado − gastos − comisiones)</div></div>
+        <div className="card kpi" style={{ borderColor: "var(--brand)" }}><div className="num" style={{ color: !pr || pr.profit >= 0 ? "var(--entr)" : "var(--danger)" }}>{pr ? fmt(pr.profit) : "…"}</div><div className="lbl">Profit (ganancia − gastos − comisiones)</div></div>
         <div className="card kpi" style={{ cursor: "pointer" }} onClick={() => go("clientes")}><div className="num" style={{ color: "var(--prep)" }}>{fmt(deuda)}</div><div className="lbl">Te deben hoy (todos los clientes)</div></div>
       </div>
-      <p className="muted" style={{ marginBottom: 6 }}>No muestra ganancia sobre la mercadería porque no se carga el costo de compra. Si lo quiere, se suma un campo “costo” en Artículos.</p>
+      <p className="muted" style={{ marginBottom: 6 }}>
+        {!pr ? "Calculando la ganancia…"
+          : pr.conCostos
+            ? <>Ganancia {fmt(pr.ganancia)}: lo cobrado este mes ({fmt(pr.cobrado)}) con el precio y el costo de cada venta original, así un cambio de precio posterior no la altera (cada cobro paga primero las ventas más viejas del cliente). Se restan gastos {fmt(pr.gastos)} (sin pagos a proveedores ni retiros del dueño, y sin pases entre cajas) y comisiones {fmt(pr.comisiones)}.</>
+            : "Todavía no hay cobros de ventas con costo cargado este mes, así que no se puede calcular la ganancia. Cargá los costos en Artículos."}
+        {pr && pr.cobradoSinCosto > 0 && pr.conCostos && ` De lo cobrado, ${fmt(pr.cobradoSinCosto)} corresponde a deudas anteriores o a ventas sin costo cargado: no suma ganancia.`}
+        {pr && pr.productosSinCosto > 0 && ` Faltan costos en ${pr.productosSinCosto} ${pr.productosSinCosto === 1 ? "producto" : "productos"}: lo que se vende sin costo no entra en el cálculo.`}
+      </p>
 
       <div className="sec-h"><h2>Por vendedor</h2></div>
       <div className="card" style={{ overflowX: "auto" }}>

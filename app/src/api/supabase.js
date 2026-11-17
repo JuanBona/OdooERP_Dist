@@ -2,7 +2,7 @@
 // forma que el modo demo, así las pantallas no cambian. Las escrituras van por funciones de la base
 // (supabase/migrations) que validan permisos, stock y reglas; después se recarga lo necesario.
 import { createClient } from "@supabase/supabase-js";
-import { fechaEntrega } from "../lib/reglas";
+import { CAJA_DE_DEVOLUCION, faltanDatosCheque, fechaEntrega } from "../lib/reglas";
 
 const URL = import.meta.env.VITE_SUPABASE_URL;
 const KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
@@ -41,15 +41,18 @@ function traducir(m) {
 // ---------- Carga y conversión (snake_case de la base → forma de la app) ----------
 const num = v => (v == null ? v : Number(v));
 const mapUsuario = p => ({ id: p.id, nombre: p.nombre, rol: p.rol, usuario: p.usuario, comisionPct: num(p.comision_pct) });
-const mapProducto = p => ({ id: p.id, nombre: p.nombre, categoria: p.categoria, precio: num(p.precio), stock: p.stock, stockMin: p.stock_min, stockContado: p.stock_contado, tramos: p.tramos || [], foto: p.foto_url, activo: p.activo });
+// El costo viene de tablas aparte que solo ven Administración y Gerencia (a los demás les llega vacío).
+const unoDe = x => (Array.isArray(x) ? x[0] : x) ?? null;
+const costoDe = x => num(unoDe(x)?.costo ?? null);
+const mapProducto = p => ({ id: p.id, costo: costoDe(p.producto_costos), nombre: p.nombre, categoria: p.categoria, precio: num(p.precio), stock: p.stock, stockMin: p.stock_min, stockContado: p.stock_contado, tramos: p.tramos || [], foto: p.foto_url, activo: p.activo });
 const mapCliente = c => ({ id: c.id, codigo: c.codigo, nombre: c.nombre, dir: c.dir, cuit: c.cuit, tel: c.tel, localidad: c.localidad, dia: c.dia, vendedorId: c.vendedor_id, saldo: num(c.saldo), ultimoPago: c.ultimo_pago, obs: c.obs });
-const mapLinea = l => ({ productoId: l.producto_id, nombre: l.nombre, cant: l.cant, precio: num(l.precio), pct: num(l.pct), manual: l.manual, total: num(l.total) });
+const mapLinea = l => ({ costo: costoDe(l.linea_costos), productoId: l.producto_id, nombre: l.nombre, cant: l.cant, precio: num(l.precio), pct: num(l.pct), manual: l.manual, total: num(l.total) });
 const mapPedido = p => ({ id: p.id, clienteId: p.cliente_id, vendedorId: p.vendedor_id, fecha: p.fecha, fechaEntrega: p.fecha_entrega, creado: p.creado, estado: p.estado, total: num(p.total), obs: p.obs, hechos: p.hechos || [], historial: p.historial || [], salio: p.salio, lineas: (p.pedido_lineas || []).sort((a, b) => a.id - b.id).map(mapLinea) });
 const mapCobro = c => ({ id: c.id, fecha: c.fecha, hora: c.fecha + "T12:00:00", clienteId: c.cliente_id, vendedorId: c.vendedor_id, cobradorId: c.cobrador_id, monto: num(c.monto), medio: c.medio, comision: num(c.comision) });
 const mapFeriado = f => ({ fecha: f.fecha, nombre: f.nombre });
 const mapCambioRuta = e => ({ id: e.id, vendedorId: e.vendedor_id, desde: e.fecha_original, hasta: e.fecha_nueva, motivo: e.motivo });
 const nombreDe = id => db.usuarios.find(u => u.id === id)?.nombre || "—";
-const mapMov = m => ({ id: m.id, fecha: m.fecha, hora: m.hora, tipo: m.tipo, concepto: m.concepto, monto: num(m.monto), persona: m.persona, detalle: m.detalle, vuelve: m.vuelve, vuelveFecha: m.vuelve_fecha || "", vendedorId: m.vendedor_id, cobroId: m.cobro_id, usuario: nombreDe(m.usuario),
+const mapMov = m => ({ id: m.id, fecha: m.fecha, hora: m.hora, tipo: m.tipo, concepto: m.concepto, monto: num(m.monto), persona: m.persona, detalle: m.detalle, vuelve: m.vuelve, vuelveFecha: m.vuelve_fecha || "", vendedorId: m.vendedor_id, cobroId: m.cobro_id, caja: m.caja || "efectivo", chequeNumero: m.cheque_numero, chequeBanco: m.cheque_banco, chequeCobro: m.cheque_cobro, usuario: nombreDe(m.usuario),
   devoluciones: (m.caja_devoluciones || []).map(d => ({ fecha: d.hora.slice(0, 10), hora: d.hora, monto: num(d.monto), como: d.como, usuario: nombreDe(d.usuario) })) });
 
 const DIAS_HISTORIAL = 60;
@@ -62,12 +65,12 @@ async function todo(q) { // trae todas las filas (Supabase devuelve de a 1000)
 
 const cargas = {
   usuarios: async () => { db.usuarios = (await todo(() => sb.from("perfiles").select("*").order("nombre"))).map(mapUsuario); },
-  productos: async () => { db.productos = (await todo(() => sb.from("productos").select("*").order("id"))).map(mapProducto); },
+  productos: async () => { db.productos = (await todo(() => sb.from("productos").select("*, producto_costos(costo)").order("id"))).map(mapProducto); },
   clientes: async () => { db.clientes = (await todo(() => sb.from("clientes").select("*").order("codigo"))).map(mapCliente); },
   // Solo lo reciente (para que entrar sea rápido y no se descargue todo el historial):
   // pedidos de los últimos 60 días + los que siguen abiertos, y cobros de los últimos 60 días.
   pedidos: async () => {
-    db.pedidos = (await todo(() => sb.from("pedidos").select("*, pedido_lineas(*)")
+    db.pedidos = (await todo(() => sb.from("pedidos").select("*, pedido_lineas(*, linea_costos(costo))")
       .or(`fecha.gte.${desde()},fecha_entrega.gte.${desde()},estado.in.(porAutorizar,pendiente,preparando,preparado,enReparto)`)
       .order("id", { ascending: false }))).map(mapPedido);
   },
@@ -78,7 +81,7 @@ const cargas = {
     if (!["admin", "gerencia"].includes(yo?.rol)) { db.caja = []; db.arqueos = []; return; }
     db.caja = (await todo(() => sb.from("caja_movimientos").select("*, caja_devoluciones(*)").order("id", { ascending: false }))).map(mapMov);
     const { data, error } = await sb.from("caja_arqueos").select("*").order("id", { ascending: false }).limit(20); err(error);
-    db.arqueos = data.map(a => ({ fecha: a.hora, contado: num(a.contado), esperado: num(a.esperado), dif: num(a.contado) - num(a.esperado), motivo: a.motivo, usuario: nombreDe(a.usuario) }));
+    db.arqueos = data.map(a => ({ fecha: a.hora, contado: num(a.contado), esperado: num(a.esperado), dif: num(a.contado) - num(a.esperado), motivo: a.motivo, caja: a.caja || "efectivo", usuario: nombreDe(a.usuario) }));
   },
   miARendir: async () => {
     if (yo?.rol !== "vendedor") return;
@@ -169,6 +172,14 @@ export const api = {
     const { error } = await sb.from("excepciones_visita").delete().eq("id", id); err(error);
     await recargar("excepciones");
   },
+  // Ganancia de lo cobrado en el mes ("AAAA-MM"), con el precio y el costo de cada venta original (solo Gerencia).
+  async gananciaCobrada(mes) {
+    const [a, m] = mes.split("-").map(Number);
+    const hasta = new Date(Date.UTC(a, m, 0)).toISOString().slice(0, 10);
+    const { data, error } = await sb.rpc("ganancia_cobrada", { p_desde: mes + "-01", p_hasta: hasta }); err(error);
+    const r = (Array.isArray(data) ? data[0] : data) || {};
+    return { cobrado: num(r.cobrado) || 0, ganancia: Math.round(num(r.ganancia) || 0), cobradoSinCosto: Math.round(num(r.cobrado_sin_costo) || 0) };
+  },
   async autorizarPedidos(user, ids) {
     const { data, error } = await sb.rpc("autorizar_pedidos", { p_ids: ids }); err(error);
     await recargar("pedidos");
@@ -182,8 +193,8 @@ export const api = {
     const { error } = await sb.rpc("tildar", { p_pedido: pedidoId, p_idx: idx }); err(error);
     await recargar("pedidos");
   },
-  async registrarCobro(user, clienteId, monto, medio, uid) {
-    const { error } = await sb.rpc("registrar_cobro", { p_cliente: clienteId, p_monto: monto, p_medio: medio, p_uid: uid || null }); err(error);
+  async registrarCobro(user, clienteId, monto, medio, uid, cheque) { // cheque: { numero, banco, cobro }
+    const { error } = await sb.rpc("registrar_cobro", { p_cliente: clienteId, p_monto: monto, p_medio: medio, p_uid: uid || null, p_cheque: medio === "Cheque" ? cheque : null }); err(error);
     await recargar("clientes", "cobros", "caja", "miARendir");
   },
   async guardarProducto(user, p) {
@@ -195,7 +206,12 @@ export const api = {
       foto_url = sb.storage.from("productos").getPublicUrl(path).data.publicUrl;
     }
     const fila = { nombre: p.nombre, categoria: p.categoria, precio: p.precio, stock: p.stock, stock_min: p.stockMin, stock_contado: !!p.stockContado, tramos: p.tramos, foto_url, activo: p.activo };
-    const { error } = p.id ? await sb.from("productos").update(fila).eq("id", p.id) : await sb.from("productos").insert(fila); err(error);
+    let id = p.id;
+    if (id) { const { error } = await sb.from("productos").update(fila).eq("id", id); err(error); }
+    else { const { data, error } = await sb.from("productos").insert(fila).select("id").single(); err(error); id = data.id; }
+    if (p.costo !== undefined) { // el costo va aparte (solo lo ven Administración y Gerencia)
+      const { error } = p.costo === null || p.costo === "" ? await sb.from("producto_costos").delete().eq("producto_id", id) : await sb.from("producto_costos").upsert({ producto_id: id, costo: +p.costo }); err(error);
+    }
     await recargar("productos");
   },
   async guardarCliente(user, c) {
@@ -212,7 +228,7 @@ export const api = {
   },
 
   // ---- Caja del depósito ----
-  saldoCaja() { return db.caja.reduce((s, m) => s + m.monto + m.devoluciones.filter(d => d.como === "Efectivo").reduce((a, d) => a + d.monto, 0), 0); },
+  saldoCaja(caja = "efectivo") { return db.caja.reduce((s, m) => s + (m.caja === caja ? m.monto : 0) + m.devoluciones.filter(d => CAJA_DE_DEVOLUCION[d.como] === caja).reduce((a, d) => a + d.monto, 0), 0); },
   pendienteDe(m) { return m.vuelve ? -m.monto - m.devoluciones.reduce((s, d) => s + d.monto, 0) : 0; },
   aRendir(vendedorId) {
     if (yo?.rol === "vendedor") return db.miARendir;
@@ -220,11 +236,13 @@ export const api = {
     const entregado = db.caja.filter(m => m.vendedorId === vendedorId && m.concepto === "Rendición de vendedor").reduce((s, m) => s + m.monto, 0);
     return cobrado - entregado;
   },
-  async movCaja(user, { tipo, concepto, monto, persona = "", detalle = "", vuelve = false, vuelveFecha = "", vendedorId = null }) {
+  async movCaja(user, { tipo, concepto, monto, persona = "", detalle = "", vuelve = false, vuelveFecha = "", vendedorId = null, caja = "efectivo", cheque = null }) {
     monto = Math.round(+monto);
     if (!(Math.abs(monto) > 0)) throw new Error("Poné el monto.");
+    if (caja === "cheques" && faltanDatosCheque(cheque)) throw new Error("Poné el número, el banco y la fecha de cobro del cheque.");
     const { error } = await sb.from("caja_movimientos").insert({
-      tipo, concepto, persona, detalle, vendedor_id: vendedorId, usuario: user.id,
+      tipo, concepto, persona, detalle, vendedor_id: vendedorId, usuario: user.id, caja,
+      ...(caja === "cheques" ? { cheque_numero: cheque.numero.trim(), cheque_banco: cheque.banco.trim(), cheque_cobro: cheque.cobro } : {}),
       monto: tipo === "egreso" ? -Math.abs(monto) : Math.abs(monto),
       vuelve: tipo === "egreso" && vuelve, vuelve_fecha: vuelve && vuelveFecha ? vuelveFecha : null,
     }); err(error);
@@ -238,8 +256,17 @@ export const api = {
     const { error } = await sb.from("caja_devoluciones").insert({ movimiento_id: movId, monto, como, usuario: user.id }); err(error);
     await recargar("caja");
   },
-  async arqueo(user, contado, motivo) {
-    const { data, error } = await sb.rpc("contar_caja", { p_contado: Math.round(+contado), p_motivo: motivo || "" }); err(error);
+  // Pasa plata de una caja a otra (no cuenta como gasto ni como ingreso). Con cheques, informar el cheque.
+  async pasarEntreCajas(user, { origen, destino, monto, detalle = "", cheque = null }) {
+    monto = Math.round(+monto);
+    if (!(monto > 0)) throw new Error("Poné el monto.");
+    if (origen === destino) throw new Error("Elegí dos cajas distintas.");
+    if ((origen === "cheques" || destino === "cheques") && faltanDatosCheque(cheque)) throw new Error("Poné el número, el banco y la fecha de cobro del cheque.");
+    const { error } = await sb.rpc("pasar_entre_cajas", { p_origen: origen, p_destino: destino, p_monto: monto, p_detalle: detalle, p_cheque: cheque }); err(error);
+    await recargar("caja");
+  },
+  async arqueo(user, contado, motivo, caja = "efectivo") {
+    const { data, error } = await sb.rpc("contar_caja", { p_contado: Math.round(+contado), p_motivo: motivo || "", p_caja: caja }); err(error);
     await recargar("caja");
     return num(data);
   },

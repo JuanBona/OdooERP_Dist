@@ -2,7 +2,7 @@
 // Implementa las mismas acciones que el backend de Supabase (ver supabase/schema.sql),
 // así la interfaz no cambia cuando se conecta la base real.
 import seed from "../seed.json";
-import { calcPedido, cerrado, diaSemana, fechaEntrega, hoyISO, nuevoEstadoPedido } from "../lib/reglas";
+import { CAJA_DE_DEVOLUCION, calcPedido, cerrado, diaSemana, faltanDatosCheque, fechaEntrega, gananciaCobrada, hoyISO, nuevoEstadoPedido } from "../lib/reglas";
 
 const KEY = "rds-demo-v4";
 const listeners = new Set();
@@ -51,6 +51,7 @@ function load() {
   try { const raw = localStorage.getItem(KEY); if (raw) d = JSON.parse(raw); } catch {}
   d = d || inicial();
   d.caja ||= []; d.arqueos ||= [];
+  d.caja.forEach(m => { m.caja ||= "efectivo"; }); d.arqueos.forEach(a => { a.caja ||= "efectivo"; });
   d.feriados ||= feriadosIniciales(); d.excepciones ||= []; d.seqRuta ||= 1;
   // Pedidos guardados antes de que existieran los camiones: se les calcula con la misma regla.
   d.pedidos.forEach(p => { p.fechaEntrega ||= fechaEntrega(d.clientes.find(c => c.id === p.clienteId)?.dia, p.fecha); });
@@ -83,7 +84,7 @@ export const api = {
       if (p.stockContado !== false && it.cant > p.stock) throw new Error(`No hay stock suficiente de ${p.nombre} (quedan ${p.stock}).`);
     }
     const lineas = calcPedido(items, db.productos);
-    lineas.forEach(l => { db.productos.find(p => p.id === l.productoId).stock -= l.cant; });
+    lineas.forEach(l => { const prod = db.productos.find(p => p.id === l.productoId); prod.stock -= l.cant; l.costo = prod.costo ?? null; }); // el costo queda guardado al vender
     const ped = {
       id: db.seq++, clienteId, vendedorId: user.rol === "vendedor" ? user.id : c.vendedorId,
       fecha: fecha || hoyISO(), fechaEntrega: fechaEntrega(c.dia, fecha || hoyISO(), { excepciones: db.excepciones, vendedorId: c.vendedorId }), creado: new Date().toISOString(), estado: nuevoEstadoPedido(user),
@@ -147,6 +148,9 @@ export const api = {
     db.excepciones = db.excepciones.filter(e => e.id !== id); save();
   },
 
+  // Ganancia de lo cobrado en el mes, con el precio y el costo de cada venta original.
+  gananciaCobrada(mes) { return gananciaCobrada(db, mes); },
+
   // Autoriza varios pedidos juntos (ej.: todos los de un camión). Devuelve cuántos autorizó.
   autorizarPedidos(user, ids) {
     if (!["admin", "gerencia"].includes(user.rol)) throw new Error("Solo Administración o Gerencia pueden autorizar.");
@@ -170,25 +174,39 @@ export const api = {
     save();
   },
 
-  // ---- Caja del depósito (una sola, la manejan Administración y Gerencia) ----
-  // Movimiento: { tipo: "ingreso" | "egreso" | "ajuste", concepto, monto (+/-), persona, detalle,
+  // ---- Cajas del depósito (efectivo, transferencia y cheques; las manejan Administración y Gerencia) ----
+  // Movimiento: { tipo: "ingreso" | "egreso" | "ajuste", concepto, monto (+/-), persona, detalle, caja,
+  //   chequeNumero/chequeBanco/chequeCobro (solo en la caja de cheques),
   //   vuelve (solo egresos), vuelveFecha, devoluciones: [{ fecha, monto, como, usuario }] }
-  saldoCaja() {
-    return db.caja.reduce((s, m) => s + m.monto +
-      (m.devoluciones || []).filter(d => d.como === "Efectivo").reduce((a, d) => a + d.monto, 0), 0);
+  saldoCaja(caja = "efectivo") {
+    return db.caja.reduce((s, m) => s + (m.caja === caja ? m.monto : 0) +
+      (m.devoluciones || []).filter(d => CAJA_DE_DEVOLUCION[d.como] === caja).reduce((a, d) => a + d.monto, 0), 0);
   },
 
-  movCaja(user, { tipo, concepto, monto, persona = "", detalle = "", vuelve = false, vuelveFecha = "", vendedorId = null, cobroId = null }) {
+  movCaja(user, { tipo, concepto, monto, persona = "", detalle = "", vuelve = false, vuelveFecha = "", vendedorId = null, cobroId = null, caja = "efectivo", cheque = null }) {
     monto = Math.round(+monto);
     if (!(Math.abs(monto) > 0)) throw new Error("Poné el monto.");
-    const m = { id: db.caja.length + 1, fecha: hoyISO(), hora: new Date().toISOString(), tipo, concepto,
+    if (caja === "cheques" && concepto !== "Diferencia al contar" && faltanDatosCheque(cheque)) throw new Error("Poné el número, el banco y la fecha de cobro del cheque.");
+    const m = { id: db.caja.length + 1, fecha: hoyISO(), hora: new Date().toISOString(), tipo, concepto, caja,
       monto: tipo === "egreso" ? -Math.abs(monto) : tipo === "ingreso" ? Math.abs(monto) : monto,
       persona, detalle, vuelve: tipo === "egreso" && vuelve, vuelveFecha: vuelve ? vuelveFecha : "",
+      ...(caja === "cheques" && cheque ? { chequeNumero: cheque.numero.trim(), chequeBanco: cheque.banco.trim(), chequeCobro: cheque.cobro } : {}),
       devoluciones: [], vendedorId, cobroId, usuario: user.nombre };
     db.caja.unshift(m);
-    audit(user, `Caja: ${tipo} ${concepto} $${Math.abs(m.monto)}${persona ? " · " + persona : ""}`, "Caja");
+    audit(user, `Caja ${caja}: ${tipo} ${concepto} $${Math.abs(m.monto)}${persona ? " · " + persona : ""}`, "Caja");
     save();
     return m;
+  },
+
+  // Pasa plata de una caja a otra (no cuenta como gasto ni como ingreso). Con cheques, informar el cheque.
+  pasarEntreCajas(user, { origen, destino, monto, detalle = "", cheque = null }) {
+    if (!["admin", "gerencia"].includes(user.rol)) throw new Error("Solo Administración o Gerencia.");
+    monto = Math.round(+monto);
+    if (!(monto > 0)) throw new Error("Poné el monto.");
+    if (origen === destino) throw new Error("Elegí dos cajas distintas.");
+    if ((origen === "cheques" || destino === "cheques") && faltanDatosCheque(cheque)) throw new Error("Poné el número, el banco y la fecha de cobro del cheque.");
+    api.movCaja(user, { tipo: "ajuste", concepto: "Pase entre cajas", monto: -monto, persona: "A " + destino, detalle, caja: origen, cheque: origen === "cheques" ? cheque : null });
+    api.movCaja(user, { tipo: "ajuste", concepto: "Pase entre cajas", monto, persona: "De " + origen, detalle, caja: destino, cheque: destino === "cheques" ? cheque : null });
   },
 
   // Lo que falta que vuelva de una salida.
@@ -205,10 +223,10 @@ export const api = {
   },
 
   // Contar la caja: si no cuadra queda un ajuste con el motivo.
-  arqueo(user, contado, motivo) {
-    const dif = Math.round(+contado) - api.saldoCaja();
-    db.arqueos.unshift({ fecha: new Date().toISOString(), contado: Math.round(+contado), esperado: api.saldoCaja(), dif, motivo, usuario: user.nombre });
-    if (dif !== 0) api.movCaja(user, { tipo: "ajuste", concepto: "Diferencia al contar", monto: dif, detalle: motivo });
+  arqueo(user, contado, motivo, caja = "efectivo") {
+    const dif = Math.round(+contado) - api.saldoCaja(caja);
+    db.arqueos.unshift({ fecha: new Date().toISOString(), contado: Math.round(+contado), esperado: api.saldoCaja(caja), dif, motivo, caja, usuario: user.nombre });
+    if (dif !== 0) api.movCaja(user, { tipo: "ajuste", concepto: "Diferencia al contar", monto: dif, detalle: motivo, caja });
     else save();
     return dif;
   },
@@ -220,7 +238,8 @@ export const api = {
     return cobrado - entregado;
   },
 
-  registrarCobro(user, clienteId, monto, medio) {
+  registrarCobro(user, clienteId, monto, medio, uid, cheque) { // cheque: { numero, banco, cobro }
+    if (medio === "Cheque" && faltanDatosCheque(cheque)) throw new Error("Poné el número, el banco y la fecha de cobro del cheque.");
     const c = db.clientes.find(x => x.id === clienteId);
     const vend = db.usuarios.find(u => u.id === c.vendedorId);
     c.saldo += monto;
@@ -230,9 +249,14 @@ export const api = {
       cobradorId: user.id, monto, medio, comision, usuario: user.nombre };
     db.cobros.unshift(cobro);
     audit(user, `Cobro ${medio} $${monto}`, c.nombre);
-    // Si cobra Administración en el depósito en efectivo, entra directo a la caja.
+    // Cada medio entra a su caja: el efectivo si cobra Administración (si cobra un vendedor lo entrega después),
+    // y la transferencia y el cheque entran solos.
     if (medio === "Efectivo" && ["admin", "gerencia"].includes(user.rol)) {
       api.movCaja(user, { tipo: "ingreso", concepto: "Cobro en el depósito", monto, persona: c.nombre, cobroId: cobro.id });
+    } else if (medio === "Transferencia") {
+      api.movCaja(user, { tipo: "ingreso", concepto: "Cobro por transferencia", monto, persona: c.nombre, cobroId: cobro.id, caja: "transferencia" });
+    } else if (medio === "Cheque") {
+      api.movCaja(user, { tipo: "ingreso", concepto: "Cobro con cheque", monto, persona: c.nombre, cobroId: cobro.id, caja: "cheques", cheque });
     } else save();
   },
 

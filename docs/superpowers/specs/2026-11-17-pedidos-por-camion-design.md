@@ -91,3 +91,19 @@ El camión depende del **día de visita del cliente**, no del día en que se car
 - Un cambio de ruta no mueve pedidos ya cargados: afecta a los que se carguen después. Los ya cargados se mueven a mano con "Cambiar camión".
 - **Hoja de ruta (vendedor):** pestaña nueva. Clientes del día (con el cambio por feriado aplicado), ordenados por localidad, con su deuda y la marca "Pedido cargado". Flechas para otros días (salta fines de semana). Tocar el cliente abre su ficha (deuda, cobro, pedido habitual); el botón "Pedido" va directo al catálogo con el cliente elegido. Avisa si hay clientes sin día asignado.
 - Aún falta cargar el día de visita de los 776 clientes (planilla del dueño).
+
+## 12. Tres cajas, costos, profit y calculadora de precio (implementado, sin desplegar)
+
+- **Tres cajas:** Efectivo, Transferencia y Cheques. Cada una con sus cuadros (tendría que haber, entró hoy, salió hoy, afuera que tiene que volver), su propio "Contar caja" y su última vez contada. Entradas y salidas se cargan en la caja que se elija; la lista de movimientos es una sola, con la caja marcada y filtro por caja. Los movimientos que ya existían quedan en Efectivo.
+- **Cobros por medio:** efectivo (si cobra administración entra a la caja; si cobra un vendedor lo entrega), **transferencia entra sola** a su caja y **cheque entra solo** a la caja de cheques, con **número, banco y fecha de cobro obligatorios** (también al cargar a mano un movimiento de cheques o al pasar un cheque entre cajas).
+- **Pasar entre cajas:** depositar efectivo en el banco, cobrar un cheque, etc. Se registra como dos ajustes y **no cuenta como gasto ni como ingreso**.
+- Lo que vuelve de una salida (préstamo) entra a la caja del medio con que vuelve (efectivo o transferencia).
+- **Costo:** campo en Artículos (Administración y Gerencia). Se guarda en tablas aparte que solo leen Administración y Gerencia (los vendedores no lo ven ni por la API) y cada línea de pedido guarda el costo con que se vendió. Los productos que ya existían quedan "Sin costo": se cargan con el campo o con la calculadora.
+- **Calculadora de precio:** botón a la derecha de cada artículo. Costo + % de ganancia **sobre el costo** → precio de venta (costo 100 y 30% = 130, redondeado al peso). Pregunta "¿Querés actualizar el precio?" y guarda el costo y el precio. La lista muestra el costo y cuánto se gana.
+- **Profit (solo Gerencia, mes en curso):** cuadro en Inicio y en Resumen del mes.
+  - Ganancia = lo **cobrado del mes valuado con el precio y el costo de la venta original**. Un cobro llega después de la venta y los precios pueden haber cambiado: si el cliente pagó una Coca que compró a 100, cuenta con ese 100 aunque hoy valga 120 (y con el costo de ese momento). Para eso **cada cobro paga primero las ventas más viejas del cliente** y gana lo que se ganó en ellas. Cambiar un precio o un costo después **no modifica** pedidos, deudas ni ganancias ya cargadas.
+  - Una deuda anterior al sistema se paga primero y no tiene costo conocido; lo cobrado de ventas sin costo, o los adelantos, no suman ganancia y el resumen lo informa aparte.
+  - El cálculo está en la base (`ganancia_cobrada`, solo Gerencia) porque necesita todo el historial; la demo usa la misma cuenta en la app.
+  - Se resta: gastos (salidas de las 3 cajas que no vuelven) y comisiones.
+  - **No** se restan: pagos a proveedores (esa mercadería ya está en el costo), retiros del dueño, plata que vuelve (préstamos) ni pases entre cajas.
+  - Avisa cuántos productos activos siguen sin costo.
