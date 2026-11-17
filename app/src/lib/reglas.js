@@ -1,8 +1,73 @@
 // Reglas de negocio (las mismas que se replican en la base de Supabase).
 
 export const fmt = n => "$ " + Math.round(n || 0).toLocaleString("es-AR");
-export const hoyISO = () => new Date().toISOString().slice(0, 10);
-export const DIAS = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado"];
+// Fecha de hoy según el reloj del dispositivo (no UTC: pasadas las 21 hs ya sería "mañana").
+const dos = n => String(n).padStart(2, "0");
+export const hoyISO = () => { const d = new Date(); return `${d.getFullYear()}-${dos(d.getMonth() + 1)}-${dos(d.getDate())}`; };
+
+// Fechas como texto "AAAA-MM-DD", sin zonas horarias de por medio.
+const aFecha = iso => new Date(iso + "T12:00:00Z");
+export const sumarDias = (iso, n) => { const d = aFecha(iso); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10); };
+export const diaSemana = iso => (aFecha(iso).getUTCDay() + 6) % 7 + 1; // 1 lunes … 7 domingo
+export const lunesDe = iso => sumarDias(iso, 1 - diaSemana(iso));
+export const fechaCorta = iso => `${iso.slice(8, 10)}/${iso.slice(5, 7)}`;
+const NOMBRE_DIA = ["", "lunes", "martes", "miércoles", "jueves", "viernes", "sábado", "domingo"];
+export const nombreDia = iso => NOMBRE_DIA[diaSemana(iso)];
+
+// Día de visita del cliente (la ruta del vendedor). Los vendedores no trabajan sábado ni domingo.
+export const DIAS_VISITA = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes"];
+
+// Visita más reciente (hoy incluido) de un cliente con ese día. Sin día (o "Sábado"): cuenta el día en que se
+// carga; sábado y domingo cuentan como viernes.
+export function visitaReciente(dia, hoy = hoyISO()) {
+  const hoyDow = diaSemana(hoy);
+  const idx = DIAS_VISITA.indexOf(dia);
+  const dow = idx >= 0 ? idx + 1 : Math.min(hoyDow, 5);
+  return sumarDias(hoy, -((hoyDow - dow + 7) % 7));
+}
+
+// Cambio de ruta por feriado que mueve las visitas de `fecha` a otro día (del vendedor, o de todos).
+// excepciones: [{ id, vendedorId (null = todos), desde, hasta, motivo }]. Gana el del vendedor, y el más nuevo.
+export function cambioDeRuta(excepciones = [], fecha, vendedorId = null) {
+  return excepciones
+    .filter(e => e.desde === fecha && (e.vendedorId == null || e.vendedorId === vendedorId))
+    .sort((a, b) => ((a.vendedorId == null) - (b.vendedorId == null)) || (b.id - a.id))[0] || null;
+}
+
+// El pedido sale en el camión que corresponde al día de visita del cliente (misma regla que la base):
+// Lun→Mié, Mar→Jue, Mié→Vie, Jue→Sáb, Vie→Mar siguiente. Si se olvidaron de cargarlo ese día, igual
+// va a su camión mientras éste no haya salido. Si la visita se movió por un feriado, cuenta el día nuevo.
+// ext: { excepciones, vendedorId } del cliente.
+export function fechaEntrega(dia, hoy = hoyISO(), ext = {}) {
+  let visita = visitaReciente(dia, hoy);
+  const cambio = cambioDeRuta(ext.excepciones, visita, ext.vendedorId ?? null);
+  if (cambio) visita = cambio.hasta;
+  const cam = sumarDias(visita, diaSemana(visita) === 5 ? 4 : 2);
+  return cam <= hoy ? sumarDias(cam, 7) : cam;
+}
+
+// Clientes que le toca visitar a un vendedor en `fecha`: los de ese día de la semana (salvo que esa visita se
+// haya movido) más los que vienen de otro día movido a éste.
+export function clientesDelDia(clientes, fecha, excepciones = []) {
+  const dow = diaSemana(fecha);
+  return clientes.filter(c => {
+    const suyo = DIAS_VISITA.indexOf(c.dia) + 1; // 0 si no tiene día
+    if (!suyo) return false;
+    if (suyo === dow && !cambioDeRuta(excepciones, fecha, c.vendedorId ?? null)) return true;
+    return excepciones.some(e => e.hasta === fecha && diaSemana(e.desde) === suyo && (e.vendedorId == null || e.vendedorId === c.vendedorId));
+  });
+}
+
+// Feriado de ese día (o undefined). feriados: [{ fecha, nombre }]
+export const feriadoDe = (feriados = [], iso) => feriados.find(f => f.fecha === iso);
+
+// Día hábil (lunes a viernes) más cercano hacia adelante: sábado y domingo pasan al lunes.
+export const proximoHabil = iso => (diaSemana(iso) === 6 ? sumarDias(iso, 2) : diaSemana(iso) === 7 ? sumarDias(iso, 1) : iso);
+export const habilVecino = (iso, dir) => { let f = sumarDias(iso, dir); while (diaSemana(f) > 5) f = sumarDias(f, dir); return f; };
+export const nombreCamion = iso => `Camión ${nombreDia(iso)}`;
+// Camiones de la semana que empieza el lunes `lunes`: martes a sábado.
+export const camionesDeSemana = lunes => [1, 2, 3, 4, 5].map(n => sumarDias(lunes, n));
+export const cerrado = p => ["entregado", "anulado", "rechazado"].includes(p.estado);
 
 export const ROLES = {
   vendedor: "Vendedor", deposito: "Depósito", admin: "Administración", gerencia: "Gerencia",
@@ -24,8 +89,9 @@ export const ESTADO_CLASE = {
   rechazado: "st-rechazado", anulado: "st-autorizado",
 };
 
-// RF-PV-04 / decisión 4: los pedidos de clientes con deuda pasan por autorización.
-export const nuevoEstadoPedido = cliente => (cliente.saldo < 0 ? "porAutorizar" : "pendiente");
+// Todo pedido de un vendedor espera la autorización de Administración antes de ir a depósito.
+// Los que cargan Administración o Gerencia entran ya autorizados.
+export const nuevoEstadoPedido = user => (user.rol === "vendedor" ? "porAutorizar" : "pendiente");
 
 // RF-PV-07: alerta (no bloquea) a los 15 días sin pagar teniendo deuda.
 export function diasSinPagar(c) {
@@ -72,4 +138,6 @@ export const puede = {
   // Vendedor: da de alta clientes (quedan a su nombre) y edita los suyos y los sin asignar.
   crearCliente: u => ["vendedor", "admin", "gerencia"].includes(u.rol),
   editarCliente: (u, c) => ["admin", "gerencia"].includes(u.rol) || (u.rol === "vendedor" && (!c.vendedorId || c.vendedorId === u.id)),
+  // Mover un pedido a otro camión: vendedor (los suyos), Administración y Gerencia.
+  cambiarCamion: (u, p) => !cerrado(p) && (["admin", "gerencia"].includes(u.rol) || (u.rol === "vendedor" && p.vendedorId === u.id)),
 };

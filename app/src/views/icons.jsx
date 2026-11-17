@@ -7,6 +7,7 @@ const P = {
   catalogo: "M4 4h7v7H4zM13 4h7v7h-7zM4 13h7v7H4zM13 13h7v7h-7z",
   pedidos: "M6 3h12v18l-3-2-3 2-3-2-3 2zM9 8h6M9 12h6M9 16h3",
   deposito: "M3 8l9-5 9 5v11a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1zM3 8h18M8 20v-7h8v7",
+  hoja: "M9 20 3 17V4l6 3 6-3 6 3v13l-6-3zM9 7v13M15 4v13",
   caja: "M3 7h18v12H3zM3 11h18M16 15h2M7 7V5h10v2",
   resumen: "M4 20V10M10 20V4M16 20v-7M22 20H2",
   articulos: "M20 7 12 3 4 7v10l8 4 8-4zM4 7l8 4 8-4M12 11v10",

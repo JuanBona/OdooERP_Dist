@@ -39,7 +39,7 @@ select chequear((select estado from pedidos order by id desc limit 1) = 'porAuto
 select chequear((select total from pedidos order by id desc limit 1) = 345600, 'tramo 5+ aplica 4%: 6 x 60000 x 0.96 = 345600');
 select chequear((select stock from productos where id = 1) = 44, 'stock se descontó al confirmar (50 -> 44)');
 select chequear(crear_pedido(1, '[{"producto_id":2,"cant":1}]') is not null, 'pedido a cliente al día');
-select chequear((select estado from pedidos order by id desc limit 1) = 'pendiente', 'cliente al día va directo a depósito');
+select chequear((select estado from pedidos order by id desc limit 1) = 'porAutorizar', 'todo pedido de vendedor espera autorización, aunque el cliente esté al día');
 do $$ begin perform crear_pedido(1, '[{"producto_id":2,"cant":10}]'); raise exception 'debió fallar';
 exception when others then perform chequear(sqlerrm like 'No hay stock suficiente%', 'no deja vender más que el stock'); end $$;
 do $$ begin perform crear_pedido(1, '[{"producto_id":1,"cant":1,"precio_manual":1}]'); raise exception 'debió fallar';
@@ -75,6 +75,100 @@ select como('00000000-0000-0000-0000-000000000001'); set role authenticated;
 do $$ begin insert into clientes(nombre, vendedor_id) values ('Para V2', '00000000-0000-0000-0000-000000000002');
   perform chequear((select vendedor_id from clientes where nombre = 'Para V2') = '00000000-0000-0000-0000-000000000001', 'cliente creado por el vendedor queda a su nombre aunque elija otro');
 exception when others then perform chequear(true, 'vendedor no puede crear clientes para otro vendedor'); end $$;
+reset role;
+
+-- ===== Camión de entrega =====
+-- Regla pura: Lun→Mié, Mar→Jue, Mié→Vie, Jue→Sáb, Vie→Mar siguiente (semana del lun 16/11/2026).
+select chequear(fecha_entrega_de('Lunes', date '2026-11-16') = date '2026-11-18', 'camión: lunes → miércoles');
+select chequear(fecha_entrega_de('Martes', date '2026-11-17') = date '2026-11-19', 'camión: martes → jueves');
+select chequear(fecha_entrega_de('Miércoles', date '2026-11-18') = date '2026-11-20', 'camión: miércoles → viernes');
+select chequear(fecha_entrega_de('Jueves', date '2026-11-19') = date '2026-11-21', 'camión: jueves → sábado');
+select chequear(fecha_entrega_de('Viernes', date '2026-11-20') = date '2026-11-24', 'camión: viernes → martes de la semana siguiente');
+select chequear(fecha_entrega_de('Lunes', date '2026-11-17') = date '2026-11-18', 'camión: cliente del lunes cargado el martes igual va al miércoles');
+select chequear(fecha_entrega_de('Lunes', date '2026-11-18') = date '2026-11-25', 'camión: si el camión sale hoy, pasa a la semana siguiente');
+select chequear(fecha_entrega_de('', date '2026-11-21') = date '2026-11-24', 'camión: sin día, cargado el sábado → martes');
+select chequear(fecha_entrega_de('', date '2026-11-22') = date '2026-11-24', 'camión: sin día, cargado el domingo → martes');
+select chequear(fecha_entrega_de('', date '2026-11-16') = date '2026-11-18', 'camión: sin día cuenta el día en que se carga');
+
+select como('00000000-0000-0000-0000-000000000001'); set role authenticated;
+update clientes set dia = 'Martes' where codigo = 1;
+select crear_pedido(1, '[{"producto_id":2,"cant":1}]', '', 'cam-1');
+select chequear((select fecha_entrega from pedidos where uid = 'cam-1') = fecha_entrega_de('Martes', hoy_ar()), 'pedido nuevo guarda el camión según el día del cliente');
+select chequear((select fecha_entrega from pedidos where uid = 'cam-1') > hoy_ar(), 'el camión siempre sale después de hoy');
+select crear_pedido(1, '[{"producto_id":2,"cant":1}]', '', 'cam-2', hoy_ar() + 30);
+select chequear((select fecha from pedidos where uid = 'cam-2') = hoy_ar(), 'un pedido no puede tener fecha de carga futura');
+select cambiar_fecha_entrega((select id from pedidos where uid = 'cam-1'), date_trunc('week', hoy_ar())::date + 10);
+select chequear((select fecha_entrega from pedidos where uid = 'cam-1') = date_trunc('week', hoy_ar())::date + 10, 'vendedor cambia el camión de su pedido');
+select chequear((select historial->-1->>'txt' from pedidos where uid = 'cam-1') like 'Cambió el camión al jueves%', 'el cambio de camión queda en el historial');
+do $$ begin perform cambiar_fecha_entrega((select id from pedidos where uid = 'cam-1'), date_trunc('week', hoy_ar())::date + 7); raise exception 'debió fallar';
+exception when others then perform chequear(sqlerrm like 'Los camiones salen%', 'no se puede mover un camión a lunes (solo martes a sábado)'); end $$;
+reset role;
+select set_config('t.cam1', (select id::text from pedidos where uid = 'cam-1'), false); -- el vendedor 2 no ve este pedido
+select como('00000000-0000-0000-0000-000000000002'); set role authenticated;
+do $$ begin perform cambiar_fecha_entrega(current_setting('t.cam1')::bigint, date_trunc('week', hoy_ar())::date + 11); raise exception 'debió fallar';
+exception when others then perform chequear(sqlerrm like 'El pedido no es tuyo%', 'vendedor no cambia el camión del pedido de otro'); end $$;
+reset role;
+select como('00000000-0000-0000-0000-000000000003'); set role authenticated;
+do $$ begin perform cambiar_fecha_entrega(current_setting('t.cam1')::bigint, date_trunc('week', hoy_ar())::date + 11); raise exception 'debió fallar';
+exception when others then perform chequear(sqlerrm like 'No tenés permiso%', 'depósito no cambia el camión'); end $$;
+reset role;
+select como('00000000-0000-0000-0000-000000000004'); set role authenticated;
+select cambiar_fecha_entrega((select id from pedidos where uid = 'cam-1'), date_trunc('week', hoy_ar())::date + 11);
+select chequear((select fecha_entrega from pedidos where uid = 'cam-1') = date_trunc('week', hoy_ar())::date + 11, 'administración cambia el camión de cualquier pedido');
+reset role;
+
+-- ===== Feriados y cambios de ruta =====
+-- El lunes 23/11/2026 es feriado: sus visitas pasan al martes 24/11 (para todos).
+insert into excepciones_visita(vendedor_id, fecha_original, fecha_nueva, motivo) values (null, date '2026-11-23', date '2026-11-24', 'Feriado');
+select chequear(fecha_entrega_de('Lunes', date '2026-11-24') = date '2026-11-26', 'feriado: el cliente del lunes, visitado el martes, sale en el camión del jueves');
+select chequear(fecha_entrega_de('Martes', date '2026-11-24') = date '2026-11-26', 'feriado: los clientes del martes no cambian');
+select chequear(fecha_entrega_de('Lunes', date '2026-11-30') = date '2026-12-02', 'la semana siguiente vuelve a la normalidad solo');
+-- Cambio solo para un vendedor: gana sobre el general.
+insert into excepciones_visita(vendedor_id, fecha_original, fecha_nueva) values ('00000000-0000-0000-0000-000000000001', date '2026-11-23', date '2026-11-25');
+select chequear(fecha_entrega_de('Lunes', date '2026-11-25', '00000000-0000-0000-0000-000000000001') = date '2026-11-27', 'cambio de un vendedor: el suyo gana sobre el general');
+select chequear(fecha_entrega_de('Lunes', date '2026-11-25', '00000000-0000-0000-0000-000000000002') = date '2026-11-26', 'cambio de un vendedor: el otro sigue con el general');
+delete from excepciones_visita;
+select chequear(fecha_entrega_de('Lunes', date '2026-11-24') = date '2026-11-25', 'sin cambios de ruta vale la regla normal');
+
+select como('00000000-0000-0000-0000-000000000001'); set role authenticated;
+select chequear((select count(*) from feriados) >= 4, 'el vendedor ve los feriados');
+do $$ begin insert into feriados(fecha, nombre) values (date '2026-12-31', 'trucho'); raise exception 'debió fallar';
+exception when insufficient_privilege then perform chequear(true, 'vendedor no puede cargar feriados'); end $$;
+do $$ begin insert into excepciones_visita(fecha_original, fecha_nueva) values (date '2026-11-23', date '2026-11-24'); raise exception 'debió fallar';
+exception when insufficient_privilege then perform chequear(true, 'vendedor no puede cambiar la ruta'); end $$;
+reset role;
+select como('00000000-0000-0000-0000-000000000004'); set role authenticated;
+insert into feriados(fecha, nombre) values (date '2027-01-01', 'Año Nuevo');
+insert into excepciones_visita(fecha_original, fecha_nueva, motivo) values (date '2026-11-23', date '2026-11-24', 'Feriado');
+select chequear((select count(*) from excepciones_visita) = 1, 'administración carga un cambio de ruta');
+do $$ begin insert into excepciones_visita(fecha_original, fecha_nueva) values (date '2026-11-21', date '2026-11-24'); raise exception 'debió fallar';
+exception when check_violation then perform chequear(true, 'no se puede mover una visita desde o hacia un sábado'); end $$;
+delete from excepciones_visita;
+select chequear((select count(*) from excepciones_visita) = 0, 'administración cancela el cambio de ruta');
+reset role;
+
+-- ===== Autorización antes de depósito =====
+select chequear((select estado from pedidos where uid = 'cam-1') = 'porAutorizar', 'el pedido del vendedor queda por autorizar');
+select set_config('t.ids', (select array_to_string(array_agg(id), ',') from pedidos where uid in ('cam-1', 'cam-2')), false);
+select como('00000000-0000-0000-0000-000000000003'); set role authenticated;
+select chequear((select count(*) from pedidos where estado = 'porAutorizar') = 0, 'depósito no ve los pedidos por autorizar');
+do $$ begin perform autorizar_pedidos(string_to_array(current_setting('t.ids'), ',')::bigint[]); raise exception 'debió fallar';
+exception when others then perform chequear(sqlerrm like 'Solo Administración%', 'depósito no puede autorizar'); end $$;
+reset role;
+select como('00000000-0000-0000-0000-000000000001'); set role authenticated;
+do $$ begin perform autorizar_pedidos(string_to_array(current_setting('t.ids'), ',')::bigint[]); raise exception 'debió fallar';
+exception when others then perform chequear(sqlerrm like 'Solo Administración%', 'vendedor no puede autorizar'); end $$;
+reset role;
+select como('00000000-0000-0000-0000-000000000004'); set role authenticated;
+select crear_pedido(1, '[{"producto_id":1,"cant":1}]', '', 'adm-1');
+select chequear((select estado from pedidos where uid = 'adm-1') = 'pendiente', 'lo que carga administración entra ya autorizado');
+select chequear(autorizar_pedidos(string_to_array(current_setting('t.ids'), ',')::bigint[]) = 2, 'administración autoriza varios pedidos juntos');
+select chequear(autorizar_pedidos(string_to_array(current_setting('t.ids'), ',')::bigint[]) = 0, 'autorizar de nuevo no repite nada');
+select chequear((select estado from pedidos where uid = 'cam-1') = 'pendiente', 'el pedido autorizado pasa a depósito');
+select chequear((select historial->-1->>'txt' from pedidos where uid = 'cam-1') = 'Autorizado y enviado a depósito', 'la autorización queda en el historial');
+reset role;
+select como('00000000-0000-0000-0000-000000000003'); set role authenticated;
+select chequear((select count(*) from pedidos where uid = 'cam-1') = 1, 'depósito ve el pedido una vez autorizado');
 reset role;
 
 -- ===== Vendedor 2 no ve pedidos de V1 =====

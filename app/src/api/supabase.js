@@ -2,6 +2,7 @@
 // forma que el modo demo, así las pantallas no cambian. Las escrituras van por funciones de la base
 // (supabase/migrations) que validan permisos, stock y reglas; después se recarga lo necesario.
 import { createClient } from "@supabase/supabase-js";
+import { fechaEntrega } from "../lib/reglas";
 
 const URL = import.meta.env.VITE_SUPABASE_URL;
 const KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
@@ -10,7 +11,7 @@ const DOMINIO = "rincondelsur.app"; // el login usa "usuario" → usuario@rincon
 // Solo se crea si hay Supabase configurado (sin URL la app corre en modo demo).
 export const sb = URL ? createClient(URL, KEY, { auth: { persistSession: true } }) : null;
 const listeners = new Set();
-let db = { usuarios: [], productos: [], clientes: [], pedidos: [], cobros: [], caja: [], arqueos: [], auditoria: [], miARendir: 0 };
+let db = { usuarios: [], productos: [], clientes: [], pedidos: [], cobros: [], caja: [], arqueos: [], auditoria: [], miARendir: 0, feriados: [], excepciones: [] };
 let yo = null;
 
 // Copia local de los datos para abrir sin señal. La caja no se guarda en la tablet.
@@ -43,8 +44,10 @@ const mapUsuario = p => ({ id: p.id, nombre: p.nombre, rol: p.rol, usuario: p.us
 const mapProducto = p => ({ id: p.id, nombre: p.nombre, categoria: p.categoria, precio: num(p.precio), stock: p.stock, stockMin: p.stock_min, stockContado: p.stock_contado, tramos: p.tramos || [], foto: p.foto_url, activo: p.activo });
 const mapCliente = c => ({ id: c.id, codigo: c.codigo, nombre: c.nombre, dir: c.dir, cuit: c.cuit, tel: c.tel, localidad: c.localidad, dia: c.dia, vendedorId: c.vendedor_id, saldo: num(c.saldo), ultimoPago: c.ultimo_pago, obs: c.obs });
 const mapLinea = l => ({ productoId: l.producto_id, nombre: l.nombre, cant: l.cant, precio: num(l.precio), pct: num(l.pct), manual: l.manual, total: num(l.total) });
-const mapPedido = p => ({ id: p.id, clienteId: p.cliente_id, vendedorId: p.vendedor_id, fecha: p.fecha, creado: p.creado, estado: p.estado, total: num(p.total), obs: p.obs, hechos: p.hechos || [], historial: p.historial || [], salio: p.salio, lineas: (p.pedido_lineas || []).sort((a, b) => a.id - b.id).map(mapLinea) });
+const mapPedido = p => ({ id: p.id, clienteId: p.cliente_id, vendedorId: p.vendedor_id, fecha: p.fecha, fechaEntrega: p.fecha_entrega, creado: p.creado, estado: p.estado, total: num(p.total), obs: p.obs, hechos: p.hechos || [], historial: p.historial || [], salio: p.salio, lineas: (p.pedido_lineas || []).sort((a, b) => a.id - b.id).map(mapLinea) });
 const mapCobro = c => ({ id: c.id, fecha: c.fecha, hora: c.fecha + "T12:00:00", clienteId: c.cliente_id, vendedorId: c.vendedor_id, cobradorId: c.cobrador_id, monto: num(c.monto), medio: c.medio, comision: num(c.comision) });
+const mapFeriado = f => ({ fecha: f.fecha, nombre: f.nombre });
+const mapCambioRuta = e => ({ id: e.id, vendedorId: e.vendedor_id, desde: e.fecha_original, hasta: e.fecha_nueva, motivo: e.motivo });
 const nombreDe = id => db.usuarios.find(u => u.id === id)?.nombre || "—";
 const mapMov = m => ({ id: m.id, fecha: m.fecha, hora: m.hora, tipo: m.tipo, concepto: m.concepto, monto: num(m.monto), persona: m.persona, detalle: m.detalle, vuelve: m.vuelve, vuelveFecha: m.vuelve_fecha || "", vendedorId: m.vendedor_id, cobroId: m.cobro_id, usuario: nombreDe(m.usuario),
   devoluciones: (m.caja_devoluciones || []).map(d => ({ fecha: d.hora.slice(0, 10), hora: d.hora, monto: num(d.monto), como: d.como, usuario: nombreDe(d.usuario) })) });
@@ -65,9 +68,11 @@ const cargas = {
   // pedidos de los últimos 60 días + los que siguen abiertos, y cobros de los últimos 60 días.
   pedidos: async () => {
     db.pedidos = (await todo(() => sb.from("pedidos").select("*, pedido_lineas(*)")
-      .or(`fecha.gte.${desde()},estado.in.(porAutorizar,pendiente,preparando,preparado,enReparto)`)
+      .or(`fecha.gte.${desde()},fecha_entrega.gte.${desde()},estado.in.(porAutorizar,pendiente,preparando,preparado,enReparto)`)
       .order("id", { ascending: false }))).map(mapPedido);
   },
+  feriados: async () => { db.feriados = (await todo(() => sb.from("feriados").select("*").order("fecha"))).map(mapFeriado); },
+  excepciones: async () => { db.excepciones = (await todo(() => sb.from("excepciones_visita").select("*").gte("fecha_nueva", desde()).order("id"))).map(mapCambioRuta); },
   cobros: async () => { db.cobros = (await todo(() => sb.from("cobros").select("*").gte("fecha", desde()).order("id", { ascending: false }))).map(mapCobro); },
   caja: async () => {
     if (!["admin", "gerencia"].includes(yo?.rol)) { db.caja = []; db.arqueos = []; return; }
@@ -84,7 +89,7 @@ const recargar = async (...qué) => { await Promise.all(qué.map(k => cargas[k](
 const recargarTodo = () => recargar(...Object.keys(cargas));
 
 // Tiempo real: si otro usuario cambia algo, se recarga esa parte.
-const TABLA = { productos: "productos", clientes: "clientes", pedidos: "pedidos", pedido_lineas: "pedidos", cobros: "cobros", caja_movimientos: "caja", caja_devoluciones: "caja", perfiles: "usuarios" };
+const TABLA = { productos: "productos", clientes: "clientes", pedidos: "pedidos", pedido_lineas: "pedidos", cobros: "cobros", caja_movimientos: "caja", caja_devoluciones: "caja", perfiles: "usuarios", feriados: "feriados", excepciones_visita: "excepciones" };
 let canal = null; const pendientes = new Set(); let timer = null;
 let reloj = null;
 function escuchar() {
@@ -127,21 +132,51 @@ export const api = {
       // Sin señal: abre con la última copia guardada en la tablet (solo si es del mismo usuario).
       const c = leerCopia();
       if (!c || c.yo?.id !== uid) throw e;
-      yo = c.yo; db = { ...db, ...c.db }; emit();
+      yo = c.yo; db = { ...db, ...c.db };
+      // La copia puede ser de antes de que existieran los camiones: se les calcula con la misma regla.
+      db.pedidos = db.pedidos.map(p => p.fechaEntrega ? p : { ...p, fechaEntrega: fechaEntrega(db.clientes.find(x => x.id === p.clienteId)?.dia, p.fecha) });
+      db.feriados ||= []; db.excepciones ||= [];
+      emit();
     }
     return yo;
   },
   async salir() { canal?.unsubscribe(); clearInterval(reloj); await sb.auth.signOut(); yo = null; borrarCopia(); },
 
-  async crearPedido(user, { clienteId, items, obs, uid }) {
+  async crearPedido(user, { clienteId, items, obs, uid, fecha }) {
     const p_items = items.map(i => ({ producto_id: i.productoId, cant: i.cant, precio_manual: i.precioManual ?? null, desc_manual: i.descManual ?? null }));
-    const { data: id, error } = await sb.rpc("crear_pedido", { p_cliente: clienteId, p_items, p_obs: obs || "", p_uid: uid || null }); err(error);
+    const { data: id, error } = await sb.rpc("crear_pedido", { p_cliente: clienteId, p_items, p_obs: obs || "", p_uid: uid || null, p_fecha: fecha || null }); err(error);
     await recargar("pedidos", "productos");
     return db.pedidos.find(p => p.id === id);
   },
   async cambiarEstado(user, pedidoId, estado, txt) {
     const { error } = await sb.rpc("cambiar_estado", { p_pedido: pedidoId, p_estado: estado, p_txt: txt }); err(error);
     await recargar("pedidos", "productos", "clientes");
+  },
+  // ---- Feriados y cambios de ruta (Administración y Gerencia) ----
+  async guardarFeriado(user, { fecha, nombre }) {
+    const { error } = await sb.from("feriados").upsert({ fecha, nombre }); err(error);
+    await recargar("feriados");
+  },
+  async borrarFeriado(user, fecha) {
+    const { error } = await sb.from("feriados").delete().eq("fecha", fecha); err(error);
+    await recargar("feriados");
+  },
+  async crearCambioRuta(user, { vendedorId, desde, hasta, motivo }) {
+    const { error } = await sb.from("excepciones_visita").insert({ vendedor_id: vendedorId || null, fecha_original: desde, fecha_nueva: hasta, motivo: motivo || "" }); err(error);
+    await recargar("excepciones");
+  },
+  async cancelarCambioRuta(user, id) {
+    const { error } = await sb.from("excepciones_visita").delete().eq("id", id); err(error);
+    await recargar("excepciones");
+  },
+  async autorizarPedidos(user, ids) {
+    const { data, error } = await sb.rpc("autorizar_pedidos", { p_ids: ids }); err(error);
+    await recargar("pedidos");
+    return data;
+  },
+  async cambiarFechaEntrega(user, pedidoId, fecha) {
+    const { error } = await sb.rpc("cambiar_fecha_entrega", { p_pedido: pedidoId, p_fecha: fecha }); err(error);
+    await recargar("pedidos");
   },
   async tildar(user, pedidoId, idx) {
     const { error } = await sb.rpc("tildar", { p_pedido: pedidoId, p_idx: idx }); err(error);

@@ -2,7 +2,7 @@ import { Icon, Avatar } from "./icons.jsx";
 import React from "react";
 import { useApp } from "../App.jsx";
 import { api } from "../api";
-import { fmt, hoyISO, tieneAlerta } from "../lib/reglas";
+import { fechaCorta, fmt, hoyISO, nombreCamion, puede, tieneAlerta } from "../lib/reglas";
 import { ChipCuenta, ChipEstado, ProdImg } from "./ui.jsx";
 
 export const misClientes = (db, user) =>
@@ -32,7 +32,7 @@ export default function Inicio() {
         {user.rol !== "vendedor" && <>
           <div className="card kpi" style={{ cursor: "pointer" }} onClick={() => go("pedidos", { estado: "porAutorizar" })}>
             <div className="num" style={{ color: "var(--aut)" }}>{cuenta("porAutorizar")}</div><div className="lbl">Por autorizar</div></div>
-          <div className="card kpi" style={{ cursor: "pointer" }} onClick={() => go("deposito")}>
+          <div className="card kpi" style={{ cursor: "pointer" }} onClick={() => go(user.rol === "admin" ? "pedidos" : "deposito")}>
             <div className="num" style={{ color: "var(--pend)" }}>{cuenta("pendiente") + cuenta("preparando")}</div><div className="lbl">En depósito</div></div>
           <div className="card kpi"><div className="num" style={{ color: "var(--listo)" }}>{cuenta("preparado")}</div><div className="lbl">Listos para salir</div></div>
         </>}
@@ -76,13 +76,13 @@ export default function Inicio() {
 }
 
 export function PedidoRow({ p }) {
-  const { db, go } = useApp();
+  const { db, go, user } = useApp();
   const c = db.clientes.find(x => x.id === p.clienteId);
   const v = db.usuarios.find(x => x.id === p.vendedorId);
   return (
     <div className="list-item" onClick={() => go("pedido", { id: p.id })}>
       <Avatar txt={"#" + p.id} />
-      <div style={{ flex: 1, minWidth: 0 }}><b>{c?.nombre}</b><div className="muted">{p.fecha}{v ? " · " + v.nombre : ""}</div></div>
+      <div style={{ flex: 1, minWidth: 0 }}><b>{c?.nombre}</b><div className="muted">{p.fecha}{v ? " · " + v.nombre : ""}{p.fechaEntrega ? " · " + nombreCamion(p.fechaEntrega) + " " + fechaCorta(p.fechaEntrega) : ""}{p.estado === "porAutorizar" && puede.autorizar(user) && c?.saldo < 0 ? " · Debe " + fmt(-c.saldo) : ""}</div></div>
       <div style={{ textAlign: "right" }}><div style={{ fontWeight: 800 }}>{fmt(p.total)}</div><ChipEstado e={p.estado} /></div>
     </div>
   );

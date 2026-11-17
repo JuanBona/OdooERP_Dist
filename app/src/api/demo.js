@@ -2,7 +2,7 @@
 // Implementa las mismas acciones que el backend de Supabase (ver supabase/schema.sql),
 // así la interfaz no cambia cuando se conecta la base real.
 import seed from "../seed.json";
-import { calcPedido, hoyISO, nuevoEstadoPedido } from "../lib/reglas";
+import { calcPedido, cerrado, diaSemana, fechaEntrega, hoyISO, nuevoEstadoPedido } from "../lib/reglas";
 
 const KEY = "rds-demo-v4";
 const listeners = new Set();
@@ -33,7 +33,17 @@ function inicial() {
   Object.assign(clientes[2], { saldo: -12800, ultimoPago: d(5), vendedorId: 1 });
   Object.assign(clientes[0], { vendedorId: 1 });
   Object.assign(clientes[3], { vendedorId: 2 });
-  return { usuarios, productos, clientes, pedidos: [], cobros: [], caja: [], arqueos: [], auditoria: [], seq: 1 };
+  return { usuarios, productos, clientes, pedidos: [], cobros: [], caja: [], arqueos: [], auditoria: [], seq: 1, feriados: feriadosIniciales(), excepciones: [], seqRuta: 1 };
+}
+
+// Los mismos feriados que carga la migración de la base.
+function feriadosIniciales() {
+  return [
+    { fecha: "2026-11-23", nombre: "Día de la Soberanía Nacional (trasladado)" },
+    { fecha: "2026-12-07", nombre: "Puente turístico (día no laborable)" },
+    { fecha: "2026-12-08", nombre: "Inmaculada Concepción de María" },
+    { fecha: "2026-12-25", nombre: "Navidad" },
+  ];
 }
 
 function load() {
@@ -41,6 +51,9 @@ function load() {
   try { const raw = localStorage.getItem(KEY); if (raw) d = JSON.parse(raw); } catch {}
   d = d || inicial();
   d.caja ||= []; d.arqueos ||= [];
+  d.feriados ||= feriadosIniciales(); d.excepciones ||= []; d.seqRuta ||= 1;
+  // Pedidos guardados antes de que existieran los camiones: se les calcula con la misma regla.
+  d.pedidos.forEach(p => { p.fechaEntrega ||= fechaEntrega(d.clientes.find(c => c.id === p.clienteId)?.dia, p.fecha); });
   return d;
 }
 function save() {
@@ -63,7 +76,7 @@ export const api = {
     return u;
   },
 
-  crearPedido(user, { clienteId, items, obs }) {
+  crearPedido(user, { clienteId, items, obs, fecha }) {
     const c = db.clientes.find(x => x.id === clienteId);
     for (const it of items) {
       const p = db.productos.find(x => x.id === it.productoId);
@@ -73,7 +86,7 @@ export const api = {
     lineas.forEach(l => { db.productos.find(p => p.id === l.productoId).stock -= l.cant; });
     const ped = {
       id: db.seq++, clienteId, vendedorId: user.rol === "vendedor" ? user.id : c.vendedorId,
-      fecha: hoyISO(), creado: new Date().toISOString(), estado: nuevoEstadoPedido(c),
+      fecha: fecha || hoyISO(), fechaEntrega: fechaEntrega(c.dia, fecha || hoyISO(), { excepciones: db.excepciones, vendedorId: c.vendedorId }), creado: new Date().toISOString(), estado: nuevoEstadoPedido(user),
       lineas, total: lineas.reduce((s, l) => s + l.total, 0), obs: obs || "", hechos: [],
       historial: [{ fecha: new Date().toISOString(), usuario: user.nombre, txt: "Pedido cargado" }],
     };
@@ -96,6 +109,55 @@ export const api = {
     p.historial.push({ fecha: new Date().toISOString(), usuario: user.nombre, txt });
     audit(user, txt, "#" + p.id);
     save();
+  },
+
+  cambiarFechaEntrega(user, pedidoId, fecha) {
+    const p = db.pedidos.find(x => x.id === pedidoId);
+    if (user.rol === "vendedor" && p.vendedorId !== user.id) throw new Error("El pedido no es tuyo.");
+    if (!["vendedor", "admin", "gerencia"].includes(user.rol)) throw new Error("No tenés permiso para cambiar el camión.");
+    if (cerrado(p)) throw new Error("El pedido ya está cerrado.");
+    const dow = (new Date(fecha + "T12:00:00Z").getUTCDay() + 6) % 7 + 1;
+    if (dow < 2 || dow > 6) throw new Error("Los camiones salen de martes a sábado.");
+    p.fechaEntrega = fecha;
+    p.historial.push({ fecha: new Date().toISOString(), usuario: user.nombre, txt: "Cambió el camión al " + fecha.slice(8) + "/" + fecha.slice(5, 7) });
+    audit(user, "Cambió el camión", "#" + p.id);
+    save();
+  },
+
+  // ---- Feriados y cambios de ruta (Administración y Gerencia) ----
+  guardarFeriado(user, { fecha, nombre }) {
+    if (!["admin", "gerencia"].includes(user.rol)) throw new Error("Solo Administración o Gerencia.");
+    db.feriados = [...db.feriados.filter(f => f.fecha !== fecha), { fecha, nombre }].sort((a, b) => a.fecha.localeCompare(b.fecha));
+    audit(user, "Cargó feriado " + fecha, nombre); save();
+  },
+  borrarFeriado(user, fecha) {
+    if (!["admin", "gerencia"].includes(user.rol)) throw new Error("Solo Administración o Gerencia.");
+    db.feriados = db.feriados.filter(f => f.fecha !== fecha); save();
+  },
+  crearCambioRuta(user, { vendedorId, desde, hasta, motivo }) {
+    if (!["admin", "gerencia"].includes(user.rol)) throw new Error("Solo Administración o Gerencia.");
+    const habil = f => diaSemana(f) <= 5;
+    if (!habil(desde) || !habil(hasta)) throw new Error("Los cambios de ruta son de lunes a viernes.");
+    if (desde === hasta) throw new Error("El día nuevo tiene que ser distinto del original.");
+    db.excepciones.push({ id: db.seqRuta++, vendedorId: vendedorId || null, desde, hasta, motivo: motivo || "" });
+    audit(user, `Cambio de ruta ${desde} → ${hasta}`, motivo || ""); save();
+  },
+  cancelarCambioRuta(user, id) {
+    if (!["admin", "gerencia"].includes(user.rol)) throw new Error("Solo Administración o Gerencia.");
+    db.excepciones = db.excepciones.filter(e => e.id !== id); save();
+  },
+
+  // Autoriza varios pedidos juntos (ej.: todos los de un camión). Devuelve cuántos autorizó.
+  autorizarPedidos(user, ids) {
+    if (!["admin", "gerencia"].includes(user.rol)) throw new Error("Solo Administración o Gerencia pueden autorizar.");
+    let n = 0;
+    db.pedidos.filter(p => ids.includes(p.id) && p.estado === "porAutorizar").forEach(p => {
+      p.estado = "pendiente";
+      p.historial.push({ fecha: new Date().toISOString(), usuario: user.nombre, txt: "Autorizado y enviado a depósito" });
+      n++;
+    });
+    if (n) { audit(user, `Autorizó ${n} pedidos`, "Pedidos"); save(); }
+    return n;
   },
 
   tildar(user, pedidoId, idx) {

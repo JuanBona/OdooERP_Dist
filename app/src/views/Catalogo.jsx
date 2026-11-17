@@ -2,7 +2,7 @@ import { Icon, Avatar } from "./icons.jsx";
 import React, { useState } from "react";
 import { useApp } from "../App.jsx";
 import { enviarPedido } from "../lib/offline";
-import { calcLinea, fmt, nuevoEstadoPedido, proximoTramo, puede, sinContar, tope } from "../lib/reglas";
+import { DIAS_VISITA, calcLinea, cambioDeRuta, diaSemana, fechaCorta, fechaEntrega, feriadoDe, fmt, hoyISO, visitaReciente, nombreCamion, nombreDia, nuevoEstadoPedido, proximoTramo, puede, sinContar, tope } from "../lib/reglas";
 import { ChipCuenta, ProdImg } from "./ui.jsx";
 import { misClientes } from "./Inicio.jsx";
 
@@ -117,6 +117,29 @@ function ProductoModal({ p, cant, setQty, onClose }) {
   );
 }
 
+// A qué camión va el pedido y por qué. Avisa (sin bloquear) si el cliente no tiene día o hoy no es su día.
+function AvisoCamion({ c }) {
+  const { db } = useApp();
+  const hoy = hoyISO();
+  const cam = fechaEntrega(c.dia, hoy, { excepciones: db.excepciones, vendedorId: c.vendedorId });
+  const destino = `${nombreCamion(cam)} ${fechaCorta(cam)}`;
+  const caja = { display: "block", borderRadius: 9, padding: 10, marginTop: 10 };
+  const feriado = feriadoDe(db.feriados, cam);
+  const visita = visitaReciente(c.dia, hoy);
+  const cambio = DIAS_VISITA.includes(c.dia) ? cambioDeRuta(db.excepciones, visita, c.vendedorId ?? null) : null;
+  return (
+    <>
+      {!DIAS_VISITA.includes(c.dia)
+        ? <p className="chip alerta" style={caja}>Este cliente no tiene día de visita asignado, así que el pedido va al {destino} según el día de hoy. Asignale un día en su ficha de cliente.</p>
+        : DIAS_VISITA.indexOf(c.dia) + 1 !== diaSemana(hoy)
+          ? <p className="chip alerta" style={caja}>Este cliente es de los {c.dia.toLowerCase()} y hoy es {nombreDia(hoy)}. El pedido igual va a su camión: {destino}.</p>
+          : <p className="chip st-preparado" style={caja}>Sale en el {destino}.</p>}
+      {cambio && <p className="chip alerta" style={caja}>Esta semana la visita del {nombreDia(cambio.desde)} {fechaCorta(cambio.desde)} se pasó al {nombreDia(cambio.hasta)} {fechaCorta(cambio.hasta)}{cambio.motivo ? " (" + cambio.motivo + ")" : ""}. Por eso el camión es el {destino}.</p>}
+      {feriado && <p className="chip warn" style={caja}>El {fechaCorta(cam)} es feriado ({feriado.nombre}). Tené cuidado: confirmá con Administración que ese camión salga.</p>}
+    </>
+  );
+}
+
 export function Confirmar() {
   const { db, user, cart, setCart, go, toast } = useApp();
   const c = db.clientes.find(x => x.id === cart.clienteId);
@@ -137,7 +160,7 @@ export function Confirmar() {
       setCart({ clienteId: null, items: {}, manual: {}, obs: "" });
       if (r.enCola) { toast("Sin señal: el pedido quedó guardado y se envía solo cuando vuelva la conexión."); go("pedidos"); return; }
       const p = r.pedido;
-      toast(p.estado === "porAutorizar" ? `Pedido #${p.id} enviado. Queda por autorizar (cliente con deuda).` : `Pedido #${p.id} enviado al depósito`);
+      toast(p.estado === "porAutorizar" ? `Pedido #${p.id} enviado. Queda por autorizar en Administración.` : `Pedido #${p.id} enviado al depósito`);
       go("pedido", { id: p.id });
     } catch (e) { toast(e.message); } finally { setEnviando(false); }
   };
@@ -172,7 +195,8 @@ export function Confirmar() {
           <textarea id="obs" rows="2" value={cart.obs} onChange={e => setCart({ ...cart, obs: e.target.value })} placeholder="Ej: entregar antes de las 10" /></div>
         {ahorro > 0 && <div className="row between muted"><span>Descuentos por cantidad</span><span style={{ color: "var(--entr)", fontWeight: 700 }}>− {fmt(ahorro)}</span></div>}
         <div className="row between" style={{ fontSize: 20, fontWeight: 850, marginTop: 6 }}><span>Total</span><span>{fmt(total)}</span></div>
-        {c && nuevoEstadoPedido(c) === "porAutorizar" && <p className="chip st-porAutorizar" style={{ display: "block", borderRadius: 9, padding: 10, marginTop: 10 }}>El cliente tiene deuda: el pedido va a quedar por autorizar.</p>}
+        {c && <AvisoCamion c={c} />}
+        {c && nuevoEstadoPedido(user) === "porAutorizar" && <p className="chip st-porAutorizar" style={{ display: "block", borderRadius: 9, padding: 10, marginTop: 10 }}>{c.saldo < 0 ? "El cliente tiene deuda. " : ""}El pedido queda por autorizar: Administración lo aprueba y recién ahí pasa a depósito.</p>}
         <button className="btn blk" style={{ marginTop: 14 }} onClick={enviar} disabled={enviando}>{enviando ? "Enviando…" : "Enviar pedido"}</button>
       </div>
       {editLinea && <EditarLinea l={editLinea} onClose={() => setEditLinea(null)} onOk={m => { setCart({ ...cart, manual: { ...cart.manual, [editLinea.productoId]: m } }); setEditLinea(null); }} />}
