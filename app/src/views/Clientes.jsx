@@ -94,11 +94,11 @@ export function ClienteDetalle() {
   [...peds].reverse().forEach(p => p.estado !== "anulado" && p.lineas.forEach(l => { habitual[l.productoId] = l.cant; }));
   const habList = Object.entries(habitual).map(([id, cant]) => ({ p: db.productos.find(x => x.id === +id), cant })).filter(x => x.p);
 
-  const tomarPedido = (items = {}) => { setCart({ clienteId: c.id, items, manual: {}, obs: "" }); go(Object.keys(items).length ? "confirmar" : "catalogo"); };
+  const tomarPedido = (items = {}) => { setCart({ clienteId: c.id, items, manual: {}, obs: "", origen: params.desde === "hoja" ? "hoja" : undefined }); go(Object.keys(items).length ? "confirmar" : "catalogo"); };
 
   return (
     <>
-      <button className="btn sm sec" onClick={() => go(params.desde === "hoja" ? "hoja" : "clientes")}><Icon n="atras" s={16} /> {params.desde === "hoja" ? "Hoja de ruta" : "Clientes"}</button>
+      <button className="btn sm sec" onClick={() => (params.desde === "hoja" ? go("hoja", { volver: true }) : go("clientes"))}><Icon n="atras" s={16} /> {params.desde === "hoja" ? "Hoja de ruta" : "Clientes"}</button>
       <div className="card" style={{ marginTop: 12 }}>
         <div className="row between" style={{ flexWrap: "wrap", alignItems: "flex-start" }}>
           <div style={{ minWidth: 0 }}>

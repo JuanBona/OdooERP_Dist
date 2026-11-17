@@ -1,5 +1,5 @@
 import { Icon, Avatar } from "./icons.jsx";
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { useApp } from "../App.jsx";
 import { api } from "../api";
 import { ESTADOS, camionesDeSemana, diaSemana, fechaCorta, feriadoDe, fmt, hoyISO, lunesDe, nombreCamion, puede, sumarDias } from "../lib/reglas";
@@ -7,6 +7,7 @@ import { ChipCuenta, ChipEstado, fechaHora } from "./ui.jsx";
 import { PedidoRow } from "./Inicio.jsx";
 import logo from "../assets/logo.jpg";
 import { descartar, useConexion } from "../lib/offline";
+import { useRestaurarScroll, useVista } from "../lib/vista";
 
 // Semana de entrega que se muestra al abrir: la del lunes (el domingo ya se mira la que viene).
 export const semanaDeHoy = () => { const h = hoyISO(); return lunesDe(diaSemana(h) === 7 ? sumarDias(h, 1) : h); };
@@ -109,19 +110,23 @@ export function SemanaNav({ semana, setSemana }) {
   );
 }
 
-// Abrir y cerrar renglones (se recuerda cuáles están abiertos mientras se está en la pantalla).
-export function useAbiertos() {
-  const [abiertos, setAbiertos] = useState({});
+// Abrir y cerrar renglones. Se recuerda cuáles están abiertos aunque se salga de la pantalla (ej.: al abrir un pedido).
+export function useAbiertos(pantalla) {
+  const [abiertos, setAbiertos] = useVista(pantalla + ".abiertos", {});
   return [k => !!abiertos[k], k => setAbiertos(a => ({ ...a, [k]: !a[k] }))];
 }
 
 export function Pedidos() {
   const { db, user, params, go } = useApp();
-  const [estado, setEstado] = useState(params.estado || "");
-  const [q, setQ] = useState("");
-  const [lista, setLista] = useState(!!params.estado); // lista plana de todas las semanas (si vienen de un aviso de Inicio)
-  const [semana, setSemana] = useState(semanaDeHoy);
-  const [abierto, toggle] = useAbiertos();
+  const [estado, setEstado] = useVista("pedidos.estado", "");
+  const [q, setQ] = useVista("pedidos.q", "");
+  const [lista, setLista] = useVista("pedidos.lista", false); // lista plana de todas las semanas (si vienen de un aviso de Inicio)
+  const [semana, setSemana] = useVista("pedidos.semana", semanaDeHoy);
+  const [abierto, toggle] = useAbiertos("pedidos");
+  // Al volver de un pedido queda todo como estaba (semana, camiones abiertos, filtros y scroll). Si se entra de cero
+  // (por la pestaña o por un aviso de Inicio) arranca en la semana de hoy y sin filtros.
+  useRestaurarScroll("pedidos", params.volver);
+  useEffect(() => { if (!params.volver) { setSemana(semanaDeHoy()); setEstado(params.estado || ""); setQ(""); setLista(!!params.estado); } }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const esVendedor = user.rol === "vendedor";
   const mios = esVendedor ? db.pedidos.filter(p => p.vendedorId === user.id) : db.pedidos;
@@ -203,6 +208,7 @@ export function PedidoDetalle() {
   const idx = PASOS.findIndex(s => s[0] === p.estado);
   const accion = async (estado, txt) => { try { await api.cambiarEstado(user, p.id, estado, txt); toast(txt); setConfirmar(null); } catch (e) { toast(e.message); } };
   const admin = puede.administrar(user);
+  const volverA = params.desde === "deposito" ? "deposito" : "pedidos"; // la lista de la que se vino, para no perder el lugar
   const cambiarCamion = async () => {
     const dow = diaSemana(nuevaFecha);
     if (dow < 2 || dow > 6) return toast("Los camiones salen de martes a sábado");
@@ -211,7 +217,7 @@ export function PedidoDetalle() {
 
   return (
     <>
-      <button className="btn sm sec" onClick={() => go("pedidos")}><Icon n="atras" s={16} /> Pedidos</button>
+      <button className="btn sm sec" onClick={() => go(volverA, { volver: true })}><Icon n="atras" s={16} /> {volverA === "deposito" ? "Preparación" : "Pedidos"}</button>
       <div className="card" style={{ marginTop: 12 }}>
         <div className="row between" style={{ flexWrap: "wrap" }}>
           <div><div className="eyebrow">Pedido #{p.id}</div><h1>{c.nombre}</h1>

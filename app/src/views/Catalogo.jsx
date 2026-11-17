@@ -156,12 +156,13 @@ export function Confirmar() {
     if (!items.length) return toast("El pedido está vacío");
     try {
       setEnviando(true);
+      const desdeHoja = cart.origen === "hoja"; // la venta se empezó en la hoja de ruta: al terminar se vuelve ahí
       const r = await enviarPedido(user, { clienteId: c.id, items, obs: cart.obs });
       setCart({ clienteId: null, items: {}, manual: {}, obs: "" });
-      if (r.enCola) { toast("Sin señal: el pedido quedó guardado y se envía solo cuando vuelva la conexión."); go("pedidos"); return; }
+      if (r.enCola) { toast("Sin señal: el pedido quedó guardado y se envía solo cuando vuelva la conexión."); desdeHoja ? go("hoja", { volver: true }) : go("pedidos"); return; }
       const p = r.pedido;
       toast(p.estado === "porAutorizar" ? `Pedido #${p.id} enviado. Queda por autorizar en Administración.` : `Pedido #${p.id} enviado al depósito`);
-      go("pedido", { id: p.id });
+      if (desdeHoja) go("hoja", { volver: true }); else go("pedido", { id: p.id });
     } catch (e) { toast(e.message); } finally { setEnviando(false); }
   };
 
