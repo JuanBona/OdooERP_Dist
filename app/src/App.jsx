@@ -12,6 +12,8 @@ import Articulos from "./views/Articulos.jsx";
 import Usuarios from "./views/Usuarios.jsx";
 import Caja from "./views/Caja.jsx";
 import Resumen from "./views/Resumen.jsx";
+import HojaRuta from "./views/HojaRuta.jsx";
+import Feriados from "./views/Feriados.jsx";
 import { sincronizar, useConexion } from "./lib/offline";
 import { Icon, Avatar } from "./views/icons.jsx";
 
@@ -19,16 +21,16 @@ const Ctx = createContext(null);
 export const useApp = () => useContext(Ctx);
 
 const TABS = {
-  vendedor: [["inicio", "Inicio"], ["clientes", "Clientes"], ["catalogo", "Catálogo"], ["pedidos", "Mis pedidos"]],
+  vendedor: [["inicio", "Inicio"], ["hoja", "Hoja de ruta"], ["clientes", "Clientes"], ["catalogo", "Catálogo"], ["pedidos", "Mis pedidos"]],
   deposito: [["deposito", "Preparación"]],
-  admin: [["inicio", "Inicio"], ["pedidos", "Pedidos"], ["deposito", "Depósito"], ["clientes", "Clientes"], ["catalogo", "Catálogo"], ["caja", "Caja"], ["articulos", "Artículos"]],
+  admin: [["inicio", "Inicio"], ["pedidos", "Pedidos"], ["clientes", "Clientes"], ["catalogo", "Catálogo"], ["caja", "Caja"], ["articulos", "Artículos"]],
   gerencia: [["inicio", "Inicio"], ["resumen", "Resumen del mes"], ["pedidos", "Pedidos"], ["deposito", "Depósito"], ["clientes", "Clientes"], ["catalogo", "Catálogo"], ["caja", "Caja"], ["articulos", "Artículos"], ["usuarios", "Usuarios"]],
 };
 
 const VIEWS = {
   inicio: Inicio, clientes: Clientes, cliente: ClienteDetalle, catalogo: Catalogo, confirmar: Confirmar,
   pedidos: Pedidos, pedido: PedidoDetalle, deposito: Deposito, depoPedido: DepoPedido,
-  articulos: Articulos, usuarios: Usuarios, caja: Caja, resumen: Resumen,
+  articulos: Articulos, usuarios: Usuarios, caja: Caja, resumen: Resumen, hoja: HojaRuta, feriados: Feriados,
 };
 
 export default function App() {
@@ -64,7 +66,7 @@ export default function App() {
 
   const View = VIEWS[nav.view] || Inicio;
   const tabs = TABS[user.rol];
-  const activo = { cliente: "clientes", confirmar: "catalogo", pedido: "pedidos", depoPedido: "deposito" }[nav.view] || nav.view;
+  const activo = { cliente: nav.params.desde === "hoja" ? "hoja" : "clientes", confirmar: "catalogo", pedido: "pedidos", depoPedido: "deposito", feriados: "pedidos" }[nav.view] || nav.view;
   const cartCount = Object.values(cart.items).reduce((a, b) => a + b, 0);
 
   return (

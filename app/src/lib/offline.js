@@ -3,6 +3,7 @@
 // y se envía solo cuando vuelve la señal. El vendedor no tiene que hacer nada.
 import { useSyncExternalStore } from "react";
 import { api } from "../api";
+import { hoyISO } from "./reglas";
 
 const KEY = "rds-outbox-v1";
 const listeners = new Set();
@@ -37,6 +38,7 @@ const ENVIAR = {
 
 async function enviar(tipo, user, data) {
   data = { ...data, uid: data.uid || nuevoUid() };
+  if (tipo === "pedido") data.fecha ||= hoyISO(); // el camión depende del día en que se cargó, no de cuándo llegue
   if (!navigator.onLine) return encolar(tipo, user, data);
   try {
     return { resultado: await ENVIAR[tipo](user, data) };

@@ -3,7 +3,7 @@ import React, { useMemo, useState } from "react";
 import { useApp } from "../App.jsx";
 import { api } from "../api";
 import { enviarCobro } from "../lib/offline";
-import { DIAS, fmt, puede, tieneAlerta, sinContar, tope } from "../lib/reglas";
+import { DIAS_VISITA, fmt, puede, tieneAlerta, sinContar, tope } from "../lib/reglas";
 import { ChipCuenta } from "./ui.jsx";
 import { misClientes, PedidoRow } from "./Inicio.jsx";
 
@@ -28,7 +28,7 @@ export function Clientes() {
       </div>
       <div className="filters">
         <input type="search" placeholder="Buscar por nombre, dirección o código…" value={q} onChange={e => setQ(e.target.value)} />
-        <select value={dia} onChange={e => setDia(e.target.value)}><option value="">Ruta: todos los días</option>{DIAS.map(d => <option key={d}>{d}</option>)}</select>
+        <select value={dia} onChange={e => setDia(e.target.value)}><option value="">Ruta: todos los días</option>{DIAS_VISITA.map(d => <option key={d}>{d}</option>)}</select>
         <select value={loc} onChange={e => setLoc(e.target.value)}><option value="">Todas las localidades</option>{localidades.map(l => <option key={l}>{l}</option>)}</select>
         <button className={"btn sm " + (soloAlerta ? "" : "sec")} onClick={() => setSoloAlerta(!soloAlerta)}><Icon n="alerta" s={15} /> Con alerta de pago</button>
       </div>
@@ -69,7 +69,7 @@ export function EditarCliente({ c, onClose }) {
         <div className="grid g2">
           <div className="field"><label htmlFor="ec-loc">Localidad</label><input id="ec-loc" list="locs" value={f.localidad} onChange={e => set("localidad", e.target.value)} />
             <datalist id="locs">{[...new Set(db.clientes.map(x => x.localidad).filter(Boolean))].map(l => <option key={l} value={l} />)}</datalist></div>
-          <div className="field"><label htmlFor="ec-dia">Día de visita</label><select id="ec-dia" value={f.dia} onChange={e => set("dia", e.target.value)}><option value="">—</option>{DIAS.map(d => <option key={d}>{d}</option>)}</select></div>
+          <div className="field"><label htmlFor="ec-dia">Día de visita</label><select id="ec-dia" value={f.dia} onChange={e => set("dia", e.target.value)}><option value="">—</option>{DIAS_VISITA.map(d => <option key={d}>{d}</option>)}</select></div>
           {user.rol !== "vendedor" && <div className="field"><label htmlFor="ec-ven">Vendedor</label><select id="ec-ven" value={f.vendedorId ?? ""} onChange={e => set("vendedorId", vendedores.find(v => String(v.id) === e.target.value)?.id ?? null)}><option value="">Sin asignar</option>{vendedores.map(v => <option key={v.id} value={v.id}>{v.nombre}</option>)}</select></div>}
           <div className="field"><label htmlFor="ec-tel">Teléfono</label><input id="ec-tel" value={f.tel} onChange={e => set("tel", e.target.value)} /></div>
         </div>
@@ -98,7 +98,7 @@ export function ClienteDetalle() {
 
   return (
     <>
-      <button className="btn sm sec" onClick={() => go("clientes")}><Icon n="atras" s={16} /> Clientes</button>
+      <button className="btn sm sec" onClick={() => go(params.desde === "hoja" ? "hoja" : "clientes")}><Icon n="atras" s={16} /> {params.desde === "hoja" ? "Hoja de ruta" : "Clientes"}</button>
       <div className="card" style={{ marginTop: 12 }}>
         <div className="row between" style={{ flexWrap: "wrap", alignItems: "flex-start" }}>
           <div style={{ minWidth: 0 }}>
@@ -106,6 +106,7 @@ export function ClienteDetalle() {
             <h1>{c.nombre}</h1>
             <p className="muted">{c.dir}{c.localidad ? " · " + c.localidad : ""}{c.tel ? " · Tel " + c.tel : ""}</p>
             <p className="muted">Ruta: {c.dia || "sin día"} · Vendedor: {vend?.nombre || "sin asignar"}</p>
+            {!DIAS_VISITA.includes(c.dia) && <p className="chip alerta" style={{ marginTop: 6 }}>Falta asignarle un día de visita: sus pedidos salen en el camión según el día en que se cargan.</p>}
             {c.obs && <p className="muted" style={{ marginTop: 6 }}><Icon n="nota" s={15} style={{ verticalAlign: "-2px" }} /> {c.obs}</p>}
           </div>
           <div style={{ textAlign: "right" }}>
