@@ -2,12 +2,12 @@ import { Icon, Avatar } from "./icons.jsx";
 import React, { useState } from "react";
 import { useApp } from "../App.jsx";
 import { api } from "../api";
-import { CAJAS, faltanDatosCheque, fmt, hoyISO, nombreCaja } from "../lib/reglas";
+import { CAJAS, NO_ES_GASTO, faltanDatosCheque, fmt, hoyISO, nombreCaja } from "../lib/reglas";
 import { ChequeCampos, chequeVacio, fechaHora } from "./ui.jsx";
 
 // Cajas del depósito: efectivo, transferencia y cheques. Las manejan Administración y Gerencia.
 export const CONCEPTOS_ENTRADA = ["Rendición de vendedor", "Cobro en el depósito", "Aporte del dueño", "Otro ingreso"];
-export const CONCEPTOS_SALIDA = ["Pago a proveedor", "Sueldo / adelanto de sueldo", "Combustible", "Cambio para el reparto", "Préstamo", "Retiro del dueño", "Gasto varios"];
+export const CONCEPTOS_SALIDA = ["Pago a proveedor", "Sueldo / adelanto de sueldo", "Combustible", "Cambio para el reparto", "Préstamo", "Retiro del dueño", "Inversiones", "Gasto varios"];
 const VUELVE_POR_DEFECTO = ["Cambio para el reparto", "Préstamo"];
 const COMO_VUELVE = ["Efectivo", "Transferencia", "Descontado del sueldo", "Otro"];
 
@@ -159,6 +159,7 @@ function ModalMov({ tipo, onClose }) {
           <div className="field"><label htmlFor="mv-c">Concepto</label><select id="mv-c" value={f.concepto} onChange={e => set("concepto", e.target.value)}>{conceptos.map(c => <option key={c}>{c}</option>)}</select></div>
           <div className="field"><label htmlFor="mv-m">Monto</label><input id="mv-m" type="number" inputMode="numeric" value={f.monto} onChange={e => set("monto", e.target.value)} /></div>
         </div>
+        {!entrada && NO_ES_GASTO.includes(f.concepto) && <p className="chip st-preparado" style={{ display: "block", borderRadius: 9, padding: 8, marginBottom: 10 }}>{f.concepto === "Inversiones" ? "Inversión: no cuenta como gasto, no afecta el profit." : "No cuenta como gasto en el profit."}</p>}
         {f.caja === "cheques" && <ChequeCampos ch={ch} setCh={setCh} />}
         <div className="field"><label htmlFor="mv-p">{entrada ? "De quién (opcional)" : "A quién se le da"}</label><input id="mv-p" value={f.persona} onChange={e => set("persona", e.target.value)} placeholder={entrada ? "" : "Ej: Juan (chofer), Coca-Cola, Mario"} /></div>
         <div className="field"><label htmlFor="mv-d">Detalle (opcional)</label><input id="mv-d" value={f.detalle} onChange={e => set("detalle", e.target.value)} placeholder="Ej: factura 0001-2345" /></div>

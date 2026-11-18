@@ -27,12 +27,13 @@ export default function Resumen() {
   const entregados = peds.filter(p => p.estado === "entregado");
   const cobros = db.cobros.filter(c => enMes(c.fecha));
   // Gastos = salidas de la caja que no vuelven (sin contar retiros del dueño).
-  const gastos = db.caja.filter(m => enMes(m.fecha) && m.tipo === "egreso" && !m.vuelve && m.concepto !== "Retiro del dueño")
+  const gastos = db.caja.filter(m => enMes(m.fecha) && m.tipo === "egreso" && !m.vuelve && m.concepto !== "Retiro del dueño" && m.concepto !== "Inversiones")
     .map(m => ({ categoria: m.concepto, monto: -m.monto }));
   const sum = (a, f) => a.reduce((s, x) => s + f(x), 0);
   const vendido = sum(peds, p => p.total);
   const cobrado = sum(cobros, c => c.monto);
   const gastado = sum(gastos, g => g.monto);
+  const inversiones = sum(db.caja.filter(m => enMes(m.fecha) && m.tipo === "egreso" && m.concepto === "Inversiones"), m => -m.monto);
   const comisiones = sum(cobros, c => c.comision || 0);
   const g = useGanancia(db, mes);
   const pr = g ? calcProfit(db, mes, g) : null; // null mientras se calcula
@@ -64,6 +65,7 @@ export default function Resumen() {
         <div className="card kpi"><div className="num">{fmt(vendido)}</div><div className="lbl">Vendido · {peds.length} {peds.length === 1 ? "pedido" : "pedidos"} ({entregados.length} entregados)</div></div>
         <div className="card kpi"><div className="num" style={{ color: "var(--entr)" }}>{fmt(cobrado)}</div><div className="lbl">Cobrado</div></div>
         <div className="card kpi"><div className="num" style={{ color: "var(--danger)" }}>{fmt(gastado)}</div><div className="lbl">Gastos</div></div>
+        <div className="card kpi"><div className="num">{fmt(inversiones)}</div><div className="lbl">Inversiones (no son gasto ni afectan el profit)</div></div>
         <div className="card kpi"><div className="num">{fmt(comisiones)}</div><div className="lbl">Comisiones a pagar</div></div>
         <div className="card kpi" style={{ borderColor: "var(--brand)" }}><div className="num">{fmt(cobrado - gastado - comisiones)}</div><div className="lbl">Lo que quedó (cobrado − gastos − comisiones)</div></div>
         <div className="card kpi" style={{ borderColor: "var(--brand)" }}><div className="num" style={{ color: !pr || pr.profit >= 0 ? "var(--entr)" : "var(--danger)" }}>{pr ? fmt(pr.profit) : "…"}</div><div className="lbl">Profit (ganancia − gastos − comisiones)</div></div>
@@ -72,7 +74,7 @@ export default function Resumen() {
       <p className="muted" style={{ marginBottom: 6 }}>
         {!pr ? "Calculando la ganancia…"
           : pr.conCostos
-            ? <>Ganancia {fmt(pr.ganancia)}: lo cobrado este mes ({fmt(pr.cobrado)}) con el precio y el costo de cada venta original, así un cambio de precio posterior no la altera (cada cobro paga primero las ventas más viejas del cliente). Se restan gastos {fmt(pr.gastos)} (sin pagos a proveedores ni retiros del dueño, y sin pases entre cajas) y comisiones {fmt(pr.comisiones)}.</>
+            ? <>Ganancia {fmt(pr.ganancia)}: lo cobrado este mes ({fmt(pr.cobrado)}) con el precio y el costo de cada venta original, así un cambio de precio posterior no la altera (cada cobro paga primero las ventas más viejas del cliente). Se restan gastos {fmt(pr.gastos)} (sin pagos a proveedores, retiros del dueño ni inversiones, y sin pases entre cajas) y comisiones {fmt(pr.comisiones)}.</>
             : "Todavía no hay cobros de ventas con costo cargado este mes, así que no se puede calcular la ganancia. Cargá los costos en Artículos."}
         {pr && pr.cobradoSinCosto > 0 && pr.conCostos && ` De lo cobrado, ${fmt(pr.cobradoSinCosto)} corresponde a deudas anteriores o a ventas sin costo cargado: no suma ganancia.`}
         {pr && pr.productosSinCosto > 0 && ` Faltan costos en ${pr.productosSinCosto} ${pr.productosSinCosto === 1 ? "producto" : "productos"}: lo que se vende sin costo no entra en el cálculo.`}

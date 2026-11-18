@@ -105,5 +105,6 @@ El camión depende del **día de visita del cliente**, no del día en que se car
   - Una deuda anterior al sistema se paga primero y no tiene costo conocido; lo cobrado de ventas sin costo, o los adelantos, no suman ganancia y el resumen lo informa aparte.
   - El cálculo está en la base (`ganancia_cobrada`, solo Gerencia) porque necesita todo el historial; la demo usa la misma cuenta en la app.
   - Se resta: gastos (salidas de las 3 cajas que no vuelven) y comisiones.
-  - **No** se restan: pagos a proveedores (esa mercadería ya está en el costo), retiros del dueño, plata que vuelve (préstamos) ni pases entre cajas.
+  - **No** se restan: pagos a proveedores (esa mercadería ya está en el costo), retiros del dueño, **inversiones**, plata que vuelve (préstamos) ni pases entre cajas.
+  - **Inversiones:** al retirar plata de cualquiera de las 3 cajas (efectivo, transferencia o cheques) hay un concepto "Inversiones". No cuenta como gasto ni afecta el profit, y en el Resumen del mes se muestra aparte (no entra en "Gastos"). La salida avisa al cargarla: "no cuenta como gasto, no afecta el profit".
   - Avisa cuántos productos activos siguen sin costo.

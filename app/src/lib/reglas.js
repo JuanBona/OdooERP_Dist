@@ -156,9 +156,11 @@ export const precioConGanancia = (costo, pct) => Math.round(+costo * (1 + +pct /
 // % que se gana hoy sobre el costo, con un decimal (null si no hay costo).
 export const gananciaPct = (costo, precio, decimales = 1) => (costo > 0 ? Math.round((precio - costo) / costo * 100 * 10 ** decimales) / 10 ** decimales : null);
 
-// Salidas de caja que no son un gasto del negocio: lo que se lleva el dueño, y los pagos a proveedores
-// (esa mercadería ya se descuenta con el costo de lo vendido; contarlos otra vez la restaría dos veces).
-const NO_ES_GASTO = ["Retiro del dueño", "Pago a proveedor"];
+// Salidas de caja que no son un gasto del negocio y por lo tanto no restan en el profit:
+//  · Retiro del dueño.
+//  · Pago a proveedor: esa mercadería ya se descuenta con el costo de lo vendido; contarla otra vez la restaría dos veces.
+//  · Inversiones: plata que sale de cualquiera de las 3 cajas para invertir (no es un gasto de la operación).
+export const NO_ES_GASTO = ["Retiro del dueño", "Pago a proveedor", "Inversiones"];
 
 // Ganancia de lo cobrado en un mes ("AAAA-MM"), valuada con el PRECIO y el COSTO DE LA VENTA ORIGINAL.
 // Un cobro llega después de la venta y los precios pueden haber cambiado: si el cliente pagó una Coca que
