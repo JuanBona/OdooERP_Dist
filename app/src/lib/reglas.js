@@ -131,9 +131,16 @@ export function calcPedido(items, productos) {
 export const sinContar = p => p.stockContado === false;
 export const tope = p => (sinContar(p) ? Infinity : p.stock);
 
+// Cambios de precio del vendedor: todas las líneas con cambio (cualquier estado) y si alguna espera decisión.
+export const lineasConPrecio = p => p.lineas.filter(l => l.precioEstado);
+export const precioPendiente = p => p.lineas.some(l => l.precioEstado === "pendiente");
+// Vende por debajo del costo (el costo solo lo trae la base a Administración y Gerencia; al vendedor le llega null).
+export const bajoCosto = l => l.costo != null && l.cant > 0 && l.total / l.cant < l.costo;
+
 export const puede = {
   autorizar: u => ["admin", "gerencia"].includes(u.rol),
-  editarPrecio: u => ["admin", "gerencia"].includes(u.rol),
+  editarPrecio: u => ["vendedor", "admin", "gerencia"].includes(u.rol),     // vendedor: solo el precio, con aprobación
+  editarDescuento: u => ["admin", "gerencia"].includes(u.rol),
   verFinanzas: u => u.rol === "gerencia",
   administrar: u => ["admin", "gerencia"].includes(u.rol),
   // Vendedor: da de alta clientes (quedan a su nombre) y edita los suyos y los sin asignar.

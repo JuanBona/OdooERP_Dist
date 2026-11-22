@@ -83,8 +83,21 @@ export const api = {
       const p = db.productos.find(x => x.id === it.productoId);
       if (p.stockContado !== false && it.cant > p.stock) throw new Error(`No hay stock suficiente de ${p.nombre} (quedan ${p.stock}).`);
     }
+    if (user.rol === "vendedor" && items.some(it => it.descManual != null)) throw new Error("Solo Administración puede cambiar descuentos.");
+    if (items.some(it => it.precioManual != null && it.precioManual < 0)) throw new Error("El precio no puede ser negativo.");
     const lineas = calcPedido(items, db.productos);
-    lineas.forEach(l => { const prod = db.productos.find(p => p.id === l.productoId); prod.stock -= l.cant; l.costo = prod.costo ?? null; }); // el costo queda guardado al vender
+    lineas.forEach(l => {
+      const prod = db.productos.find(p => p.id === l.productoId);
+      prod.stock -= l.cant; l.costo = prod.costo ?? null; // el costo queda guardado al vender
+      l.id = db.seq++; l.precioLista = prod.precio; l.precioEstado = null; l.log = [];
+      // El vendedor cambia el precio: queda pendiente de aprobación (poner el precio de lista no es un cambio).
+      if (user.rol === "vendedor") {
+        if (l.precio !== prod.precio) {
+          l.precioEstado = "pendiente"; l.cambiadoPor = user.id; l.cambiadoEn = new Date().toISOString();
+          l.log.push({ accion: "propuesto", usuarioId: user.id, antes: prod.precio, despues: l.precio, fecha: l.cambiadoEn });
+        } else l.manual = false;
+      }
+    });
     const ped = {
       id: db.seq++, clienteId, vendedorId: user.rol === "vendedor" ? user.id : c.vendedorId,
       fecha: fecha || hoyISO(), fechaEntrega: fechaEntrega(c.dia, fecha || hoyISO(), { excepciones: db.excepciones, vendedorId: c.vendedorId }), creado: new Date().toISOString(), estado: nuevoEstadoPedido(user),
@@ -99,6 +112,9 @@ export const api = {
 
   cambiarEstado(user, pedidoId, estado, txt) {
     const p = db.pedidos.find(x => x.id === pedidoId);
+    if (p.estado === "porAutorizar" && estado === "pendiente" && p.lineas.some(l => l.precioEstado === "pendiente")) {
+      throw new Error("Resolvé los cambios de precio antes de autorizar el pedido");
+    }
     if (estado === "anulado" || estado === "rechazado") {
       p.lineas.forEach(l => { db.productos.find(x => x.id === l.productoId).stock += l.cant; });
     }
@@ -107,6 +123,30 @@ export const api = {
     }
     if (estado === "enReparto") p.salio = hoyISO();
     p.estado = estado;
+    p.historial.push({ fecha: new Date().toISOString(), usuario: user.nombre, txt });
+    audit(user, txt, "#" + p.id);
+    save();
+  },
+
+  // Administración / Gerencia resuelven un cambio de precio del vendedor.
+  resolverPrecio(user, lineaId, accion, precio = null) {
+    if (!["admin", "gerencia"].includes(user.rol)) throw new Error("Solo Administración o Gerencia pueden resolver precios.");
+    const p = db.pedidos.find(x => x.lineas.some(l => l.id === lineaId));
+    const l = p?.lineas.find(x => x.id === lineaId);
+    if (!l) throw new Error("Línea no encontrada.");
+    if (p.estado !== "porAutorizar") throw new Error("El pedido ya fue autorizado o cerrado.");
+    if (l.precioEstado !== "pendiente") throw new Error("Este precio ya fue resuelto.");
+    let nuevo, txt;
+    if (accion === "aprobado") { nuevo = l.precio; txt = "Aprobó el precio de " + l.nombre; }
+    else if (accion === "repuesto") { nuevo = l.precioLista; txt = "Volvió a precio de lista: " + l.nombre; }
+    else if (accion === "corregido") {
+      if (precio == null || precio < 0) throw new Error("Precio inválido.");
+      nuevo = precio; txt = "Corrigió el precio de " + l.nombre;
+    } else throw new Error("Acción inválida.");
+    (l.log ||= []).push({ accion, usuarioId: user.id, antes: l.precio, despues: nuevo, fecha: new Date().toISOString() });
+    l.precio = nuevo; l.precioEstado = accion; l.manual = accion !== "repuesto";
+    l.total = Math.round(nuevo * l.cant * (1 - l.pct / 100));
+    p.total = p.lineas.reduce((s, x) => s + x.total, 0);
     p.historial.push({ fecha: new Date().toISOString(), usuario: user.nombre, txt });
     audit(user, txt, "#" + p.id);
     save();
@@ -155,7 +195,7 @@ export const api = {
   autorizarPedidos(user, ids) {
     if (!["admin", "gerencia"].includes(user.rol)) throw new Error("Solo Administración o Gerencia pueden autorizar.");
     let n = 0;
-    db.pedidos.filter(p => ids.includes(p.id) && p.estado === "porAutorizar").forEach(p => {
+    db.pedidos.filter(p => ids.includes(p.id) && p.estado === "porAutorizar" && !p.lineas.some(l => l.precioEstado === "pendiente")).forEach(p => {
       p.estado = "pendiente";
       p.historial.push({ fecha: new Date().toISOString(), usuario: user.nombre, txt: "Autorizado y enviado a depósito" });
       n++;

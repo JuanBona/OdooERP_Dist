@@ -2,7 +2,7 @@ import { Icon, Avatar } from "./icons.jsx";
 import React, { useEffect, useState } from "react";
 import { useApp } from "../App.jsx";
 import { api } from "../api";
-import { ESTADOS, camionesDeSemana, diaSemana, fechaCorta, feriadoDe, fmt, hoyISO, lunesDe, nombreCamion, puede, sumarDias } from "../lib/reglas";
+import { ESTADOS, bajoCosto, camionesDeSemana, diaSemana, fechaCorta, feriadoDe, fmt, hoyISO, lineasConPrecio, lunesDe, nombreCamion, precioPendiente, puede, sumarDias } from "../lib/reglas";
 import { ChipCuenta, ChipEstado, fechaHora } from "./ui.jsx";
 import { PedidoRow } from "./Inicio.jsx";
 import logo from "../assets/logo.jpg";
@@ -18,9 +18,10 @@ function resumenPedidos(ps) {
   const a = activos(ps);
   const faltan = a.filter(p => p.estado !== "entregado").length;
   const porAut = a.filter(p => p.estado === "porAutorizar").length;
+  const conPrecio = a.filter(p => p.estado === "porAutorizar" && precioPendiente(p)).length;
   return {
     arriba: fmt(a.reduce((s, p) => s + p.total, 0)),
-    abajo: <>{a.length} {a.length === 1 ? "pedido" : "pedidos"}{faltan ? ` · ${faltan} sin entregar` : ""}{porAut > 0 && <b style={{ color: "var(--aut)" }}> · {porAut} por autorizar</b>}</>,
+    abajo: <>{a.length} {a.length === 1 ? "pedido" : "pedidos"}{faltan ? ` · ${faltan} sin entregar` : ""}{porAut > 0 && <b style={{ color: "var(--aut)" }}> · {porAut} por autorizar</b>}{conPrecio > 0 && <b style={{ color: "var(--aut)" }}> · {conPrecio} con precio cambiado</b>}</>,
   };
 }
 
@@ -44,18 +45,25 @@ export function Fila({ icono, titulo, sub, arriba, abajo, abierto, onToggle, chi
 }
 
 // Autorizar de una vez todos los pedidos de un camión que esperan aprobación (Administración y Gerencia).
+// Los pedidos con un cambio de precio sin resolver quedan afuera: se revisan uno por uno.
 function AutorizarTodos({ ps }) {
   const { db, user, toast } = useApp();
-  const pend = puede.autorizar(user) ? ps.filter(p => p.estado === "porAutorizar") : [];
-  if (!pend.length) return null;
+  const todos = puede.autorizar(user) ? ps.filter(p => p.estado === "porAutorizar") : [];
+  const pend = todos.filter(p => !precioPendiente(p));
+  const conPrecio = todos.length - pend.length;
+  if (!todos.length) return null;
   const conDeuda = pend.filter(p => db.clientes.find(c => c.id === p.clienteId)?.saldo < 0).length;
   const autorizar = async () => {
-    try { const n = await api.autorizarPedidos(user, pend.map(p => p.id)); toast(n === 1 ? "1 pedido autorizado y enviado a depósito" : `${n} pedidos autorizados y enviados a depósito`); } catch (e) { toast(e.message); }
+    try {
+      const n = await api.autorizarPedidos(user, pend.map(p => p.id));
+      const aviso = conPrecio ? ` · ${conPrecio} quedan pendientes: tienen precio cambiado` : "";
+      toast((n === 1 ? "1 pedido autorizado y enviado a depósito" : `${n} pedidos autorizados y enviados a depósito`) + aviso);
+    } catch (e) { toast(e.message); }
   };
   return (
     <div className="row between" style={{ padding: "8px 4px", flexWrap: "wrap" }}>
-      <span className="muted">{pend.length} por autorizar{conDeuda ? ` · ${conDeuda} de clientes que deben` : ""}</span>
-      <button className="btn sm" onClick={autorizar}><Icon n="check" s={16} /> Autorizar todos ({pend.length})</button>
+      <span className="muted">{todos.length} por autorizar{conDeuda ? ` · ${conDeuda} de clientes que deben` : ""}{conPrecio ? ` · ${conPrecio} con precio cambiado (se revisan uno por uno)` : ""}</span>
+      {pend.length > 0 && <button className="btn sm" onClick={autorizar}><Icon n="check" s={16} /> Autorizar todos ({pend.length})</button>}
     </div>
   );
 }
@@ -197,6 +205,69 @@ function Bandeja() {
 
 const PASOS =[["porAutorizar", "Autorización"], ["pendiente", "Depósito"], ["preparando", "Preparando"], ["preparado", "Listo"], ["enReparto", "En reparto"], ["entregado", "Entregado"]];
 
+const ACCION_TXT = { propuesto: "Puso el precio", aprobado: "Aprobó", repuesto: "Volvió a lista", corregido: "Corrigió" };
+const ESTADO_PRECIO = { aprobado: "Aprobado", repuesto: "Repuesto a lista", corregido: "Corregido" };
+const hora = f => new Date(f).toLocaleString("es-AR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
+
+// Cambios de precio hechos por el vendedor. Administración y Gerencia los aprueban, reponen el precio de lista o corrigen.
+function CambiosDePrecio({ p }) {
+  const { db, user, toast } = useApp();
+  const [corrigiendo, setCorrigiendo] = useState(null);   // { id, precio }
+  const [historial, setHistorial] = useState(null);       // id de la línea con el historial abierto
+  const lineas = lineasConPrecio(p);
+  const pendientes = lineas.filter(l => l.precioEstado === "pendiente");
+  if (!lineas.length) return null;
+  if (!puede.autorizar(user)) {
+    return pendientes.length ? <p className="chip st-porAutorizar" style={{ display: "block", borderRadius: 9, padding: 10, marginTop: 12 }}>Hay {pendientes.length === 1 ? "un precio" : pendientes.length + " precios"} a confirmar por Administración antes de que el pedido pase a depósito.</p> : null;
+  }
+  const quien = id => db.usuarios.find(u => u.id === id)?.nombre || "El vendedor";
+  const decidir = async (l, accion, precio = null) => {
+    try { await api.resolverPrecio(user, l.id, accion, precio); setCorrigiendo(null); toast("Precio resuelto"); } catch (e) { toast(e.message); }
+  };
+  const aprobarTodos = async () => {
+    try { for (const l of pendientes) await api.resolverPrecio(user, l.id, "aprobado"); toast("Precios aprobados"); } catch (e) { toast(e.message); }
+  };
+  return (
+    <div className="card" style={{ marginTop: 12, border: pendientes.length ? "2px solid var(--aut)" : undefined, background: pendientes.length ? "var(--danger-bg)" : undefined }}>
+      <div className="row between" style={{ flexWrap: "wrap" }}>
+        <b style={{ fontSize: 16 }}>{pendientes.length ? `⚠ ${quien(p.vendedorId)} cambió ${pendientes.length === 1 ? "un precio" : pendientes.length + " precios"}. Resolvelo para poder autorizar el pedido.` : "Cambios de precio resueltos"}</b>
+        {pendientes.length > 1 && p.estado === "porAutorizar" && <button className="btn sm sec" onClick={aprobarTodos}>Aprobar todos los cambios</button>}
+      </div>
+      {lineas.map(l => {
+        const propuesto = l.log[0]?.despues ?? l.precio;
+        const dif = l.precioLista ? Math.round((1 - propuesto / l.precioLista) * 100) : 0;
+        const pend = l.precioEstado === "pendiente";
+        return (
+          <div key={l.id} style={{ padding: "10px 0", borderTop: "1px solid rgba(0,0,0,.12)" }}>
+            <div><b>{l.nombre}</b> · lista {fmt(l.precioLista)} → {quien(l.cambiadoPor)} puso <b>{fmt(propuesto)}</b> ({dif > 0 ? "−" + dif + "%" : dif < 0 ? "+" + -dif + "%" : "igual"}){l.cambiadoEn ? " · " + hora(l.cambiadoEn) : ""}</div>
+            {bajoCosto(l) && <div style={{ color: "var(--danger, #c0392b)", fontWeight: 800 }}>⚠ Por debajo del costo ({fmt(l.costo)})</div>}
+            {!pend && <div className="muted">{ESTADO_PRECIO[l.precioEstado]}{l.precioEstado !== "aprobado" ? ": " + fmt(l.precio) : ""}</div>}
+            {pend && p.estado === "porAutorizar" && (corrigiendo?.id === l.id ? (
+              <div className="row" style={{ marginTop: 6, flexWrap: "wrap" }}>
+                <input type="number" min="0" aria-label="Precio corregido" value={corrigiendo.precio} onChange={e => setCorrigiendo({ id: l.id, precio: e.target.value })} style={{ width: 130 }} />
+                <button className="btn sm" disabled={corrigiendo.precio === "" || +corrigiendo.precio < 0} onClick={() => decidir(l, "corregido", +corrigiendo.precio)}>Guardar precio</button>
+                <button className="btn sm sec" onClick={() => setCorrigiendo(null)}>Cancelar</button>
+              </div>
+            ) : (
+              <div className="row" style={{ marginTop: 6, flexWrap: "wrap" }}>
+                <button className="btn sm" onClick={() => decidir(l, "aprobado")}>Aprobar</button>
+                <button className="btn sm sec" onClick={() => decidir(l, "repuesto")}>Volver a lista ({fmt(l.precioLista)})</button>
+                <button className="btn sm sec" onClick={() => setCorrigiendo({ id: l.id, precio: l.precio })}>Corregir precio</button>
+              </div>
+            ))}
+            <button className="btn sm sec" style={{ marginTop: 6 }} onClick={() => setHistorial(historial === l.id ? null : l.id)}>{historial === l.id ? "Ocultar historial" : "Ver historial"}</button>
+            {historial === l.id && (
+              <ul className="muted" style={{ margin: "6px 0 0 18px" }}>
+                {l.log.map((h, i) => <li key={i}>{ACCION_TXT[h.accion]} · {quien(h.usuarioId)} · {fmt(h.antes)} → {fmt(h.despues)} · {hora(h.fecha)}</li>)}
+              </ul>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 export function PedidoDetalle() {
   const { db, user, go, params, toast } = useApp();
   const [confirmar, setConfirmar] = useState(null);
@@ -244,16 +315,17 @@ export function PedidoDetalle() {
         {!["anulado", "rechazado"].includes(p.estado) && (
           <div className="timeline">{PASOS.map(([k, l], i) => <span key={k} className={i <= idx ? "on" : ""}>{l}</span>)}</div>
         )}
+        <CambiosDePrecio p={p} />
         <div className="tw" style={{ overflowX: "auto" }}>
           <table><thead><tr><th>Producto</th><th>Cant.</th><th>Precio</th><th>Desc.</th><th style={{ textAlign: "right" }}>Total</th></tr></thead>
-            <tbody>{p.lineas.map((l, i) => <tr key={i}><td>{l.nombre}{l.manual && <span className="muted"> (manual)</span>}</td><td>{l.cant}</td><td>{fmt(l.precio)}</td><td>{l.pct ? l.pct + "%" : "—"}</td><td style={{ textAlign: "right" }}>{fmt(l.total)}</td></tr>)}</tbody>
+            <tbody>{p.lineas.map((l, i) => <tr key={i}><td>{l.nombre}{l.precioEstado === "pendiente" ? <span className="chip warn"> precio a confirmar</span> : l.manual && <span className="muted"> (manual)</span>}</td><td>{l.cant}</td><td>{fmt(l.precio)}</td><td>{l.pct ? l.pct + "%" : "—"}</td><td style={{ textAlign: "right" }}>{fmt(l.total)}</td></tr>)}</tbody>
           </table>
         </div>
         <div className="row between" style={{ fontSize: 19, fontWeight: 850, marginTop: 10 }}><span>Total</span><span>{fmt(p.total)}</span></div>
         {p.obs && <p className="muted" style={{ marginTop: 8 }}><Icon n="nota" s={15} style={{ verticalAlign: "-2px" }} /> {p.obs}</p>}
 
         <div className="row" style={{ flexWrap: "wrap", marginTop: 16 }}>
-          {p.estado === "porAutorizar" && puede.autorizar(user) && <button className="btn" onClick={() => accion("pendiente", "Autorizado y enviado a depósito")}><Icon n="check" s={17} /> Autorizar</button>}
+          {p.estado === "porAutorizar" && puede.autorizar(user) && <button className="btn" disabled={precioPendiente(p)} title={precioPendiente(p) ? "Resolvé los cambios de precio primero" : ""} onClick={() => accion("pendiente", "Autorizado y enviado a depósito")}><Icon n="check" s={17} /> Autorizar</button>}
           {["preparado", "enReparto", "entregado"].includes(p.estado) && <button className="btn sec" onClick={() => window.print()}><Icon n="imprimir" s={17} /> Imprimir remito</button>}
           {admin && p.estado === "preparado" && <button className="btn brand" onClick={() => accion("enReparto", "Salió en reparto")}><Icon n="camion" s={17} /> Salió en reparto</button>}
           {admin && p.estado === "enReparto" && <>

@@ -108,3 +108,13 @@ El camión depende del **día de visita del cliente**, no del día en que se car
   - **No** se restan: pagos a proveedores (esa mercadería ya está en el costo), retiros del dueño, **inversiones**, plata que vuelve (préstamos) ni pases entre cajas.
   - **Inversiones:** al retirar plata de cualquiera de las 3 cajas (efectivo, transferencia o cheques) hay un concepto "Inversiones". No cuenta como gasto ni afecta el profit, y en el Resumen del mes se muestra aparte (no entra en "Gastos"). La salida avisa al cargarla: "no cuenta como gasto, no afecta el profit".
   - Avisa cuántos productos activos siguen sin costo.
+
+## 13. Precio manual del vendedor con aprobación (implementado)
+
+- El vendedor puede cambiar el **precio unitario** de una línea al cargar el pedido (el descuento sigue automático y solo lo cambian Administración y Gerencia). Vale **solo para ese pedido**: el catálogo no se toca.
+- Si el precio difiere del de lista, la línea queda **pendiente**: el pedido muestra "⚠ Precio cambiado" y no se puede autorizar. Poner el mismo precio de lista no cuenta como cambio.
+- En el pedido, Administración y Gerencia ven un recuadro rojo: lista → precio que puso el vendedor (con %), quién y cuándo. Por línea: **Aprobar**, **Volver a lista** o **Corregir precio** (un tercer precio). También "Aprobar todos los cambios" y "Ver historial".
+- **Autorizar** queda deshabilitado mientras haya pendientes y la base también lo valida (`cambiar_estado`: "Resolvé los cambios de precio antes de autorizar el pedido"). **Autorizar todos** del camión salta esos pedidos y avisa cuántos quedaron.
+- Si el precio final queda **por debajo del costo**, la fila se marca en rojo (el costo solo lo trae la base a Administración y Gerencia).
+- Lo que cargan Administración o Gerencia con precio manual no pasa por aprobación.
+- El historial vive en `pedido_linea_precio_log` (solo lo leen Administración y Gerencia). El vendedor ve "precio a confirmar" mientras está pendiente.
