@@ -65,6 +65,13 @@ function audit(user, accion, ref) {
   db.auditoria.unshift({ fecha: new Date().toISOString(), usuario: user.nombre, accion, ref });
 }
 
+// Total del pedido = suma de las líneas menos el descuento sobre el total (que nunca pasa de la suma).
+function recalcularTotal(p) {
+  const suma = p.lineas.reduce((s, x) => s + x.total, 0);
+  p.descuentoTotal = Math.min(p.descuentoTotal || 0, suma);
+  p.total = suma - p.descuentoTotal;
+}
+
 export const api = {
   modo: "demo",
   subscribe(fn) { listeners.add(fn); return () => listeners.delete(fn); },
@@ -77,7 +84,7 @@ export const api = {
     return u;
   },
 
-  crearPedido(user, { clienteId, items, obs, fecha }) {
+  crearPedido(user, { clienteId, items, obs, fecha, descTotal }) {
     const c = db.clientes.find(x => x.id === clienteId);
     for (const it of items) {
       const p = db.productos.find(x => x.id === it.productoId);
@@ -86,6 +93,10 @@ export const api = {
     if (user.rol === "vendedor" && items.some(it => it.descManual != null)) throw new Error("Solo Administración puede cambiar descuentos.");
     if (items.some(it => it.precioManual != null && it.precioManual < 0)) throw new Error("El precio no puede ser negativo.");
     const lineas = calcPedido(items, db.productos);
+    const suma = lineas.reduce((s, l) => s + l.total, 0);
+    const dt = descTotal || 0;
+    if (dt < 0) throw new Error("El descuento no puede ser negativo.");
+    if (dt > 0 && dt >= suma) throw new Error("El descuento no puede ser igual o mayor al total del pedido.");
     lineas.forEach(l => {
       const prod = db.productos.find(p => p.id === l.productoId);
       prod.stock -= l.cant; l.costo = prod.costo ?? null; // el costo queda guardado al vender
@@ -106,9 +117,14 @@ export const api = {
     const ped = {
       id: db.seq++, clienteId, vendedorId: user.rol === "vendedor" ? user.id : c.vendedorId,
       fecha: fecha || hoyISO(), fechaEntrega: fechaEntrega(c.dia, fecha || hoyISO(), { excepciones: db.excepciones, vendedorId: c.vendedorId }), creado: new Date().toISOString(), estado: nuevoEstadoPedido(user),
-      lineas, total: lineas.reduce((s, l) => s + l.total, 0), obs: obs || "", hechos: [],
+      lineas, total: suma - dt, descuentoTotal: dt, descTotalEstado: null, logTotal: [], obs: obs || "", hechos: [],
       historial: [{ fecha: new Date().toISOString(), usuario: user.nombre, txt: "Pedido cargado" }],
     };
+    // Descuento sobre el total hecho por un vendedor: queda pendiente de aprobación.
+    if (dt > 0 && user.rol === "vendedor") {
+      ped.descTotalEstado = "pendiente"; ped.descTotalPor = user.id; ped.descTotalEn = new Date().toISOString();
+      ped.logTotal.push({ accion: "propuesto", usuarioId: user.id, antes: 0, despues: dt, fecha: ped.descTotalEn });
+    }
     db.pedidos.unshift(ped);
     audit(user, "Creó pedido", "#" + ped.id);
     save();
@@ -151,7 +167,7 @@ export const api = {
     (l.log ||= []).push({ campo: "precio", accion, usuarioId: user.id, antes: l.precio, despues: nuevo, fecha: new Date().toISOString() });
     l.precio = nuevo; l.precioEstado = accion; l.manual = accion !== "repuesto";
     l.total = Math.round(nuevo * l.cant * (1 - l.pct / 100));
-    p.total = p.lineas.reduce((s, x) => s + x.total, 0);
+    recalcularTotal(p);
     p.historial.push({ fecha: new Date().toISOString(), usuario: user.nombre, txt });
     audit(user, txt, "#" + p.id);
     save();
@@ -171,7 +187,30 @@ export const api = {
     (l.log ||= []).push({ campo: "descuento", accion, usuarioId: user.id, antes: l.pct, despues: nuevo, fecha: new Date().toISOString() });
     l.pct = nuevo; l.descEstado = accion;
     l.total = Math.round(l.precio * l.cant * (1 - l.pct / 100));
-    p.total = p.lineas.reduce((s, x) => s + x.total, 0);
+    recalcularTotal(p);
+    p.historial.push({ fecha: new Date().toISOString(), usuario: user.nombre, txt });
+    audit(user, txt, "#" + p.id);
+    save();
+  },
+
+  // Descuento sobre el total del pedido: "aprobado", "quitado" o "corregido" (monto nuevo en $).
+  resolverDescuentoTotal(user, pedidoId, accion, monto = null) {
+    if (!["admin", "gerencia"].includes(user.rol)) throw new Error("Solo Administración o Gerencia pueden resolver descuentos.");
+    const p = db.pedidos.find(x => x.id === pedidoId);
+    if (!p) throw new Error("Pedido no encontrado.");
+    if (p.estado !== "porAutorizar") throw new Error("El pedido ya fue autorizado o cerrado.");
+    if (p.descTotalEstado !== "pendiente") throw new Error("Este descuento ya fue resuelto.");
+    const suma = p.lineas.reduce((s, x) => s + x.total, 0);
+    let nuevo, txt;
+    if (accion === "aprobado") { nuevo = p.descuentoTotal; txt = "Aprobó el descuento sobre el total"; }
+    else if (accion === "quitado") { nuevo = 0; txt = "Quitó el descuento sobre el total"; }
+    else if (accion === "corregido") {
+      if (monto == null || monto < 0 || monto >= suma) throw new Error("Monto de descuento inválido.");
+      nuevo = monto; txt = "Corrigió el descuento sobre el total";
+    } else throw new Error("Acción inválida.");
+    (p.logTotal ||= []).push({ accion, usuarioId: user.id, antes: p.descuentoTotal, despues: nuevo, fecha: new Date().toISOString() });
+    p.descuentoTotal = nuevo; p.descTotalEstado = accion;
+    recalcularTotal(p);
     p.historial.push({ fecha: new Date().toISOString(), usuario: user.nombre, txt });
     audit(user, txt, "#" + p.id);
     save();

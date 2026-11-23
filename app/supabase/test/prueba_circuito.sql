@@ -442,4 +442,61 @@ select chequear((select pct from pedido_lineas where pedido_id = (select id from
 select chequear((select count(*) from pedido_linea_precio_log where campo = 'descuento') = 4, 'el historial guarda los pasos del descuento');
 reset role;
 
+-- ===== Descuento sobre el total del pedido =====
+select como('00000000-0000-0000-0000-000000000001'); set role authenticated;
+select crear_pedido(1, '[{"producto_id":1,"cant":1}]', '', 'dt-1', null, 10000);
+select crear_pedido(1, '[{"producto_id":1,"cant":1}]', '', 'dt-2');
+select crear_pedido(1, '[{"producto_id":1,"cant":1}]', '', 'dt-4', null, 10000);
+select crear_pedido(1, '[{"producto_id":1,"cant":1}]', '', 'dt-5', null, 10000);
+select crear_pedido(1, '[{"producto_id":1,"cant":1,"precio_manual":50000}]', '', 'dt-6', null, 5000);
+select chequear((select total from pedidos where uid = 'dt-1') = 50000 and (select descuento_total from pedidos where uid = 'dt-1') = 10000, 'el descuento sobre el total se resta de la suma: 60000 - 10000 = 50000');
+select chequear((select desc_total_estado from pedidos where uid = 'dt-1') = 'pendiente', 'el descuento sobre el total de un vendedor queda pendiente');
+select chequear((select total from pedidos where uid = 'dt-2') = 60000 and (select desc_total_estado from pedidos where uid = 'dt-2') is null, 'sin descuento sobre el total no queda nada pendiente');
+do $$ begin perform crear_pedido(1, '[{"producto_id":1,"cant":1}]', '', null, null, 60000); raise exception 'debió fallar';
+exception when others then perform chequear(sqlerrm like 'El descuento no puede ser igual%', 'el descuento no puede igualar o superar el total'); end $$;
+do $$ begin perform crear_pedido(1, '[{"producto_id":1,"cant":1}]', '', null, null, -5); raise exception 'debió fallar';
+exception when others then perform chequear(sqlerrm like 'El descuento no puede ser negativo%', 'el descuento no puede ser negativo'); end $$;
+do $$ begin perform resolver_descuento_total((select id from pedidos where uid = 'dt-1'), 'aprobado'); raise exception 'debió fallar';
+exception when others then perform chequear(sqlerrm like 'Solo Administración%', 'vendedor no puede resolver el descuento sobre el total'); end $$;
+reset role;
+
+select como('00000000-0000-0000-0000-000000000004'); set role authenticated;
+select set_config('t.dt1', (select id::text from pedidos where uid = 'dt-1'), false);
+select set_config('t.dt2', (select id::text from pedidos where uid = 'dt-2'), false);
+select set_config('t.dt4', (select id::text from pedidos where uid = 'dt-4'), false);
+select set_config('t.dt5', (select id::text from pedidos where uid = 'dt-5'), false);
+select set_config('t.dt6', (select id::text from pedidos where uid = 'dt-6'), false);
+do $$ begin perform cambiar_estado(current_setting('t.dt1')::bigint, 'pendiente', 'Autorizado'); raise exception 'debió fallar';
+exception when others then perform chequear(sqlerrm like 'Resolvé los cambios de precio%', 'no se autoriza con el descuento sobre el total pendiente'); end $$;
+select chequear(autorizar_pedidos(array[current_setting('t.dt1')::bigint, current_setting('t.dt2')::bigint]) = 1, 'autorizar varios salta el pedido con descuento sobre el total pendiente');
+select resolver_descuento_total(current_setting('t.dt1')::bigint, 'corregido', 8000);
+select chequear((select total from pedidos where id = current_setting('t.dt1')::bigint) = 52000 and (select descuento_total from pedidos where id = current_setting('t.dt1')::bigint) = 8000, 'corregir el descuento recalcula el total: 60000 - 8000');
+select chequear((select desc_total_estado from pedidos where id = current_setting('t.dt1')::bigint) = 'corregido', 'el descuento queda corregido');
+do $$ begin perform resolver_descuento_total(current_setting('t.dt1')::bigint, 'aprobado'); raise exception 'debió fallar';
+exception when others then perform chequear(sqlerrm like '%ya fue resuelto%', 'el descuento sobre el total no se resuelve dos veces'); end $$;
+select cambiar_estado(current_setting('t.dt1')::bigint, 'pendiente', 'Autorizado y enviado a depósito');
+select chequear((select estado from pedidos where id = current_setting('t.dt1')::bigint) = 'pendiente', 'resuelto el descuento sobre el total, el pedido se autoriza');
+select resolver_descuento_total(current_setting('t.dt4')::bigint, 'aprobado');
+select chequear((select total from pedidos where id = current_setting('t.dt4')::bigint) = 50000, 'aprobar deja el descuento sobre el total');
+select resolver_descuento_total(current_setting('t.dt5')::bigint, 'quitado');
+select chequear((select total from pedidos where id = current_setting('t.dt5')::bigint) = 60000 and (select descuento_total from pedidos where id = current_setting('t.dt5')::bigint) = 0, 'quitar el descuento sobre el total deja el pedido a su suma');
+-- si cambia un precio, el descuento sobre el total se mantiene
+select resolver_precio_linea((select id from pedido_lineas where pedido_id = current_setting('t.dt6')::bigint), 'repuesto');
+select chequear((select total from pedidos where id = current_setting('t.dt6')::bigint) = 55000, 'al reponer el precio, el total sigue restando el descuento: 60000 - 5000');
+select crear_pedido(1, '[{"producto_id":1,"cant":1}]', '', 'dt-adm', null, 5000);
+select chequear((select total from pedidos where uid = 'dt-adm') = 55000 and (select desc_total_estado from pedidos where uid = 'dt-adm') is null, 'el descuento sobre el total de administración no necesita aprobación');
+select chequear((select count(*) from pedido_linea_precio_log where campo = 'total') = 7, 'el historial guarda los pasos del descuento sobre el total');
+reset role;
+
+-- la ganancia descuenta el descuento sobre el total: 10 x 100 (costo 60) con 100 de descuento = 900 cobrados, gana 300 (no 400)
+insert into clientes(codigo, nombre, vendedor_id, saldo) values (94, 'Cliente descuento total', '00000000-0000-0000-0000-000000000001', 0);
+select set_config('t.c94', (select id::text from clientes where codigo = 94), false);
+select como('00000000-0000-0000-0000-000000000004'); set role authenticated;
+select crear_pedido(current_setting('t.c94')::bigint, ('[{"producto_id":' || current_setting('t.agua') || ',"cant":10}]')::jsonb, '', 'dtg-1', null, 100);
+select registrar_cobro(current_setting('t.c94')::bigint, 900, 'Efectivo');
+reset role;
+select como('00000000-0000-0000-0000-000000000005'); set role authenticated;
+select chequear((select ganancia from ganancia_cobrada(date '2000-01-01', date '2100-01-01', current_setting('t.c94')::bigint)) = 300, 'el descuento sobre el total baja la ganancia: 900 cobrados - 600 de costo = 300');
+reset role;
+
 select 'TODAS LAS PRUEBAS PASARON' as resultado;

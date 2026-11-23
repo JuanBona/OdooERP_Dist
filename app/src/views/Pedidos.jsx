@@ -216,9 +216,11 @@ function CambiosDePrecio({ p }) {
   const { db, user, toast } = useApp();
   const [corrigiendo, setCorrigiendo] = useState(null);   // { id, precio }
   const [historial, setHistorial] = useState(null);       // id de la línea con el historial abierto
+  const [corrigiendoTotal, setCorrigiendoTotal] = useState(null); // monto escrito mientras se corrige el descuento sobre el total
   const lineas = lineasConCambio(p);
-  const faltan = lineas.reduce((s, l) => s + (l.precioEstado === "pendiente" ? 1 : 0) + (l.descEstado === "pendiente" ? 1 : 0), 0);
-  if (!lineas.length) return null;
+  const totalPend = p.descTotalEstado === "pendiente";
+  const faltan = lineas.reduce((s, l) => s + (l.precioEstado === "pendiente" ? 1 : 0) + (l.descEstado === "pendiente" ? 1 : 0), 0) + (totalPend ? 1 : 0);
+  if (!lineas.length && !p.descTotalEstado) return null;
   if (!puede.autorizar(user)) {
     return faltan ? <p className="chip st-porAutorizar" style={{ display: "block", borderRadius: 9, padding: 10, marginTop: 12 }}>Hay {faltan === 1 ? "un cambio" : faltan + " cambios"} (precio o descuento) a confirmar por Administración antes de que el pedido pase a depósito.</p> : null;
   }
@@ -227,13 +229,17 @@ function CambiosDePrecio({ p }) {
   const correr = async fn => { try { await fn(); } catch (e) { toast(e.message); } };
   const decidirPrecio = (l, accion, precio = null) => correr(async () => { await api.resolverPrecio(user, l.id, accion, precio); setCorrigiendo(null); toast("Precio resuelto"); });
   const decidirDesc = (l, accion) => correr(async () => { await api.resolverDescuento(user, l.id, accion); toast("Descuento resuelto"); });
+  const decidirTotal = (accion, monto = null) => correr(async () => { await api.resolverDescuentoTotal(user, p.id, accion, monto); setCorrigiendoTotal(null); toast("Descuento resuelto"); });
   const aprobarTodos = () => correr(async () => {
     for (const l of lineas) {
       if (l.precioEstado === "pendiente") await api.resolverPrecio(user, l.id, "aprobado");
       if (l.descEstado === "pendiente") await api.resolverDescuento(user, l.id, "aprobado");
     }
+    if (totalPend) await api.resolverDescuentoTotal(user, p.id, "aprobado");
     toast("Cambios aprobados");
   });
+  const sumaLineas = p.lineas.reduce((s, x) => s + x.total, 0);
+  const propTotal = p.logTotal?.find(h => h.accion === "propuesto")?.despues ?? p.descuentoTotal;
   const sep = { padding: "10px 0", borderTop: "1px solid rgba(0,0,0,.12)" };
   return (
     <div className="card" style={{ marginTop: 12, border: faltan ? "2px solid var(--aut)" : undefined, background: faltan ? "var(--danger-bg)" : undefined }}>
@@ -241,6 +247,31 @@ function CambiosDePrecio({ p }) {
         <b style={{ fontSize: 16 }}>{faltan ? `⚠ ${quien(p.vendedorId)} hizo ${faltan === 1 ? "un cambio" : faltan + " cambios"} (precio o descuento). Resolvelo para poder autorizar el pedido.` : "Cambios resueltos"}</b>
         {faltan > 1 && abierto && <button className="btn sm sec" onClick={aprobarTodos}>Aprobar todos los cambios</button>}
       </div>
+      {p.descTotalEstado && (
+        <div style={sep}>
+          <div><b>Descuento sobre el total</b> · {quien(p.descTotalPor)} aplicó <b>{fmt(propTotal)}</b> ({sumaLineas ? Math.round(propTotal / sumaLineas * 1000) / 10 : 0}% de {fmt(sumaLineas)}){p.descTotalEn ? " · " + hora(p.descTotalEn) : ""}</div>
+          {!totalPend && <div className="muted">{{ aprobado: "Descuento aprobado", quitado: "Descuento quitado", corregido: "Corregido a " + fmt(p.descuentoTotal) }[p.descTotalEstado]}</div>}
+          {totalPend && abierto && (corrigiendoTotal !== null ? (
+            <div className="row" style={{ marginTop: 6, flexWrap: "wrap" }}>
+              <input type="number" min="0" aria-label="Monto del descuento" value={corrigiendoTotal} onChange={e => setCorrigiendoTotal(e.target.value)} style={{ width: 130 }} />
+              <button className="btn sm" disabled={corrigiendoTotal === "" || +corrigiendoTotal < 0 || +corrigiendoTotal >= sumaLineas} onClick={() => decidirTotal("corregido", +corrigiendoTotal)}>Guardar monto</button>
+              <button className="btn sm sec" onClick={() => setCorrigiendoTotal(null)}>Cancelar</button>
+            </div>
+          ) : (
+            <div className="row" style={{ marginTop: 6, flexWrap: "wrap" }}>
+              <button className="btn sm" onClick={() => decidirTotal("aprobado")}>Aprobar descuento</button>
+              <button className="btn sm sec" onClick={() => decidirTotal("quitado")}>Quitar descuento</button>
+              <button className="btn sm sec" onClick={() => setCorrigiendoTotal(String(p.descuentoTotal))}>Corregir monto</button>
+            </div>
+          ))}
+          <button className="btn sm sec" style={{ marginTop: 6 }} onClick={() => setHistorial(historial === "total" ? null : "total")}>{historial === "total" ? "Ocultar historial" : "Ver historial"}</button>
+          {historial === "total" && (
+            <ul className="muted" style={{ margin: "6px 0 0 18px" }}>
+              {p.logTotal.map((h, i) => <li key={i}>{ACCION_TXT[h.accion]} · {quien(h.usuarioId)} · {fmt(h.antes)} → {fmt(h.despues)} · {hora(h.fecha)}</li>)}
+            </ul>
+          )}
+        </div>
+      )}
       {lineas.map(l => {
         const propuesto = l.log.find(h => h.campo === "precio")?.despues ?? l.precio;
         const dif = l.precioLista ? Math.round((1 - propuesto / l.precioLista) * 100) : 0;
@@ -347,6 +378,7 @@ export function PedidoDetalle() {
             <tbody>{p.lineas.map((l, i) => <tr key={i}><td>{l.nombre}{l.precioEstado === "pendiente" || l.descEstado === "pendiente" ? <span className="chip warn"> a confirmar</span> : l.manual && <span className="muted"> (manual)</span>}</td><td>{l.cant}</td><td>{fmt(l.precio)}</td><td>{l.pct ? l.pct + "%" : "—"}</td><td style={{ textAlign: "right" }}>{fmt(l.total)}</td></tr>)}</tbody>
           </table>
         </div>
+        {p.descuentoTotal > 0 && <div className="row between muted" style={{ marginTop: 10 }}><span>Descuento sobre el total{p.descTotalEstado === "pendiente" ? " (a confirmar)" : ""}</span><span style={{ color: "var(--entr)", fontWeight: 700 }}>− {fmt(p.descuentoTotal)}</span></div>}
         <div className="row between" style={{ fontSize: 19, fontWeight: 850, marginTop: 10 }}><span>Total</span><span>{fmt(p.total)}</span></div>
         {p.obs && <p className="muted" style={{ marginTop: 8 }}><Icon n="nota" s={15} style={{ verticalAlign: "-2px" }} /> {p.obs}</p>}
 
@@ -393,6 +425,7 @@ function Remito({ p, c, v }) {
       </div>
       <table><thead><tr><th>Cant.</th><th>Producto</th><th>Precio</th><th>Desc.</th><th>Total</th></tr></thead>
         <tbody>{p.lineas.map((l, i) => <tr key={i}><td>{l.cant}</td><td>{l.nombre}</td><td>{fmt(l.precio)}</td><td>{l.pct ? l.pct + "%" : ""}</td><td>{fmt(l.total)}</td></tr>)}
+          {p.descuentoTotal > 0 && <tr><td colSpan="4" style={{ textAlign: "right" }}>Descuento sobre el total</td><td>− {fmt(p.descuentoTotal)}</td></tr>}
           <tr><td colSpan="4" style={{ textAlign: "right" }}><b>TOTAL</b></td><td><b>{fmt(p.total)}</b></td></tr></tbody>
       </table>
       {p.obs && <p style={{ marginTop: "4mm" }}>Obs.: {p.obs}</p>}

@@ -134,11 +134,18 @@ export const tope = p => (sinContar(p) ? Infinity : p.stock);
 
 // Cambios del vendedor (precio o descuento por cantidad): líneas con cambio (cualquier estado) y si alguna espera decisión.
 export const lineasConCambio = p => p.lineas.filter(l => l.precioEstado || l.descEstado);
-export const cambioPendiente = p => p.lineas.some(l => l.precioEstado === "pendiente" || l.descEstado === "pendiente");
+export const cambioPendiente = p => p.descTotalEstado === "pendiente" || p.lineas.some(l => l.precioEstado === "pendiente" || l.descEstado === "pendiente");
 // Qué cambio espera decisión, para la etiqueta del pedido.
 export const textoCambio = p => {
-  const precio = p.lineas.some(l => l.precioEstado === "pendiente"), desc = p.lineas.some(l => l.descEstado === "pendiente");
+  const precio = p.lineas.some(l => l.precioEstado === "pendiente");
+  const desc = p.lineas.some(l => l.descEstado === "pendiente") || p.descTotalEstado === "pendiente";
   return precio && desc ? "Precio y descuento" : desc ? "Descuento aplicado" : "Precio cambiado";
+};
+// Descuento sobre el total: monto en $ a partir de lo que se escribió (% o $), nunca igual ni mayor a la suma.
+export const montoDescTotal = (d, suma) => {
+  const v = Math.max(0, +d?.valor || 0);
+  const monto = d?.modo === "%" ? Math.round(suma * Math.min(v, 100) / 100) : Math.round(v);
+  return monto >= suma ? 0 : monto;
 };
 // Vende por debajo del costo (el costo solo lo trae la base a Administración y Gerencia; al vendedor le llega null).
 export const bajoCosto = l => l.costo != null && l.cant > 0 && l.total / l.cant < l.costo;
@@ -197,7 +204,8 @@ export function gananciaCobrada(db, mes) {
     if (s0 < 0) deudas.push({ resta: -s0, gan: 0, conoc: 0 });
     ventas.forEach(p => {
       let conoc = 0, gan = 0;
-      p.lineas.forEach(l => { if (l.costo != null) { conoc += l.total; gan += l.total - l.costo * l.cant; } });
+      const f = p.total / (p.total + (p.descuentoTotal || 0)); // el descuento sobre el total se reparte entre las líneas
+      p.lineas.forEach(l => { if (l.costo != null) { conoc += l.total * f; gan += l.total * f - l.costo * l.cant; } });
       deudas.push({ resta: p.total, gan: gan / p.total, conoc: conoc / p.total });
     });
     // Cola de pagos (un saldo a favor inicial paga primero y no es de ningún mes).
