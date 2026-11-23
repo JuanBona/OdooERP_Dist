@@ -132,3 +132,8 @@ El camión depende del **día de visita del cliente**, no del día en que se car
 - El total del pedido es la suma de las líneas menos este descuento (`pedidos.descuento_total`). Si después se corrige un precio o un descuento de línea, el descuento sobre el total se mantiene (hasta el tope de la suma).
 - **Ganancia:** el descuento se reparte entre las líneas en proporción a lo que valen, así que baja la ganancia (10 × $100 con costo $60 y $100 de descuento: se cobran $900 y se ganan $300, no $400).
 - Aparece en el detalle del pedido y en el remito como "Descuento sobre el total".
+
+## 16. Hoja de ruta: los visitados desaparecen (implementado)
+
+- Un cliente con pedido cargado ese día (o guardado sin señal esperando enviarse) **desaparece de la hoja de ruta de ese día**, en vez de quedar apagado abajo. Ya no existe la sección "Ya con pedido".
+- Arriba queda "N clientes por visitar" y el avance "X de Y visitados". Cuando no queda ninguno: "Ya cargaste el pedido de todos". Si se anula el pedido, el cliente vuelve a aparecer.

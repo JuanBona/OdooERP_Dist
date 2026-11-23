@@ -29,8 +29,8 @@ export default function HojaRuta() {
   const conPedido = c => db.pedidos.some(p => p.clienteId === c.id && p.fecha === fecha && p.estado !== "anulado")
     || outbox.some(o => o.user?.id === user.id && (o.tipo || "pedido") === "pedido" && o.data?.clienteId === c.id && isoLocal(new Date(o.creado)) === fecha);
   const cargados = delDia.filter(conPedido).length;
-  // Los que faltan visitar arriba; los que ya tienen pedido, abajo y apagados.
-  const porVisitar = delDia.filter(c => !conPedido(c)), yaCargados = delDia.filter(conPedido);
+  // Los que ya tienen pedido desaparecen de la hoja: solo quedan los que faltan visitar.
+  const porVisitar = delDia.filter(c => !conPedido(c));
   const pedido = c => { setCart({ clienteId: c.id, items: {}, manual: {}, obs: "", origen: "hoja" }); go("catalogo"); }; // al terminar la venta vuelve acá
 
   return (
@@ -54,18 +54,13 @@ export default function HojaRuta() {
 
       <div className="sec-h" style={{ marginTop: 6 }}>
         <h2>{porVisitar.length} {porVisitar.length === 1 ? "cliente por visitar" : "clientes por visitar"}</h2>
-        {delDia.length > 0 && <span className="muted">{cargados} de {delDia.length} con pedido cargado</span>}
+        {delDia.length > 0 && <span className="muted">{cargados} de {delDia.length} visitados</span>}
       </div>
       <div className="card">
         {delDia.length === 0 && <div className="empty">No tenés clientes para visitar este día.</div>}
         {delDia.length > 0 && porVisitar.length === 0 && <div className="empty">Ya cargaste el pedido de todos. 🎉</div>}
-        {porVisitar.map(c => <ClienteFila key={c.id} c={c} cargado={false} onPedido={pedido} />)}
+        {porVisitar.map(c => <ClienteFila key={c.id} c={c} onPedido={pedido} />)}
       </div>
-
-      {yaCargados.length > 0 && <>
-        <div className="sec-h"><h2>Ya con pedido</h2><span className="muted">{yaCargados.length}</span></div>
-        <div className="card">{yaCargados.map(c => <ClienteFila key={c.id} c={c} cargado onPedido={pedido} />)}</div>
-      </>}
 
       {sinDia > 0 && (
         <p className="muted" style={{ marginTop: 12 }}>
@@ -76,11 +71,11 @@ export default function HojaRuta() {
   );
 }
 
-// Un cliente de la hoja. Los que ya tienen pedido quedan apagados y sin el botón de pedido (siguen abriendo la ficha).
-function ClienteFila({ c, cargado, onPedido }) {
+// Un cliente por visitar. Al tocarlo se abre su ficha; el botón Pedido va directo al catálogo.
+function ClienteFila({ c, onPedido }) {
   const { go } = useApp();
   return (
-    <div className="list-item" style={cargado ? { opacity: 0.55 } : null} onClick={() => go("cliente", { id: c.id, desde: "hoja" })}>
+    <div className="list-item" onClick={() => go("cliente", { id: c.id, desde: "hoja" })}>
       <Avatar txt={c.nombre} />
       <div style={{ flex: 1, minWidth: 0 }}>
         <b>{c.nombre}</b>
@@ -88,9 +83,7 @@ function ClienteFila({ c, cargado, onPedido }) {
         <div style={{ marginTop: 4 }}><ChipCuenta c={c} /></div>
       </div>
       <div style={{ textAlign: "right" }}>
-        {cargado
-          ? <span className="chip st-entregado">✓ Pedido cargado</span>
-          : <button className="btn sm" onClick={e => { e.stopPropagation(); onPedido(c); }}><Icon n="mas" s={15} /> Pedido</button>}
+        <button className="btn sm" onClick={e => { e.stopPropagation(); onPedido(c); }}><Icon n="mas" s={15} /> Pedido</button>
       </div>
     </div>
   );
