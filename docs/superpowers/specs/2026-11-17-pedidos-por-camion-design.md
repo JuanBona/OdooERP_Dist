@@ -124,3 +124,11 @@ El camión depende del **día de visita del cliente**, no del día en que se car
 - El descuento por cantidad (10+ → 4%, etc.) **ya no se aplica solo**. Se tilda en un casillero "Aplicar descuento por cantidad" (en el producto y en "Revisar pedido"). Sin tildar, la cantidad se cobra a precio normal. Vale para todos los roles. Un solo tilde por producto: aplica el tramo que corresponde a la cantidad.
 - Si lo tilda un **vendedor**, queda pendiente igual que un cambio de precio: el pedido muestra "⚠ Descuento aplicado" y no se puede autorizar hasta que Administración o Gerencia lo **aprueben** o lo **quiten** (la línea vuelve a precio normal). Queda en el historial (quién, cuándo). Lo que tilda Administración o Gerencia se aplica directo.
 - "Autorizar todos" también deja afuera los pedidos con descuento pendiente. Los pedidos sin conexión viejos, cargados antes del cambio, entran sin descuento.
+
+## 15. Descuento sobre el total del pedido (implementado)
+
+- En "Revisar pedido" hay un campo opcional **Descuento sobre el total**, en % o en $ (se convierte a monto). Lo pueden usar todos los roles que toman pedidos. No puede ser negativo ni igual o mayor al total.
+- Si lo hace un **vendedor**, queda pendiente igual que los otros cambios: el recuadro de Administración muestra "Piniya aplicó $X (Y% de $Z)" con **Aprobar descuento**, **Quitar descuento** y **Corregir monto**, más historial. Hasta resolverlo no se puede autorizar y "Autorizar todos" salta el pedido. Lo que carga Administración o Gerencia se aplica directo.
+- El total del pedido es la suma de las líneas menos este descuento (`pedidos.descuento_total`). Si después se corrige un precio o un descuento de línea, el descuento sobre el total se mantiene (hasta el tope de la suma).
+- **Ganancia:** el descuento se reparte entre las líneas en proporción a lo que valen, así que baja la ganancia (10 × $100 con costo $60 y $100 de descuento: se cobran $900 y se ganan $300, no $400).
+- Aparece en el detalle del pedido y en el remito como "Descuento sobre el total".

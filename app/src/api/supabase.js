@@ -53,7 +53,10 @@ const mapLinea = l => ({
   // Historial de precios: solo lo devuelve la base a Administración y Gerencia (a los demás les llega vacío).
   log: (l.pedido_linea_precio_log || []).sort((a, b) => a.id - b.id).map(h => ({ campo: h.campo, accion: h.accion, usuarioId: h.usuario_id, antes: num(h.precio_antes), despues: num(h.precio_despues), fecha: h.creado_en })),
 });
-const mapPedido = p => ({ id: p.id, clienteId: p.cliente_id, vendedorId: p.vendedor_id, fecha: p.fecha, fechaEntrega: p.fecha_entrega, creado: p.creado, estado: p.estado, total: num(p.total), obs: p.obs, hechos: p.hechos || [], historial: p.historial || [], salio: p.salio, lineas: (p.pedido_lineas || []).sort((a, b) => a.id - b.id).map(mapLinea) });
+const mapPedido = p => ({ id: p.id, clienteId: p.cliente_id, vendedorId: p.vendedor_id, fecha: p.fecha, fechaEntrega: p.fecha_entrega, creado: p.creado, estado: p.estado, total: num(p.total), obs: p.obs, hechos: p.hechos || [], historial: p.historial || [], salio: p.salio,
+  descuentoTotal: num(p.descuento_total) || 0, descTotalEstado: p.desc_total_estado, descTotalPor: p.desc_total_por, descTotalEn: p.desc_total_en,
+  // Historial del descuento sobre el total: solo lo devuelve la base a Administración y Gerencia.
+  logTotal: (p.log_total || []).filter(h => h.campo === "total").sort((a, b) => a.id - b.id).map(h => ({ accion: h.accion, usuarioId: h.usuario_id, antes: num(h.precio_antes), despues: num(h.precio_despues), fecha: h.creado_en })), lineas: (p.pedido_lineas || []).sort((a, b) => a.id - b.id).map(mapLinea) });
 const mapCobro = c => ({ id: c.id, fecha: c.fecha, hora: c.fecha + "T12:00:00", clienteId: c.cliente_id, vendedorId: c.vendedor_id, cobradorId: c.cobrador_id, monto: num(c.monto), medio: c.medio, comision: num(c.comision) });
 const mapFeriado = f => ({ fecha: f.fecha, nombre: f.nombre });
 const mapCambioRuta = e => ({ id: e.id, vendedorId: e.vendedor_id, desde: e.fecha_original, hasta: e.fecha_nueva, motivo: e.motivo });
@@ -82,7 +85,7 @@ const cargas = {
   // Solo lo reciente (para que entrar sea rápido y no se descargue todo el historial):
   // pedidos de los últimos 60 días + los que siguen abiertos, y cobros de los últimos 60 días.
   pedidos: async () => {
-    db.pedidos = (await todo(() => sb.from("pedidos").select("*, pedido_lineas(*, linea_costos(costo), pedido_linea_precio_log(*))")
+    db.pedidos = (await todo(() => sb.from("pedidos").select("*, log_total:pedido_linea_precio_log(*), pedido_lineas(*, linea_costos(costo), pedido_linea_precio_log(*))")
       .or(`fecha.gte.${desde()},fecha_entrega.gte.${desde()},estado.in.(porAutorizar,pendiente,preparando,preparado,enReparto)`)
       .order("id", { ascending: false }))).map(mapPedido);
   },
@@ -157,9 +160,9 @@ export const api = {
   },
   async salir() { canal?.unsubscribe(); clearInterval(reloj); await sb.auth.signOut(); yo = null; borrarCopia(); },
 
-  async crearPedido(user, { clienteId, items, obs, uid, fecha }) {
+  async crearPedido(user, { clienteId, items, obs, uid, fecha, descTotal }) {
     const p_items = items.map(i => ({ producto_id: i.productoId, cant: i.cant, precio_manual: i.precioManual ?? null, desc_manual: i.descManual ?? null, aplicar_desc: !!i.aplicarDesc }));
-    const { data: id, error } = await sb.rpc("crear_pedido", { p_cliente: clienteId, p_items, p_obs: obs || "", p_uid: uid || null, p_fecha: fecha || null }); err(error);
+    const { data: id, error } = await sb.rpc("crear_pedido", { p_cliente: clienteId, p_items, p_obs: obs || "", p_uid: uid || null, p_fecha: fecha || null, p_desc_total: descTotal || 0 }); err(error);
     await recargar("pedidos", "productos");
     return db.pedidos.find(p => p.id === id);
   },
@@ -205,6 +208,11 @@ export const api = {
   // Administración / Gerencia resuelven el descuento por cantidad tildado por el vendedor: "aprobado" o "quitado".
   async resolverDescuento(user, lineaId, accion) {
     const { error } = await sb.rpc("resolver_descuento_linea", { p_linea: lineaId, p_accion: accion }); err(error);
+    await recargar("pedidos");
+  },
+  // Descuento sobre el total del pedido: "aprobado", "quitado" o "corregido" (monto nuevo en $).
+  async resolverDescuentoTotal(user, pedidoId, accion, monto = null) {
+    const { error } = await sb.rpc("resolver_descuento_total", { p_pedido: pedidoId, p_accion: accion, p_monto: monto }); err(error);
     await recargar("pedidos");
   },
   async cambiarFechaEntrega(user, pedidoId, fecha) {

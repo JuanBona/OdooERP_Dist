@@ -2,7 +2,7 @@ import { Icon, Avatar } from "./icons.jsx";
 import React, { useState } from "react";
 import { useApp } from "../App.jsx";
 import { enviarPedido } from "../lib/offline";
-import { DIAS_VISITA, calcLinea, cambioDeRuta, diaSemana, fechaCorta, fechaEntrega, feriadoDe, fmt, hoyISO, visitaReciente, nombreCamion, nombreDia, nuevoEstadoPedido, proximoTramo, puede, sinContar, tope, tramoAplicable } from "../lib/reglas";
+import { DIAS_VISITA, calcLinea, cambioDeRuta, diaSemana, fechaCorta, fechaEntrega, feriadoDe, fmt, hoyISO, visitaReciente, nombreCamion, nombreDia, montoDescTotal, nuevoEstadoPedido, proximoTramo, puede, sinContar, tope, tramoAplicable } from "../lib/reglas";
 import { ChipCuenta, ProdImg } from "./ui.jsx";
 import { misClientes } from "./Inicio.jsx";
 
@@ -156,7 +156,9 @@ export function Confirmar() {
   const [editLinea, setEditLinea] = useState(null);
   const items = Object.entries(cart.items).map(([id, cant]) => ({ productoId: +id, cant, aplicarDesc: !!cart.desc?.[id], ...(cart.manual[id] || {}) }));
   const lineas = items.map(it => calcLinea(db.productos.find(p => p.id === it.productoId), it.cant, it.precioManual, it.descManual, it.aplicarDesc));
-  const total = lineas.reduce((s, l) => s + l.total, 0);
+  const suma = lineas.reduce((s, l) => s + l.total, 0);
+  const descTotal = montoDescTotal(cart.descTotal, suma);   // descuento sobre el total, en $ (se escribe en % o en $)
+  const total = suma - descTotal;
   const ahorro = lineas.reduce((s, l) => s + l.ahorro, 0);
   const setCant = (id, n) => { const it = { ...cart.items }; if (n > 0) it[id] = n; else delete it[id]; setCart({ ...cart, items: it }); };
   // Tilda o destilda el descuento por cantidad de una línea (sin tildar, la cantidad se cobra a precio normal).
@@ -169,7 +171,7 @@ export function Confirmar() {
     try {
       setEnviando(true);
       const desdeHoja = cart.origen === "hoja"; // la venta se empezó en la hoja de ruta: al terminar se vuelve ahí
-      const r = await enviarPedido(user, { clienteId: c.id, items, obs: cart.obs });
+      const r = await enviarPedido(user, { clienteId: c.id, items, obs: cart.obs, descTotal });
       setCart({ clienteId: null, items: {}, manual: {}, obs: "" });
       if (r.enCola) { toast("Sin señal: el pedido quedó guardado y se envía solo cuando vuelva la conexión."); desdeHoja ? go("hoja", { volver: true }) : go("pedidos"); return; }
       const p = r.pedido;
@@ -212,6 +214,19 @@ export function Confirmar() {
         })}
         <div className="field" style={{ marginTop: 12 }}><label htmlFor="obs">Observaciones</label>
           <textarea id="obs" rows="2" value={cart.obs} onChange={e => setCart({ ...cart, obs: e.target.value })} placeholder="Ej: entregar antes de las 10" /></div>
+        {lineas.length > 0 && (
+          <div className="field" style={{ marginTop: 12 }}>
+            <label htmlFor="dt-valor">Descuento sobre el total (opcional)</label>
+            <div className="row" style={{ gap: 8 }}>
+              <select aria-label="Tipo de descuento" value={cart.descTotal?.modo || "%"} onChange={e => setCart({ ...cart, descTotal: { modo: e.target.value, valor: "" } })} style={{ width: 80 }}>
+                <option value="%">%</option><option value="$">$</option>
+              </select>
+              <input id="dt-valor" type="number" min="0" inputMode="decimal" placeholder={(cart.descTotal?.modo || "%") === "%" ? "Ej: 5" : "Ej: 10000"} value={cart.descTotal?.valor ?? ""} onChange={e => setCart({ ...cart, descTotal: { modo: cart.descTotal?.modo || "%", valor: e.target.value } })} />
+              {descTotal > 0 && <b style={{ whiteSpace: "nowrap", color: "var(--entr)" }}>− {fmt(descTotal)}</b>}
+            </div>
+            {user.rol === "vendedor" && descTotal > 0 && <p className="muted" style={{ marginTop: 6 }}>Administración tiene que aprobar este descuento antes de que el pedido pase a depósito.</p>}
+          </div>
+        )}
         {ahorro > 0 && <div className="row between muted"><span>Descuentos por cantidad</span><span style={{ color: "var(--entr)", fontWeight: 700 }}>− {fmt(ahorro)}</span></div>}
         <div className="row between" style={{ fontSize: 20, fontWeight: 850, marginTop: 6 }}><span>Total</span><span>{fmt(total)}</span></div>
         {c && <AvisoCamion c={c} />}
