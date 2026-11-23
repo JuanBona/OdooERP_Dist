@@ -58,29 +58,27 @@ function BotonHoja({ ps, onClick }) {
   );
 }
 
-// Hoja de carga: todos los artículos de los pedidos enviados a depósito, sumados y ordenados por nombre.
+// Hoja de carga: artículos y cantidad total de los pedidos enviados a depósito, ordenados por nombre.
 function HojaCarga({ hoja }) {
   const filas = new Map();
   hoja.ps.forEach(p => p.lineas.filter(l => l.cant > 0).forEach(l => {
     const k = l.productoId ?? l.nombre;
-    const f = filas.get(k) || { nombre: l.nombre, cant: 0, costo: 0, sinCosto: false, venta: 0 };
-    f.cant += l.cant; f.venta += l.total;
-    if (l.costo != null) f.costo += l.costo * l.cant; else f.sinCosto = true;
+    const f = filas.get(k) || { nombre: l.nombre, cant: 0 };
+    f.cant += l.cant;
     filas.set(k, f);
   }));
   const lista = [...filas.values()].sort((a, b) => a.nombre.localeCompare(b.nombre, "es"));
-  const tot = lista.reduce((t, f) => ({ cant: t.cant + f.cant, costo: t.costo + f.costo, venta: t.venta + f.venta, sinCosto: t.sinCosto || f.sinCosto }), { cant: 0, costo: 0, venta: 0, sinCosto: false });
+  const total = lista.reduce((t, f) => t + f.cant, 0);
   return (
     <div className="print-only">
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "6mm" }}>
         <img src={logo} alt="" style={{ height: "18mm" }} />
         <div style={{ textAlign: "right" }}><div style={{ fontSize: "16pt", fontWeight: 700 }}>HOJA DE CARGA</div><div>{hoja.titulo} · {fechaCorta(hoja.fecha)}</div><div>{hoja.ps.length} {hoja.ps.length === 1 ? "pedido" : "pedidos"} enviados a depósito</div></div>
       </div>
-      <table><thead><tr><th>Artículo</th><th>Cant.</th><th>Costo unit.</th><th>Costo total</th><th>Venta total</th></tr></thead>
-        <tbody>{lista.map((f, i) => <tr key={i}><td>{f.nombre}</td><td>{f.cant}</td><td>{f.sinCosto ? "—" : fmt(f.costo / f.cant)}</td><td>{f.sinCosto ? "—" : fmt(f.costo)}</td><td>{fmt(f.venta)}</td></tr>)}
-          <tr><td><b>TOTAL</b></td><td><b>{tot.cant}</b></td><td></td><td><b>{fmt(tot.costo)}</b></td><td><b>{fmt(tot.venta)}</b></td></tr></tbody>
+      <table><thead><tr><th>Artículo</th><th>Cant.</th></tr></thead>
+        <tbody>{lista.map((f, i) => <tr key={i}><td>{f.nombre}</td><td>{f.cant}</td></tr>)}
+          <tr><td><b>TOTAL</b></td><td><b>{total}</b></td></tr></tbody>
       </table>
-      {tot.sinCosto && <p style={{ marginTop: "4mm", fontSize: "9pt" }}>— Artículos sin costo cargado: no suman al costo total.</p>}
     </div>
   );
 }
