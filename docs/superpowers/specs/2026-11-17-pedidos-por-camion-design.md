@@ -118,3 +118,9 @@ El camión depende del **día de visita del cliente**, no del día en que se car
 - Si el precio final queda **por debajo del costo**, la fila se marca en rojo (el costo solo lo trae la base a Administración y Gerencia).
 - Lo que cargan Administración o Gerencia con precio manual no pasa por aprobación.
 - El historial vive en `pedido_linea_precio_log` (solo lo leen Administración y Gerencia). El vendedor ve "precio a confirmar" mientras está pendiente.
+
+## 14. Descuento por cantidad opcional (implementado)
+
+- El descuento por cantidad (10+ → 4%, etc.) **ya no se aplica solo**. Se tilda en un casillero "Aplicar descuento por cantidad" (en el producto y en "Revisar pedido"). Sin tildar, la cantidad se cobra a precio normal. Vale para todos los roles. Un solo tilde por producto: aplica el tramo que corresponde a la cantidad.
+- Si lo tilda un **vendedor**, queda pendiente igual que un cambio de precio: el pedido muestra "⚠ Descuento aplicado" y no se puede autorizar hasta que Administración o Gerencia lo **aprueben** o lo **quiten** (la línea vuelve a precio normal). Queda en el historial (quién, cuándo). Lo que tilda Administración o Gerencia se aplica directo.
+- "Autorizar todos" también deja afuera los pedidos con descuento pendiente. Los pedidos sin conexión viejos, cargados antes del cambio, entran sin descuento.

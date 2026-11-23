@@ -3,7 +3,7 @@ import React from "react";
 import { useApp } from "../App.jsx";
 import { api } from "../api";
 import { useGanancia } from "../lib/useGanancia";
-import { calcProfit, fechaCorta, fmt, hoyISO, nombreCamion, precioPendiente, puede, tieneAlerta } from "../lib/reglas";
+import { calcProfit, fechaCorta, fmt, hoyISO, nombreCamion, cambioPendiente, puede, textoCambio, tieneAlerta } from "../lib/reglas";
 import { ChipCuenta, ChipEstado, ProdImg } from "./ui.jsx";
 
 export const misClientes = (db, user) =>
@@ -93,7 +93,7 @@ export function PedidoRow({ p }) {
     <div className="list-item" onClick={() => go("pedido", { id: p.id })}>
       <Avatar txt={"#" + p.id} />
       <div style={{ flex: 1, minWidth: 0 }}><b>{c?.nombre}</b><div className="muted">{p.fecha}{v ? " · " + v.nombre : ""}{p.fechaEntrega ? " · " + nombreCamion(p.fechaEntrega) + " " + fechaCorta(p.fechaEntrega) : ""}{p.estado === "porAutorizar" && puede.autorizar(user) && c?.saldo < 0 ? " · Debe " + fmt(-c.saldo) : ""}</div></div>
-      <div style={{ textAlign: "right" }}><div style={{ fontWeight: 800 }}>{fmt(p.total)}</div>{p.estado === "porAutorizar" && precioPendiente(p) && <div><span className="chip warn" style={{ fontWeight: 800 }}>⚠ Precio cambiado</span></div>}<ChipEstado e={p.estado} /></div>
+      <div style={{ textAlign: "right" }}><div style={{ fontWeight: 800 }}>{fmt(p.total)}</div>{p.estado === "porAutorizar" && cambioPendiente(p) && <div><span className="chip warn" style={{ fontWeight: 800 }}>⚠ {textoCambio(p)}</span></div>}<ChipEstado e={p.estado} /></div>
     </div>
   );
 }

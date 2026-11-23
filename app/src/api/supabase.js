@@ -49,8 +49,9 @@ const mapCliente = c => ({ id: c.id, codigo: c.codigo, nombre: c.nombre, dir: c.
 const mapLinea = l => ({
   id: l.id, costo: costoDe(l.linea_costos), productoId: l.producto_id, nombre: l.nombre, cant: l.cant, precio: num(l.precio), pct: num(l.pct), manual: l.manual, total: num(l.total),
   precioLista: l.precio_lista == null ? null : num(l.precio_lista), precioEstado: l.precio_estado, cambiadoPor: l.precio_cambiado_por, cambiadoEn: l.precio_cambiado_en,
+  descEstado: l.desc_estado, descAplicadoPor: l.desc_aplicado_por, descAplicadoEn: l.desc_aplicado_en,
   // Historial de precios: solo lo devuelve la base a Administración y Gerencia (a los demás les llega vacío).
-  log: (l.pedido_linea_precio_log || []).sort((a, b) => a.id - b.id).map(h => ({ accion: h.accion, usuarioId: h.usuario_id, antes: num(h.precio_antes), despues: num(h.precio_despues), fecha: h.creado_en })),
+  log: (l.pedido_linea_precio_log || []).sort((a, b) => a.id - b.id).map(h => ({ campo: h.campo, accion: h.accion, usuarioId: h.usuario_id, antes: num(h.precio_antes), despues: num(h.precio_despues), fecha: h.creado_en })),
 });
 const mapPedido = p => ({ id: p.id, clienteId: p.cliente_id, vendedorId: p.vendedor_id, fecha: p.fecha, fechaEntrega: p.fecha_entrega, creado: p.creado, estado: p.estado, total: num(p.total), obs: p.obs, hechos: p.hechos || [], historial: p.historial || [], salio: p.salio, lineas: (p.pedido_lineas || []).sort((a, b) => a.id - b.id).map(mapLinea) });
 const mapCobro = c => ({ id: c.id, fecha: c.fecha, hora: c.fecha + "T12:00:00", clienteId: c.cliente_id, vendedorId: c.vendedor_id, cobradorId: c.cobrador_id, monto: num(c.monto), medio: c.medio, comision: num(c.comision) });
@@ -157,7 +158,7 @@ export const api = {
   async salir() { canal?.unsubscribe(); clearInterval(reloj); await sb.auth.signOut(); yo = null; borrarCopia(); },
 
   async crearPedido(user, { clienteId, items, obs, uid, fecha }) {
-    const p_items = items.map(i => ({ producto_id: i.productoId, cant: i.cant, precio_manual: i.precioManual ?? null, desc_manual: i.descManual ?? null }));
+    const p_items = items.map(i => ({ producto_id: i.productoId, cant: i.cant, precio_manual: i.precioManual ?? null, desc_manual: i.descManual ?? null, aplicar_desc: !!i.aplicarDesc }));
     const { data: id, error } = await sb.rpc("crear_pedido", { p_cliente: clienteId, p_items, p_obs: obs || "", p_uid: uid || null, p_fecha: fecha || null }); err(error);
     await recargar("pedidos", "productos");
     return db.pedidos.find(p => p.id === id);
@@ -199,6 +200,11 @@ export const api = {
   // Administración / Gerencia resuelven un cambio de precio del vendedor: "aprobado", "repuesto" (vuelve a lista) o "corregido" (precio nuevo).
   async resolverPrecio(user, lineaId, accion, precio = null) {
     const { error } = await sb.rpc("resolver_precio_linea", { p_linea: lineaId, p_accion: accion, p_precio: precio }); err(error);
+    await recargar("pedidos");
+  },
+  // Administración / Gerencia resuelven el descuento por cantidad tildado por el vendedor: "aprobado" o "quitado".
+  async resolverDescuento(user, lineaId, accion) {
+    const { error } = await sb.rpc("resolver_descuento_linea", { p_linea: lineaId, p_accion: accion }); err(error);
     await recargar("pedidos");
   },
   async cambiarFechaEntrega(user, pedidoId, fecha) {

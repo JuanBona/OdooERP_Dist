@@ -2,7 +2,7 @@
 // Implementa las mismas acciones que el backend de Supabase (ver supabase/schema.sql),
 // así la interfaz no cambia cuando se conecta la base real.
 import seed from "../seed.json";
-import { CAJA_DE_DEVOLUCION, calcPedido, cerrado, diaSemana, faltanDatosCheque, fechaEntrega, gananciaCobrada, hoyISO, nuevoEstadoPedido } from "../lib/reglas";
+import { CAJA_DE_DEVOLUCION, calcPedido, cambioPendiente, cerrado, diaSemana, faltanDatosCheque, fechaEntrega, gananciaCobrada, hoyISO, nuevoEstadoPedido } from "../lib/reglas";
 
 const KEY = "rds-demo-v4";
 const listeners = new Set();
@@ -89,13 +89,18 @@ export const api = {
     lineas.forEach(l => {
       const prod = db.productos.find(p => p.id === l.productoId);
       prod.stock -= l.cant; l.costo = prod.costo ?? null; // el costo queda guardado al vender
-      l.id = db.seq++; l.precioLista = prod.precio; l.precioEstado = null; l.log = [];
-      // El vendedor cambia el precio: queda pendiente de aprobación (poner el precio de lista no es un cambio).
+      l.id = db.seq++; l.precioLista = prod.precio; l.precioEstado = null; l.descEstado = null; l.log = [];
+      // El vendedor cambia el precio o tilda el descuento por cantidad: queda pendiente de aprobación.
+      // (Poner el precio de lista no es un cambio.)
       if (user.rol === "vendedor") {
         if (l.precio !== prod.precio) {
           l.precioEstado = "pendiente"; l.cambiadoPor = user.id; l.cambiadoEn = new Date().toISOString();
-          l.log.push({ accion: "propuesto", usuarioId: user.id, antes: prod.precio, despues: l.precio, fecha: l.cambiadoEn });
+          l.log.push({ campo: "precio", accion: "propuesto", usuarioId: user.id, antes: prod.precio, despues: l.precio, fecha: l.cambiadoEn });
         } else l.manual = false;
+        if (l.pct > 0) {
+          l.descEstado = "pendiente"; l.descAplicadoPor = user.id; l.descAplicadoEn = new Date().toISOString();
+          l.log.push({ campo: "descuento", accion: "propuesto", usuarioId: user.id, antes: 0, despues: l.pct, fecha: l.descAplicadoEn });
+        }
       }
     });
     const ped = {
@@ -112,8 +117,8 @@ export const api = {
 
   cambiarEstado(user, pedidoId, estado, txt) {
     const p = db.pedidos.find(x => x.id === pedidoId);
-    if (p.estado === "porAutorizar" && estado === "pendiente" && p.lineas.some(l => l.precioEstado === "pendiente")) {
-      throw new Error("Resolvé los cambios de precio antes de autorizar el pedido");
+    if (p.estado === "porAutorizar" && estado === "pendiente" && cambioPendiente(p)) {
+      throw new Error("Resolvé los cambios de precio o descuento antes de autorizar el pedido");
     }
     if (estado === "anulado" || estado === "rechazado") {
       p.lineas.forEach(l => { db.productos.find(x => x.id === l.productoId).stock += l.cant; });
@@ -143,9 +148,29 @@ export const api = {
       if (precio == null || precio < 0) throw new Error("Precio inválido.");
       nuevo = precio; txt = "Corrigió el precio de " + l.nombre;
     } else throw new Error("Acción inválida.");
-    (l.log ||= []).push({ accion, usuarioId: user.id, antes: l.precio, despues: nuevo, fecha: new Date().toISOString() });
+    (l.log ||= []).push({ campo: "precio", accion, usuarioId: user.id, antes: l.precio, despues: nuevo, fecha: new Date().toISOString() });
     l.precio = nuevo; l.precioEstado = accion; l.manual = accion !== "repuesto";
     l.total = Math.round(nuevo * l.cant * (1 - l.pct / 100));
+    p.total = p.lineas.reduce((s, x) => s + x.total, 0);
+    p.historial.push({ fecha: new Date().toISOString(), usuario: user.nombre, txt });
+    audit(user, txt, "#" + p.id);
+    save();
+  },
+
+  // Administración / Gerencia resuelven el descuento por cantidad tildado por el vendedor: "aprobado" o "quitado".
+  resolverDescuento(user, lineaId, accion) {
+    if (!["admin", "gerencia"].includes(user.rol)) throw new Error("Solo Administración o Gerencia pueden resolver descuentos.");
+    const p = db.pedidos.find(x => x.lineas.some(l => l.id === lineaId));
+    const l = p?.lineas.find(x => x.id === lineaId);
+    if (!l) throw new Error("Línea no encontrada.");
+    if (p.estado !== "porAutorizar") throw new Error("El pedido ya fue autorizado o cerrado.");
+    if (l.descEstado !== "pendiente") throw new Error("Este descuento ya fue resuelto.");
+    if (accion !== "aprobado" && accion !== "quitado") throw new Error("Acción inválida.");
+    const nuevo = accion === "aprobado" ? l.pct : 0;
+    const txt = (accion === "aprobado" ? "Aprobó el descuento de " : "Quitó el descuento de ") + l.nombre;
+    (l.log ||= []).push({ campo: "descuento", accion, usuarioId: user.id, antes: l.pct, despues: nuevo, fecha: new Date().toISOString() });
+    l.pct = nuevo; l.descEstado = accion;
+    l.total = Math.round(l.precio * l.cant * (1 - l.pct / 100));
     p.total = p.lineas.reduce((s, x) => s + x.total, 0);
     p.historial.push({ fecha: new Date().toISOString(), usuario: user.nombre, txt });
     audit(user, txt, "#" + p.id);
@@ -195,7 +220,7 @@ export const api = {
   autorizarPedidos(user, ids) {
     if (!["admin", "gerencia"].includes(user.rol)) throw new Error("Solo Administración o Gerencia pueden autorizar.");
     let n = 0;
-    db.pedidos.filter(p => ids.includes(p.id) && p.estado === "porAutorizar" && !p.lineas.some(l => l.precioEstado === "pendiente")).forEach(p => {
+    db.pedidos.filter(p => ids.includes(p.id) && p.estado === "porAutorizar" && !cambioPendiente(p)).forEach(p => {
       p.estado = "pendiente";
       p.historial.push({ fecha: new Date().toISOString(), usuario: user.nombre, txt: "Autorizado y enviado a depósito" });
       n++;

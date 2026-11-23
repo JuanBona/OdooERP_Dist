@@ -111,10 +111,11 @@ export function proximoTramo(prod, cant) {
 }
 
 // Una línea de pedido. precioManual / descManual: sobreescritura (solo Admin/Gerencia).
-export function calcLinea(prod, cant, precioManual = null, descManual = null) {
+// El descuento por cantidad ya no se aplica solo: hay que tildarlo (aplicarDesc) al tomar el pedido.
+export function calcLinea(prod, cant, precioManual = null, descManual = null, aplicarDesc = false) {
   const precio = precioManual ?? prod.precio;
   const t = tramoAplicable(prod, cant);
-  const pct = descManual ?? (t ? t.pct : 0);
+  const pct = descManual ?? (aplicarDesc && t ? t.pct : 0);
   const bruto = precio * cant;
   return {
     productoId: prod.id, nombre: prod.nombre, cant, precio, pct,
@@ -124,16 +125,21 @@ export function calcLinea(prod, cant, precioManual = null, descManual = null) {
 }
 
 export function calcPedido(items, productos) {
-  return items.map(it => calcLinea(productos.find(p => p.id === it.productoId), it.cant, it.precioManual, it.descManual));
+  return items.map(it => calcLinea(productos.find(p => p.id === it.productoId), it.cant, it.precioManual, it.descManual, it.aplicarDesc));
 }
 
 // Arranque sin stock contado: mientras el producto está "Sin contar" se vende sin límite.
 export const sinContar = p => p.stockContado === false;
 export const tope = p => (sinContar(p) ? Infinity : p.stock);
 
-// Cambios de precio del vendedor: todas las líneas con cambio (cualquier estado) y si alguna espera decisión.
-export const lineasConPrecio = p => p.lineas.filter(l => l.precioEstado);
-export const precioPendiente = p => p.lineas.some(l => l.precioEstado === "pendiente");
+// Cambios del vendedor (precio o descuento por cantidad): líneas con cambio (cualquier estado) y si alguna espera decisión.
+export const lineasConCambio = p => p.lineas.filter(l => l.precioEstado || l.descEstado);
+export const cambioPendiente = p => p.lineas.some(l => l.precioEstado === "pendiente" || l.descEstado === "pendiente");
+// Qué cambio espera decisión, para la etiqueta del pedido.
+export const textoCambio = p => {
+  const precio = p.lineas.some(l => l.precioEstado === "pendiente"), desc = p.lineas.some(l => l.descEstado === "pendiente");
+  return precio && desc ? "Precio y descuento" : desc ? "Descuento aplicado" : "Precio cambiado";
+};
 // Vende por debajo del costo (el costo solo lo trae la base a Administración y Gerencia; al vendedor le llega null).
 export const bajoCosto = l => l.costo != null && l.cant > 0 && l.total / l.cant < l.costo;
 

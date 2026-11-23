@@ -36,7 +36,7 @@ set role authenticated;
 select chequear((select count(*) from clientes) = 2, 'vendedor 1 ve solo sus 2 clientes (no el de V2)');
 select chequear(crear_pedido(2, '[{"producto_id":1,"cant":6}]') is not null, 'vendedor carga pedido a cliente con deuda');
 select chequear((select estado from pedidos order by id desc limit 1) = 'porAutorizar', 'pedido de cliente con deuda queda por autorizar');
-select chequear((select total from pedidos order by id desc limit 1) = 345600, 'tramo 5+ aplica 4%: 6 x 60000 x 0.96 = 345600');
+select chequear((select total from pedidos order by id desc limit 1) = 360000, 'sin tildar el descuento por cantidad se cobra precio normal: 6 x 60000 = 360000');
 select chequear((select stock from productos where id = 1) = 44, 'stock se descontó al confirmar (50 -> 44)');
 select chequear(crear_pedido(1, '[{"producto_id":2,"cant":1}]') is not null, 'pedido a cliente al día');
 select chequear((select estado from pedidos order by id desc limit 1) = 'porAutorizar', 'todo pedido de vendedor espera autorización, aunque el cliente esté al día');
@@ -336,7 +336,7 @@ select chequear(cerrar_reparto() = 0, 'el mismo día no se cierra el reparto');
 update pedidos set salio = current_date - 1 where id = 1;
 select chequear(cerrar_reparto() = 1, 'al día siguiente pasa a entregado solo');
 select chequear(jsonb_array_length((select historial from pedidos where id = 1)) >= 4, 'el pedido tiene su historial');
-select chequear((select saldo from clientes where id = 2) = -25200 - 345600, 'entregado suma a la cuenta corriente');
+select chequear((select saldo from clientes where id = 2) = -25200 - 360000, 'entregado suma a la cuenta corriente');
 select chequear((select count(*) from auditoria) > 5, 'queda historial en auditoría');
 -- ===== Precio manual del vendedor con aprobación =====
 select como('00000000-0000-0000-0000-000000000001'); set role authenticated;
@@ -402,6 +402,44 @@ reset role;
 
 select como('00000000-0000-0000-0000-000000000005'); set role authenticated;
 select chequear((select count(*) from pedido_linea_precio_log) >= 6, 'gerencia también ve el historial de precios');
+reset role;
+
+-- ===== Descuento por cantidad: solo si se tilda =====
+select como('00000000-0000-0000-0000-000000000001'); set role authenticated;
+select crear_pedido(1, '[{"producto_id":1,"cant":6,"aplicar_desc":true}]', '', 'dsc-1');
+select crear_pedido(1, '[{"producto_id":1,"cant":6}]', '', 'dsc-2');
+select crear_pedido(1, '[{"producto_id":1,"cant":2,"aplicar_desc":true}]', '', 'dsc-3');
+select crear_pedido(1, '[{"producto_id":1,"cant":6,"aplicar_desc":true}]', '', 'dsc-4');
+select chequear((select pct from pedido_lineas where pedido_id = (select id from pedidos where uid = 'dsc-1')) = 4, 'tildado: aplica el tramo que corresponde (6 unidades = 4%)');
+select chequear((select total from pedidos where uid = 'dsc-1') = 345600, 'tildado: 6 x 60000 x 0.96 = 345600');
+select chequear((select desc_estado from pedido_lineas where pedido_id = (select id from pedidos where uid = 'dsc-1')) = 'pendiente', 'el descuento del vendedor queda pendiente de aprobación');
+select chequear((select pct from pedido_lineas where pedido_id = (select id from pedidos where uid = 'dsc-2')) = 0, 'sin tildar no hay descuento aunque llegue al tramo');
+select chequear((select desc_estado from pedido_lineas where pedido_id = (select id from pedidos where uid = 'dsc-2')) is null, 'sin tildar no queda nada pendiente');
+select chequear((select pct from pedido_lineas where pedido_id = (select id from pedidos where uid = 'dsc-3')) = 0 and (select desc_estado from pedido_lineas where pedido_id = (select id from pedidos where uid = 'dsc-3')) is null, 'tildar sin llegar a ningún tramo no aplica nada');
+do $$ begin perform resolver_descuento_linea((select id from pedido_lineas where pedido_id = (select id from pedidos where uid = 'dsc-1')), 'aprobado'); raise exception 'debió fallar';
+exception when others then perform chequear(sqlerrm like 'Solo Administración%', 'vendedor no puede resolver descuentos'); end $$;
+reset role;
+
+select como('00000000-0000-0000-0000-000000000004'); set role authenticated;
+select set_config('t.d1', (select id::text from pedidos where uid = 'dsc-1'), false);
+select set_config('t.d2', (select id::text from pedidos where uid = 'dsc-2'), false);
+select set_config('t.d4', (select id::text from pedidos where uid = 'dsc-4'), false);
+do $$ begin perform cambiar_estado(current_setting('t.d1')::bigint, 'pendiente', 'Autorizado'); raise exception 'debió fallar';
+exception when others then perform chequear(sqlerrm like 'Resolvé los cambios de precio%', 'no se autoriza un pedido con descuento pendiente'); end $$;
+select chequear(autorizar_pedidos(array[current_setting('t.d1')::bigint, current_setting('t.d2')::bigint]) = 1, 'autorizar varios salta el pedido con descuento pendiente');
+select resolver_descuento_linea((select id from pedido_lineas where pedido_id = current_setting('t.d1')::bigint), 'quitado');
+select chequear((select pct from pedido_lineas where pedido_id = current_setting('t.d1')::bigint) = 0, 'quitar el descuento deja la línea a precio normal');
+select chequear((select total from pedidos where id = current_setting('t.d1')::bigint) = 360000, 'quitar el descuento recalcula el total');
+select chequear((select desc_estado from pedido_lineas where pedido_id = current_setting('t.d1')::bigint) = 'quitado', 'la línea queda con el descuento quitado');
+do $$ begin perform resolver_descuento_linea((select id from pedido_lineas where pedido_id = current_setting('t.d1')::bigint), 'aprobado'); raise exception 'debió fallar';
+exception when others then perform chequear(sqlerrm like '%ya fue resuelto%', 'un descuento ya resuelto no se resuelve dos veces'); end $$;
+select cambiar_estado(current_setting('t.d1')::bigint, 'pendiente', 'Autorizado y enviado a depósito');
+select chequear((select estado from pedidos where id = current_setting('t.d1')::bigint) = 'pendiente', 'resuelto el descuento, el pedido se autoriza');
+select resolver_descuento_linea((select id from pedido_lineas where pedido_id = current_setting('t.d4')::bigint), 'aprobado');
+select chequear((select pct from pedido_lineas where pedido_id = current_setting('t.d4')::bigint) = 4 and (select total from pedidos where id = current_setting('t.d4')::bigint) = 345600, 'aprobar deja el descuento aplicado');
+select crear_pedido(1, '[{"producto_id":1,"cant":6,"aplicar_desc":true}]', '', 'dsc-adm');
+select chequear((select pct from pedido_lineas where pedido_id = (select id from pedidos where uid = 'dsc-adm')) = 4 and (select desc_estado from pedido_lineas where pedido_id = (select id from pedidos where uid = 'dsc-adm')) is null, 'el descuento tildado por administración no necesita aprobación');
+select chequear((select count(*) from pedido_linea_precio_log where campo = 'descuento') = 4, 'el historial guarda los pasos del descuento');
 reset role;
 
 select 'TODAS LAS PRUEBAS PASARON' as resultado;

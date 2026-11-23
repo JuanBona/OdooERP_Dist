@@ -2,7 +2,7 @@ import { Icon, Avatar } from "./icons.jsx";
 import React, { useState } from "react";
 import { useApp } from "../App.jsx";
 import { enviarPedido } from "../lib/offline";
-import { DIAS_VISITA, calcLinea, cambioDeRuta, diaSemana, fechaCorta, fechaEntrega, feriadoDe, fmt, hoyISO, visitaReciente, nombreCamion, nombreDia, nuevoEstadoPedido, proximoTramo, puede, sinContar, tope } from "../lib/reglas";
+import { DIAS_VISITA, calcLinea, cambioDeRuta, diaSemana, fechaCorta, fechaEntrega, feriadoDe, fmt, hoyISO, visitaReciente, nombreCamion, nombreDia, nuevoEstadoPedido, proximoTramo, puede, sinContar, tope, tramoAplicable } from "../lib/reglas";
 import { ChipCuenta, ProdImg } from "./ui.jsx";
 import { misClientes } from "./Inicio.jsx";
 
@@ -36,12 +36,15 @@ export function Catalogo() {
   const list = db.productos
     .filter(p => p.activo && (!cat || p.categoria === cat) && p.nombre.toLowerCase().includes(q.toLowerCase()))
     .sort((a, b) => (b.tramos.length ? 1 : 0) - (a.tramos.length ? 1 : 0));
-  const setQty = (id, n) => {
+  // aplicar: tildó el descuento por cantidad (si no, la cantidad se cobra a precio normal).
+  const setQty = (id, n, aplicar = false) => {
     const p = db.productos.find(x => x.id === id);
     const items = { ...cart.items };
+    const desc = { ...(cart.desc || {}) };
     n = Math.max(0, Math.min(n, tope(p)));
     if (n) items[id] = n; else delete items[id];
-    setCart({ ...cart, items });
+    if (n && aplicar) desc[id] = true; else delete desc[id];
+    setCart({ ...cart, items, desc });
   };
 
   return (
@@ -73,14 +76,16 @@ export function Catalogo() {
         ))}
       </div>
       {list.length === 0 && <div className="empty">No hay productos con ese nombre.</div>}
-      {abierto && <ProductoModal p={db.productos.find(x => x.id === abierto)} cant={cart.items[abierto] || 0} setQty={n => setQty(abierto, n)} onClose={() => setAbierto(null)} />}
+      {abierto && <ProductoModal p={db.productos.find(x => x.id === abierto)} cant={cart.items[abierto] || 0} conDesc={!!cart.desc?.[abierto]} setQty={(n, aplicar) => setQty(abierto, n, aplicar)} onClose={() => setAbierto(null)} />}
     </>
   );
 }
 
-function ProductoModal({ p, cant, setQty, onClose }) {
+function ProductoModal({ p, cant, conDesc, setQty, onClose }) {
   const [n, setN] = useState(cant || 1);
-  const l = calcLinea(p, n);
+  const [aplicar, setAplicar] = useState(conDesc);   // el descuento por cantidad se aplica solo si se tilda
+  const l = calcLinea(p, n, null, null, aplicar);
+  const tr = tramoAplicable(p, n);                    // tramo que corresponde a esta cantidad
   const prox = proximoTramo(p, n);
   return (
     <div className="modal-back" onClick={onClose}>
@@ -94,7 +99,11 @@ function ProductoModal({ p, cant, setQty, onClose }) {
           </div>
         </div>
         {p.tramos.length > 0 && <div style={{ marginTop: 12 }}><div className="eyebrow">Descuento por cantidad</div>
-          <div className="row" style={{ flexWrap: "wrap", gap: 6, marginTop: 6 }}>{p.tramos.map(t => <span key={t.min} className={"chip " + (l.pct === t.pct ? "promo" : "st-autorizado")}>{t.min}+ → {t.pct}% off</span>)}</div></div>}
+          <div className="row" style={{ flexWrap: "wrap", gap: 6, marginTop: 6 }}>{p.tramos.map(t => <span key={t.min} className={"chip " + (aplicar && l.pct === t.pct ? "promo" : "st-autorizado")}>{t.min}+ → {t.pct}% off</span>)}</div>
+          <label htmlFor="pm-desc" className="row" style={{ marginTop: 10, gap: 8, cursor: tr ? "pointer" : "not-allowed", opacity: tr ? 1 : 0.55 }}>
+            <input id="pm-desc" type="checkbox" checked={!!tr && aplicar} disabled={!tr} onChange={e => setAplicar(e.target.checked)} style={{ width: 22, height: 22, flex: "none" }} />
+            <span style={{ fontWeight: 700 }}>{tr ? `Aplicar descuento por cantidad (${tr.pct}% off)` : "Aplicar descuento por cantidad"}</span>
+          </label></div>}
         <div className="row between" style={{ marginTop: 16 }}>
           <div className="stepper">
             <button aria-label="Menos" onClick={() => setN(Math.max(0, n - 1))}>−</button>
@@ -106,11 +115,12 @@ function ProductoModal({ p, cant, setQty, onClose }) {
             {l.ahorro > 0 && <div className="muted" style={{ color: "var(--entr)" }}>Ahorra {fmt(l.ahorro)} ({l.pct}%)</div>}
           </div>
         </div>
-        {prox && <p className="muted" style={{ marginTop: 8 }}>Llevando {prox.min - n} más tiene {prox.pct}% de descuento.</p>}
+        {tr && !aplicar && <p className="muted" style={{ marginTop: 8 }}>Llegó al tramo de {tr.pct}%. Tildá "Aplicar descuento" para dárselo; si no, se cobra a precio normal.</p>}
+        {prox && <p className="muted" style={{ marginTop: 8 }}>Llevando {prox.min - n} más puede aplicar {prox.pct}% de descuento.</p>}
         {n > tope(p) && <p className="chip warn" style={{ marginTop: 8 }}>Supera el stock disponible</p>}
         <div className="row" style={{ marginTop: 16 }}>
           <button className="btn sec" onClick={onClose}>Cerrar</button>
-          <button className="btn" style={{ flex: 1 }} disabled={n > tope(p)} onClick={() => { setQty(n); onClose(); }}>{n ? (cant ? "Actualizar" : "Agregar al pedido") : "Quitar del pedido"}</button>
+          <button className="btn" style={{ flex: 1 }} disabled={n > tope(p)} onClick={() => { setQty(n, !!tr && aplicar); onClose(); }}>{n ? (cant ? "Actualizar" : "Agregar al pedido") : "Quitar del pedido"}</button>
         </div>
       </div>
     </div>
@@ -144,11 +154,13 @@ export function Confirmar() {
   const { db, user, cart, setCart, go, toast } = useApp();
   const c = db.clientes.find(x => x.id === cart.clienteId);
   const [editLinea, setEditLinea] = useState(null);
-  const items = Object.entries(cart.items).map(([id, cant]) => ({ productoId: +id, cant, ...(cart.manual[id] || {}) }));
-  const lineas = items.map(it => calcLinea(db.productos.find(p => p.id === it.productoId), it.cant, it.precioManual, it.descManual));
+  const items = Object.entries(cart.items).map(([id, cant]) => ({ productoId: +id, cant, aplicarDesc: !!cart.desc?.[id], ...(cart.manual[id] || {}) }));
+  const lineas = items.map(it => calcLinea(db.productos.find(p => p.id === it.productoId), it.cant, it.precioManual, it.descManual, it.aplicarDesc));
   const total = lineas.reduce((s, l) => s + l.total, 0);
   const ahorro = lineas.reduce((s, l) => s + l.ahorro, 0);
   const setCant = (id, n) => { const it = { ...cart.items }; if (n > 0) it[id] = n; else delete it[id]; setCart({ ...cart, items: it }); };
+  // Tilda o destilda el descuento por cantidad de una línea (sin tildar, la cantidad se cobra a precio normal).
+  const setDesc = (id, on) => { const d = { ...(cart.desc || {}) }; if (on) d[id] = true; else delete d[id]; setCart({ ...cart, desc: d }); };
 
   const [enviando, setEnviando] = useState(false);
   const enviar = async () => {
@@ -180,7 +192,13 @@ export function Confirmar() {
               <ProdImg p={p} size={44} />
               <div style={{ flex: 1, minWidth: 160 }}>
                 <b>{l.nombre}</b>
-                <div className="muted">{fmt(l.precio)} c/u{l.pct ? ` · ${l.pct}% off` : ""}{l.manual ? (user.rol === "vendedor" ? " · precio a confirmar por Administración" : " · precio manual") : ""}</div>
+                <div className="muted">{fmt(l.precio)} c/u{l.pct ? ` · ${l.pct}% off` : ""}{l.manual ? (user.rol === "vendedor" ? " · precio a confirmar por Administración" : " · precio manual") : ""}{user.rol === "vendedor" && l.pct > 0 && !l.manual ? " · descuento a confirmar por Administración" : ""}</div>
+                {tramoAplicable(p, l.cant) && (
+                  <label className="row" style={{ gap: 8, marginTop: 4, cursor: "pointer" }}>
+                    <input type="checkbox" checked={!!cart.desc?.[l.productoId]} onChange={e => setDesc(l.productoId, e.target.checked)} style={{ width: 20, height: 20, flex: "none" }} />
+                    <span style={{ fontWeight: 700 }}>Aplicar descuento por cantidad ({tramoAplicable(p, l.cant).pct}% off)</span>
+                  </label>
+                )}
               </div>
               <div className="stepper">
                 <button aria-label="Menos" onClick={() => setCant(l.productoId, l.cant - 1)}>−</button>
