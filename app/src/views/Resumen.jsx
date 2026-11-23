@@ -25,8 +25,10 @@ export default function Resumen() {
   const peds = db.pedidos.filter(p => enMes(p.fecha) && !["anulado", "rechazado"].includes(p.estado));
   const entregados = peds.filter(p => p.estado === "entregado");
   const cobros = db.cobros.filter(c => enMes(c.fecha));
-  // Gastos = salidas de la caja que no vuelven (sin contar retiros del dueño).
-  const gastos = db.caja.filter(m => enMes(m.fecha) && m.tipo === "egreso" && !m.vuelve && m.concepto !== "Retiro del dueño")
+  // Gastos = salidas de la caja que no vuelven. No cuentan los retiros del dueño ni el pago de
+  // comisiones: las comisiones ya se restan aparte (calculadas sobre lo cobrado), así no se restan dos veces.
+  const NO_SON_GASTO = ["Retiro del dueño", "Pago de comisiones"];
+  const gastos = db.caja.filter(m => enMes(m.fecha) && m.tipo === "egreso" && !m.vuelve && !NO_SON_GASTO.includes(m.concepto))
     .map(m => ({ categoria: m.concepto, monto: -m.monto }));
   const sum = (a, f) => a.reduce((s, x) => s + f(x), 0);
   const vendido = sum(peds, p => p.total);

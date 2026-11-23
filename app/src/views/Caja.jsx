@@ -7,7 +7,7 @@ import { fechaHora } from "./ui.jsx";
 
 // Caja del depósito: una sola, la manejan Administración y Gerencia.
 export const CONCEPTOS_ENTRADA = ["Rendición de vendedor", "Cobro en el depósito", "Aporte del dueño", "Otro ingreso"];
-export const CONCEPTOS_SALIDA = ["Pago a proveedor", "Sueldo / adelanto de sueldo", "Combustible", "Cambio para el reparto", "Préstamo", "Retiro del dueño", "Gasto varios"];
+export const CONCEPTOS_SALIDA = ["Pago a proveedor", "Pago de comisiones", "Sueldo / adelanto de sueldo", "Combustible", "Cambio para el reparto", "Préstamo", "Retiro del dueño", "Gasto varios"];
 const VUELVE_POR_DEFECTO = ["Cambio para el reparto", "Préstamo"];
 const COMO_VUELVE = ["Efectivo", "Transferencia", "Descontado del sueldo", "Otro"];
 
