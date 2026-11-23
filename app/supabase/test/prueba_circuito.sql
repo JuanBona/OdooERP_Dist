@@ -42,8 +42,8 @@ select chequear(crear_pedido(1, '[{"producto_id":2,"cant":1}]') is not null, 'pe
 select chequear((select estado from pedidos order by id desc limit 1) = 'porAutorizar', 'todo pedido de vendedor espera autorización, aunque el cliente esté al día');
 do $$ begin perform crear_pedido(1, '[{"producto_id":2,"cant":10}]'); raise exception 'debió fallar';
 exception when others then perform chequear(sqlerrm like 'No hay stock suficiente%', 'no deja vender más que el stock'); end $$;
-do $$ begin perform crear_pedido(1, '[{"producto_id":1,"cant":1,"precio_manual":1}]'); raise exception 'debió fallar';
-exception when others then perform chequear(sqlerrm like 'Solo Administración%', 'vendedor no puede cambiar precios'); end $$;
+do $$ begin perform crear_pedido(1, '[{"producto_id":1,"cant":1,"desc_manual":50}]'); raise exception 'debió fallar';
+exception when others then perform chequear(sqlerrm like 'Solo Administración%', 'vendedor no puede cambiar descuentos'); end $$;
 do $$ begin perform cambiar_estado(1, 'pendiente', 'x'); raise exception 'debió fallar';
 exception when others then perform chequear(sqlerrm like 'No tenés permiso%', 'vendedor no puede autorizar'); end $$;
 select chequear(crear_pedido(1, '[{"producto_id":3,"cant":12}]') is not null, 'producto sin contar se vende aunque el stock esté en 0');
@@ -338,4 +338,70 @@ select chequear(cerrar_reparto() = 1, 'al día siguiente pasa a entregado solo')
 select chequear(jsonb_array_length((select historial from pedidos where id = 1)) >= 4, 'el pedido tiene su historial');
 select chequear((select saldo from clientes where id = 2) = -25200 - 345600, 'entregado suma a la cuenta corriente');
 select chequear((select count(*) from auditoria) > 5, 'queda historial en auditoría');
+-- ===== Precio manual del vendedor con aprobación =====
+select como('00000000-0000-0000-0000-000000000001'); set role authenticated;
+select crear_pedido(1, '[{"producto_id":1,"cant":1,"precio_manual":50000}]', '', 'pm-1');
+select crear_pedido(1, '[{"producto_id":1,"cant":1,"precio_manual":60000}]', '', 'pm-2');
+select crear_pedido(1, '[{"producto_id":1,"cant":1,"precio_manual":45000}]', '', 'pm-3');
+select crear_pedido(1, '[{"producto_id":1,"cant":1,"precio_manual":40000}]', '', 'pm-4');
+select chequear((select precio from pedido_lineas where pedido_id = (select id from pedidos where uid = 'pm-1')) = 50000, 'el vendedor puede poner su precio');
+select chequear((select precio_lista from pedido_lineas where pedido_id = (select id from pedidos where uid = 'pm-1')) = 60000, 'la línea guarda el precio de lista');
+select chequear((select precio_estado from pedido_lineas where pedido_id = (select id from pedidos where uid = 'pm-1')) = 'pendiente', 'el cambio queda pendiente');
+select chequear((select precio_cambiado_por from pedido_lineas where pedido_id = (select id from pedidos where uid = 'pm-1')) = '00000000-0000-0000-0000-000000000001', 'queda registrado quién cambió el precio');
+select chequear((select total from pedidos where uid = 'pm-1') = 50000, 'el total del pedido usa el precio del vendedor');
+select chequear((select precio_estado from pedido_lineas where pedido_id = (select id from pedidos where uid = 'pm-2')) is null, 'poner el mismo precio de lista no es un cambio');
+select chequear((select manual from pedido_lineas where pedido_id = (select id from pedidos where uid = 'pm-2')) = false, 'poner el mismo precio de lista no marca la línea como manual');
+do $$ begin perform crear_pedido(1, '[{"producto_id":1,"cant":1,"precio_manual":-5}]'); raise exception 'debió fallar';
+exception when others then perform chequear(sqlerrm like 'El precio no puede ser negativo%', 'no se acepta un precio negativo'); end $$;
+do $$ begin perform resolver_precio_linea((select id from pedido_lineas where pedido_id = (select id from pedidos where uid = 'pm-1')), 'aprobado'); raise exception 'debió fallar';
+exception when others then perform chequear(sqlerrm like 'Solo Administración%', 'vendedor no puede resolver precios'); end $$;
+select chequear((select count(*) from pedido_linea_precio_log) = 0, 'vendedor no lee el historial de precios');
+update pedido_lineas set precio = 1 where pedido_id = (select id from pedidos where uid = 'pm-1');
+select chequear((select precio from pedido_lineas where pedido_id = (select id from pedidos where uid = 'pm-1')) = 50000, 'vendedor no puede tocar el precio de una línea directo');
+reset role;
+
+select como('00000000-0000-0000-0000-000000000003'); set role authenticated;
+select chequear((select count(*) from pedido_lineas where precio_estado = 'pendiente') = 0, 'depósito no ve líneas con precio pendiente');
+reset role;
+
+select como('00000000-0000-0000-0000-000000000004'); set role authenticated;
+select set_config('t.pm1', (select id::text from pedidos where uid = 'pm-1'), false);
+select set_config('t.pm2', (select id::text from pedidos where uid = 'pm-2'), false);
+select set_config('t.pm3', (select id::text from pedidos where uid = 'pm-3'), false);
+select set_config('t.pm4', (select id::text from pedidos where uid = 'pm-4'), false);
+select chequear((select count(*) from pedido_linea_precio_log where accion = 'propuesto') = 3, 'administración ve el historial: 3 cambios propuestos');
+do $$ begin perform cambiar_estado(current_setting('t.pm1')::bigint, 'pendiente', 'Autorizado'); raise exception 'debió fallar';
+exception when others then perform chequear(sqlerrm like 'Resolvé los cambios de precio%', 'no se autoriza un pedido con precio pendiente'); end $$;
+select chequear(autorizar_pedidos(array[current_setting('t.pm1')::bigint, current_setting('t.pm2')::bigint]) = 1, 'autorizar varios salta el pedido con precio pendiente');
+select chequear((select estado from pedidos where id = current_setting('t.pm1')::bigint) = 'porAutorizar', 'el pedido con precio pendiente sigue por autorizar');
+select chequear((select estado from pedidos where id = current_setting('t.pm2')::bigint) = 'pendiente', 'el pedido sin cambios sí se autorizó');
+-- corregir a un tercer precio
+select resolver_precio_linea((select id from pedido_lineas where pedido_id = current_setting('t.pm1')::bigint), 'corregido', 55000);
+select chequear((select precio from pedido_lineas where pedido_id = current_setting('t.pm1')::bigint) = 55000, 'corregir deja el precio nuevo');
+select chequear((select precio_estado from pedido_lineas where pedido_id = current_setting('t.pm1')::bigint) = 'corregido', 'la línea queda corregida');
+select chequear((select total from pedidos where id = current_setting('t.pm1')::bigint) = 55000, 'corregir recalcula el total del pedido');
+select chequear((select count(*) from pedido_linea_precio_log where pedido_id = current_setting('t.pm1')::bigint) = 2, 'el historial tiene propuesto y corregido');
+do $$ begin perform resolver_precio_linea((select id from pedido_lineas where pedido_id = current_setting('t.pm1')::bigint), 'aprobado'); raise exception 'debió fallar';
+exception when others then perform chequear(sqlerrm like '%ya fue resuelto%', 'un precio ya resuelto no se resuelve dos veces'); end $$;
+select cambiar_estado(current_setting('t.pm1')::bigint, 'pendiente', 'Autorizado y enviado a depósito');
+select chequear((select estado from pedidos where id = current_setting('t.pm1')::bigint) = 'pendiente', 'resuelto el precio, el pedido se autoriza');
+-- volver a lista
+select resolver_precio_linea((select id from pedido_lineas where pedido_id = current_setting('t.pm3')::bigint), 'repuesto');
+select chequear((select precio from pedido_lineas where pedido_id = current_setting('t.pm3')::bigint) = 60000, 'reponer vuelve al precio de lista');
+select chequear((select manual from pedido_lineas where pedido_id = current_setting('t.pm3')::bigint) = false, 'reponer saca la marca de manual');
+select chequear((select total from pedidos where id = current_setting('t.pm3')::bigint) = 60000, 'reponer recalcula el total');
+-- aprobar
+select resolver_precio_linea((select id from pedido_lineas where pedido_id = current_setting('t.pm4')::bigint), 'aprobado');
+select chequear((select precio from pedido_lineas where pedido_id = current_setting('t.pm4')::bigint) = 40000, 'aprobar deja el precio del vendedor');
+select chequear((select precio_estado from pedido_lineas where pedido_id = current_setting('t.pm4')::bigint) = 'aprobado', 'la línea queda aprobada');
+-- lo que carga administración no pasa por aprobación
+select crear_pedido(1, '[{"producto_id":1,"cant":1,"precio_manual":1000}]', '', 'pm-adm');
+select chequear((select precio_estado from pedido_lineas where pedido_id = (select id from pedidos where uid = 'pm-adm')) is null, 'el precio manual de administración no necesita aprobación');
+select chequear((select estado from pedidos where uid = 'pm-adm') = 'pendiente', 'el pedido de administración entra autorizado');
+reset role;
+
+select como('00000000-0000-0000-0000-000000000005'); set role authenticated;
+select chequear((select count(*) from pedido_linea_precio_log) >= 6, 'gerencia también ve el historial de precios');
+reset role;
+
 select 'TODAS LAS PRUEBAS PASARON' as resultado;

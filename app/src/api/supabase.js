@@ -46,7 +46,12 @@ const unoDe = x => (Array.isArray(x) ? x[0] : x) ?? null;
 const costoDe = x => num(unoDe(x)?.costo ?? null);
 const mapProducto = p => ({ id: p.id, costo: costoDe(p.producto_costos), nombre: p.nombre, categoria: p.categoria, precio: num(p.precio), stock: p.stock, stockMin: p.stock_min, stockContado: p.stock_contado, tramos: p.tramos || [], foto: p.foto_url, activo: p.activo });
 const mapCliente = c => ({ id: c.id, codigo: c.codigo, nombre: c.nombre, dir: c.dir, cuit: c.cuit, tel: c.tel, localidad: c.localidad, dia: c.dia, vendedorId: c.vendedor_id, saldo: num(c.saldo), ultimoPago: c.ultimo_pago, obs: c.obs });
-const mapLinea = l => ({ costo: costoDe(l.linea_costos), productoId: l.producto_id, nombre: l.nombre, cant: l.cant, precio: num(l.precio), pct: num(l.pct), manual: l.manual, total: num(l.total) });
+const mapLinea = l => ({
+  id: l.id, costo: costoDe(l.linea_costos), productoId: l.producto_id, nombre: l.nombre, cant: l.cant, precio: num(l.precio), pct: num(l.pct), manual: l.manual, total: num(l.total),
+  precioLista: l.precio_lista == null ? null : num(l.precio_lista), precioEstado: l.precio_estado, cambiadoPor: l.precio_cambiado_por, cambiadoEn: l.precio_cambiado_en,
+  // Historial de precios: solo lo devuelve la base a Administración y Gerencia (a los demás les llega vacío).
+  log: (l.pedido_linea_precio_log || []).sort((a, b) => a.id - b.id).map(h => ({ accion: h.accion, usuarioId: h.usuario_id, antes: num(h.precio_antes), despues: num(h.precio_despues), fecha: h.creado_en })),
+});
 const mapPedido = p => ({ id: p.id, clienteId: p.cliente_id, vendedorId: p.vendedor_id, fecha: p.fecha, fechaEntrega: p.fecha_entrega, creado: p.creado, estado: p.estado, total: num(p.total), obs: p.obs, hechos: p.hechos || [], historial: p.historial || [], salio: p.salio, lineas: (p.pedido_lineas || []).sort((a, b) => a.id - b.id).map(mapLinea) });
 const mapCobro = c => ({ id: c.id, fecha: c.fecha, hora: c.fecha + "T12:00:00", clienteId: c.cliente_id, vendedorId: c.vendedor_id, cobradorId: c.cobrador_id, monto: num(c.monto), medio: c.medio, comision: num(c.comision) });
 const mapFeriado = f => ({ fecha: f.fecha, nombre: f.nombre });
@@ -76,7 +81,7 @@ const cargas = {
   // Solo lo reciente (para que entrar sea rápido y no se descargue todo el historial):
   // pedidos de los últimos 60 días + los que siguen abiertos, y cobros de los últimos 60 días.
   pedidos: async () => {
-    db.pedidos = (await todo(() => sb.from("pedidos").select("*, pedido_lineas(*, linea_costos(costo))")
+    db.pedidos = (await todo(() => sb.from("pedidos").select("*, pedido_lineas(*, linea_costos(costo), pedido_linea_precio_log(*))")
       .or(`fecha.gte.${desde()},fecha_entrega.gte.${desde()},estado.in.(porAutorizar,pendiente,preparando,preparado,enReparto)`)
       .order("id", { ascending: false }))).map(mapPedido);
   },
@@ -98,7 +103,7 @@ const recargar = async (...qué) => { await Promise.all(qué.map(k => cargas[k](
 const recargarTodo = () => recargar(...Object.keys(cargas));
 
 // Tiempo real: si otro usuario cambia algo, se recarga esa parte.
-const TABLA = { productos: "productos", clientes: "clientes", pedidos: "pedidos", pedido_lineas: "pedidos", cobros: "cobros", caja_movimientos: "caja", caja_devoluciones: "caja", perfiles: "usuarios", feriados: "feriados", excepciones_visita: "excepciones" };
+const TABLA = { productos: "productos", clientes: "clientes", pedidos: "pedidos", pedido_lineas: "pedidos", pedido_linea_precio_log: "pedidos", cobros: "cobros", caja_movimientos: "caja", caja_devoluciones: "caja", perfiles: "usuarios", feriados: "feriados", excepciones_visita: "excepciones" };
 let canal = null; const pendientes = new Set(); let timer = null;
 let reloj = null;
 function escuchar() {
@@ -190,6 +195,11 @@ export const api = {
     const { data, error } = await sb.rpc("autorizar_pedidos", { p_ids: ids }); err(error);
     await recargar("pedidos");
     return data;
+  },
+  // Administración / Gerencia resuelven un cambio de precio del vendedor: "aprobado", "repuesto" (vuelve a lista) o "corregido" (precio nuevo).
+  async resolverPrecio(user, lineaId, accion, precio = null) {
+    const { error } = await sb.rpc("resolver_precio_linea", { p_linea: lineaId, p_accion: accion, p_precio: precio }); err(error);
+    await recargar("pedidos");
   },
   async cambiarFechaEntrega(user, pedidoId, fecha) {
     const { error } = await sb.rpc("cambiar_fecha_entrega", { p_pedido: pedidoId, p_fecha: fecha }); err(error);

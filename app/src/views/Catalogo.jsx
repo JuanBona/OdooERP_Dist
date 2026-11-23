@@ -180,7 +180,7 @@ export function Confirmar() {
               <ProdImg p={p} size={44} />
               <div style={{ flex: 1, minWidth: 160 }}>
                 <b>{l.nombre}</b>
-                <div className="muted">{fmt(l.precio)} c/u{l.pct ? ` · ${l.pct}% off` : ""}{l.manual ? " · precio manual" : ""}</div>
+                <div className="muted">{fmt(l.precio)} c/u{l.pct ? ` · ${l.pct}% off` : ""}{l.manual ? (user.rol === "vendedor" ? " · precio a confirmar por Administración" : " · precio manual") : ""}</div>
               </div>
               <div className="stepper">
                 <button aria-label="Menos" onClick={() => setCant(l.productoId, l.cant - 1)}>−</button>
@@ -206,19 +206,23 @@ export function Confirmar() {
 }
 
 function EditarLinea({ l, onClose, onOk }) {
+  const { user } = useApp();
+  const conDesc = puede.editarDescuento(user); // el vendedor solo cambia el precio, y Administración lo tiene que aprobar
   const [precio, setPrecio] = useState(l.precio);
   const [desc, setDesc] = useState(l.pct);
   return (
     <div className="modal-back" onClick={onClose}>
       <div className="modal" onClick={e => e.stopPropagation()}>
         <h2>Cambiar precio · {l.nombre}</h2>
-        <p className="muted" style={{ marginBottom: 12 }}>Solo Administración y Gerencia. Queda registrado quién lo cambió.</p>
+        <p className="muted" style={{ marginBottom: 12 }}>
+          {conDesc ? "Queda registrado quién lo cambió." : "Vale solo para este pedido. Administración tiene que aprobar el cambio antes de que el pedido pase a depósito."}
+        </p>
         <div className="grid g2">
-          <div className="field"><label htmlFor="el-p">Precio unitario</label><input id="el-p" type="number" value={precio} onChange={e => setPrecio(e.target.value)} /></div>
-          <div className="field"><label htmlFor="el-d">Descuento %</label><input id="el-d" type="number" value={desc} onChange={e => setDesc(e.target.value)} /></div>
+          <div className="field"><label htmlFor="el-p">Precio unitario</label><input id="el-p" type="number" min="0" value={precio} onChange={e => setPrecio(e.target.value)} /></div>
+          {conDesc && <div className="field"><label htmlFor="el-d">Descuento %</label><input id="el-d" type="number" value={desc} onChange={e => setDesc(e.target.value)} /></div>}
         </div>
         <div className="row"><button className="btn sec" onClick={() => onOk({})}>Volver al automático</button>
-          <button className="btn" style={{ flex: 1 }} onClick={() => onOk({ precioManual: +precio, descManual: +desc })}>Aplicar</button></div>
+          <button className="btn" style={{ flex: 1 }} onClick={() => onOk(conDesc ? { precioManual: +precio, descManual: +desc } : { precioManual: +precio })}>Aplicar</button></div>
       </div>
     </div>
   );
