@@ -91,7 +91,7 @@ export function ClienteDetalle() {
 
   // RF-PV-08: lo que compra siempre, con la última cantidad
   const habitual = {};
-  [...peds].reverse().forEach(p => p.estado !== "anulado" && p.lineas.forEach(l => { habitual[l.productoId] = l.cant; }));
+  [...peds].reverse().forEach(p => p.estado !== "anulado" && p.lineas.forEach(l => { if (l.cant > 0) habitual[l.productoId] = l.cant; }));
   const habList = Object.entries(habitual).map(([id, cant]) => ({ p: db.productos.find(x => x.id === +id), cant })).filter(x => x.p);
 
   const tomarPedido = (items = {}) => { setCart({ clienteId: c.id, items, manual: {}, obs: "", origen: params.desde === "hoja" ? "hoja" : undefined }); go(Object.keys(items).length ? "confirmar" : "catalogo"); };

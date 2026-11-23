@@ -141,3 +141,10 @@ El camión depende del **día de visita del cliente**, no del día en que se car
 ## 17. Remito antes de depósito (implementado)
 
 - **Imprimir remito** ya no espera a que el pedido esté preparado: Administración y Gerencia lo ven en cualquier estado salvo anulado o rechazado (también "por autorizar" y "en depósito"). Los demás roles siguen viéndolo desde "preparado".
+
+## 18. Devoluciones completas o parciales (implementado)
+
+- En el detalle de un pedido que **salió en reparto o ya se entregó**, Administración y Gerencia tienen **Registrar devolución**: se pone cuánto volvió de cada producto (o "Devolvió todo el pedido"), con un motivo opcional. El pedido se busca desde Pedidos (por cliente o número).
+- **Qué restaura:** el **stock** (vuelve lo devuelto); la **deuda del cliente** (si el pedido ya estaba entregado, baja lo devuelto; si ya había pagado, queda **saldo a favor**); y lo **vendido**: el pedido y sus líneas quedan con lo que realmente se entregó (el descuento sobre el total baja en la misma proporción), así que la **ganancia**, los resúmenes y el cierre de reparto se ajustan solos.
+- Si vuelve **todo**, el pedido pasa a **anulado** con total $0. Cada devolución queda registrada (quién, cuándo, qué, monto, motivo) y en el historial del pedido; se ve en el bloque "Devoluciones".
+- **Plata devuelta al cliente:** no se registra una salida de caja. Si el cliente ya había pagado, el monto queda como saldo a favor; devolverle el efectivo se carga aparte en Caja.

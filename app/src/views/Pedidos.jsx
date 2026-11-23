@@ -249,7 +249,7 @@ function CambiosDePrecio({ p }) {
       </div>
       {p.descTotalEstado && (
         <div style={sep}>
-          <div><b>Descuento sobre el total</b> · {quien(p.descTotalPor)} aplicó <b>{fmt(propTotal)}</b> ({sumaLineas ? Math.round(propTotal / sumaLineas * 1000) / 10 : 0}% de {fmt(sumaLineas)}){p.descTotalEn ? " · " + hora(p.descTotalEn) : ""}</div>
+          <div><b>Descuento sobre el total</b> · {quien(p.descTotalPor)} aplicó <b>{fmt(propTotal)}</b>{sumaLineas > 0 && ` (${Math.round(propTotal / sumaLineas * 1000) / 10}% de ${fmt(sumaLineas)})`}{p.descTotalEn ? " · " + hora(p.descTotalEn) : ""}</div>
           {!totalPend && <div className="muted">{{ aprobado: "Descuento aprobado", quitado: "Descuento quitado", corregido: "Corregido a " + fmt(p.descuentoTotal) }[p.descTotalEstado]}</div>}
           {totalPend && abierto && (corrigiendoTotal !== null ? (
             <div className="row" style={{ marginTop: 6, flexWrap: "wrap" }}>
@@ -325,10 +325,64 @@ function CambiosDePrecio({ p }) {
   );
 }
 
+// Devolución completa o parcial de un pedido que ya salió en reparto (Administración y Gerencia).
+// Restaura el stock, baja la deuda del cliente (si ya estaba entregado) y deja el pedido con lo que realmente se vendió.
+function Devolucion({ p, onClose }) {
+  const { user, toast } = useApp();
+  const lineas = p.lineas.filter(l => l.cant > 0);
+  const [cants, setCants] = useState({});   // id de línea → cantidad que volvió
+  const [motivo, setMotivo] = useState("");
+  const [enviando, setEnviando] = useState(false);
+  const poner = (l, n) => setCants({ ...cants, [l.id]: Math.max(0, Math.min(l.cant, n || 0)) });
+  const items = lineas.filter(l => cants[l.id] > 0).map(l => ({ lineaId: l.id, cant: cants[l.id] }));
+  // Mismo cálculo que hace la base: lo devuelto sale de las líneas y el descuento sobre el total baja en proporción.
+  const sumaOld = p.lineas.reduce((s, x) => s + x.total, 0);
+  const valor = items.reduce((s, it) => { const l = lineas.find(x => x.id === it.lineaId); return s + (it.cant === l.cant ? l.total : Math.round(l.total * it.cant / l.cant)); }, 0);
+  const sumaNew = sumaOld - valor;
+  const dNew = sumaNew === 0 || sumaOld === 0 ? 0 : Math.round((p.descuentoTotal || 0) * sumaNew / sumaOld);
+  const monto = items.length ? p.total - (sumaNew - dNew) : 0;
+  const todo = lineas.length > 0 && lineas.every(l => cants[l.id] === l.cant);
+  const confirmar = async () => {
+    try {
+      setEnviando(true);
+      await api.devolverPedido(user, p.id, items, motivo);
+      toast(todo ? "Devolución completa registrada. El pedido quedó anulado." : "Devolución registrada");
+      onClose();
+    } catch (e) { toast(e.message); } finally { setEnviando(false); }
+  };
+  return (
+    <div className="card" style={{ marginTop: 12, border: "2px solid var(--brand)" }}>
+      <div className="row between" style={{ flexWrap: "wrap" }}>
+        <b style={{ fontSize: 16 }}>Registrar devolución</b>
+        <button className="btn sm sec" onClick={() => setCants(todo ? {} : Object.fromEntries(lineas.map(l => [l.id, l.cant])))}>{todo ? "Limpiar" : "Devolvió todo el pedido"}</button>
+      </div>
+      <p className="muted" style={{ margin: "6px 0" }}>Poné cuánto volvió de cada producto. Vuelve al stock{p.estado === "entregado" ? " y baja la deuda del cliente" : ""}.</p>
+      {lineas.map(l => (
+        <div key={l.id} className="row between" style={{ padding: "8px 0", borderTop: "1px solid rgba(0,0,0,.12)", flexWrap: "wrap" }}>
+          <div style={{ flex: 1, minWidth: 160 }}><b>{l.nombre}</b><div className="muted">Se entregaron {l.cant}</div></div>
+          <div className="stepper">
+            <button aria-label="Menos" onClick={() => poner(l, (cants[l.id] || 0) - 1)}>−</button>
+            <input aria-label={"Cantidad devuelta de " + l.nombre} inputMode="numeric" value={cants[l.id] || 0} onChange={e => poner(l, parseInt(e.target.value))} />
+            <button aria-label="Más" onClick={() => poner(l, (cants[l.id] || 0) + 1)}>＋</button>
+          </div>
+        </div>
+      ))}
+      <div className="field" style={{ marginTop: 8 }}><label htmlFor="dev-motivo">Motivo (opcional)</label>
+        <input id="dev-motivo" value={motivo} onChange={e => setMotivo(e.target.value)} placeholder="Ej: el cliente no estaba" /></div>
+      {items.length > 0 && <p style={{ fontWeight: 700, margin: "6px 0" }}>Se devuelven {fmt(monto)}{p.estado === "entregado" ? ": la deuda del cliente baja ese monto." : ": el total del pedido baja ese monto."}{todo ? " Como vuelve todo, el pedido queda anulado." : ""}</p>}
+      <div className="row" style={{ marginTop: 8 }}>
+        <button className="btn sec" onClick={onClose}>Cancelar</button>
+        <button className="btn" style={{ flex: 1 }} disabled={!items.length || enviando} onClick={confirmar}>{enviando ? "Guardando…" : "Confirmar devolución"}</button>
+      </div>
+    </div>
+  );
+}
+
 export function PedidoDetalle() {
   const { db, user, go, params, toast } = useApp();
   const [confirmar, setConfirmar] = useState(null);
   const [nuevaFecha, setNuevaFecha] = useState(null); // camión: fecha elegida mientras se cambia
+  const [devolviendo, setDevolviendo] = useState(false); // panel de devolución abierto
   const p = db.pedidos.find(x => x.id === params.id);
   if (!p) return <div className="empty">Pedido no encontrado.</div>;
   const c = db.clientes.find(x => x.id === p.clienteId);
@@ -375,17 +429,28 @@ export function PedidoDetalle() {
         <CambiosDePrecio p={p} />
         <div className="tw" style={{ overflowX: "auto" }}>
           <table><thead><tr><th>Producto</th><th>Cant.</th><th>Precio</th><th>Desc.</th><th style={{ textAlign: "right" }}>Total</th></tr></thead>
-            <tbody>{p.lineas.map((l, i) => <tr key={i}><td>{l.nombre}{l.precioEstado === "pendiente" || l.descEstado === "pendiente" ? <span className="chip warn"> a confirmar</span> : l.manual && <span className="muted"> (manual)</span>}</td><td>{l.cant}</td><td>{fmt(l.precio)}</td><td>{l.pct ? l.pct + "%" : "—"}</td><td style={{ textAlign: "right" }}>{fmt(l.total)}</td></tr>)}</tbody>
+            <tbody>{p.lineas.filter(l => l.cant > 0).map((l, i) => <tr key={i}><td>{l.nombre}{l.precioEstado === "pendiente" || l.descEstado === "pendiente" ? <span className="chip warn"> a confirmar</span> : l.manual && <span className="muted"> (manual)</span>}</td><td>{l.cant}</td><td>{fmt(l.precio)}</td><td>{l.pct ? l.pct + "%" : "—"}</td><td style={{ textAlign: "right" }}>{fmt(l.total)}</td></tr>)}</tbody>
           </table>
         </div>
         {p.descuentoTotal > 0 && <div className="row between muted" style={{ marginTop: 10 }}><span>Descuento sobre el total{p.descTotalEstado === "pendiente" ? " (a confirmar)" : ""}</span><span style={{ color: "var(--entr)", fontWeight: 700 }}>− {fmt(p.descuentoTotal)}</span></div>}
         <div className="row between" style={{ fontSize: 19, fontWeight: 850, marginTop: 10 }}><span>Total</span><span>{fmt(p.total)}</span></div>
+        {puede.autorizar(user) && p.devoluciones?.length > 0 && (
+          <div className="card" style={{ marginTop: 12, background: "var(--surface2)" }}>
+            <b>Devoluciones</b>
+            {p.devoluciones.map(d => (
+              <div key={d.id} className="muted" style={{ marginTop: 6 }}>
+                {fechaHora(d.fecha)} · {db.usuarios.find(u => u.id === d.usuarioId)?.nombre || "Administración"} · <b>{d.completa ? "Completa" : "Parcial"}</b>: {d.lineas.map(x => `${x.cant} x ${x.nombre}`).join(", ")} · {fmt(d.monto)}{d.motivo ? ` · "${d.motivo}"` : ""}
+              </div>
+            ))}
+          </div>
+        )}
         {p.obs && <p className="muted" style={{ marginTop: 8 }}><Icon n="nota" s={15} style={{ verticalAlign: "-2px" }} /> {p.obs}</p>}
 
         <div className="row" style={{ flexWrap: "wrap", marginTop: 16 }}>
           {p.estado === "porAutorizar" && puede.autorizar(user) && <button className="btn" disabled={cambioPendiente(p)} title={cambioPendiente(p) ? "Resolvé los cambios de precio o descuento primero" : ""} onClick={() => accion("pendiente", "Autorizado y enviado a depósito")}><Icon n="check" s={17} /> Autorizar</button>}
           {/* Administración imprime el remito en cualquier momento (también antes de autorizar); los demás roles, una vez preparado. */}
           {(admin ? !["anulado", "rechazado"].includes(p.estado) : ["preparado", "enReparto", "entregado"].includes(p.estado)) && <button className="btn sec" onClick={() => window.print()}><Icon n="imprimir" s={17} /> Imprimir remito</button>}
+          {admin && ["enReparto", "entregado"].includes(p.estado) && !devolviendo && <button className="btn sec" onClick={() => setDevolviendo(true)}><Icon n="atras" s={17} /> Registrar devolución</button>}
           {admin && p.estado === "preparado" && <button className="btn brand" onClick={() => accion("enReparto", "Salió en reparto")}><Icon n="camion" s={17} /> Salió en reparto</button>}
           {admin && p.estado === "enReparto" && <>
             <button className="btn" onClick={() => accion("entregado", "Entregado")}>Entregado</button>
@@ -393,6 +458,7 @@ export function PedidoDetalle() {
           </>}
           {admin && ["porAutorizar", "pendiente", "preparando", "preparado"].includes(p.estado) && <button className="btn sec" onClick={() => setConfirmar("anulado")}>Anular</button>}
         </div>
+        {devolviendo && <Devolucion p={p} onClose={() => setDevolviendo(false)} />}
         {confirmar && (
           <div className="card" style={{ marginTop: 12, background: "var(--danger-bg)" }}>
             <b>{confirmar === "anulado" ? `¿Anular el pedido #${p.id}?` : `¿El cliente rechazó el pedido #${p.id}?`}</b>
@@ -425,7 +491,7 @@ function Remito({ p, c, v }) {
         {c.cuit && <div><b>CUIT:</b> {c.cuit}</div>}{v && <div><b>Vendedor:</b> {v.nombre}</div>}
       </div>
       <table><thead><tr><th>Cant.</th><th>Producto</th><th>Precio</th><th>Desc.</th><th>Total</th></tr></thead>
-        <tbody>{p.lineas.map((l, i) => <tr key={i}><td>{l.cant}</td><td>{l.nombre}</td><td>{fmt(l.precio)}</td><td>{l.pct ? l.pct + "%" : ""}</td><td>{fmt(l.total)}</td></tr>)}
+        <tbody>{p.lineas.filter(l => l.cant > 0).map((l, i) => <tr key={i}><td>{l.cant}</td><td>{l.nombre}</td><td>{fmt(l.precio)}</td><td>{l.pct ? l.pct + "%" : ""}</td><td>{fmt(l.total)}</td></tr>)}
           {p.descuentoTotal > 0 && <tr><td colSpan="4" style={{ textAlign: "right" }}>Descuento sobre el total</td><td>− {fmt(p.descuentoTotal)}</td></tr>}
           <tr><td colSpan="4" style={{ textAlign: "right" }}><b>TOTAL</b></td><td><b>{fmt(p.total)}</b></td></tr></tbody>
       </table>
