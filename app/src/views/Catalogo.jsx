@@ -6,6 +6,8 @@ import { DIAS_VISITA, calcLinea, cambioDeRuta, diaSemana, fechaCorta, fechaEntre
 import { ChipCuenta, ProdImg } from "./ui.jsx";
 import { misClientes } from "./Inicio.jsx";
 
+// Es oferta si se marcó a mano o si tiene descuento por cantidad.
+const esOferta = p => !!p.oferta || (p.tramos?.length > 0);
 const OFERTAS = "__ofertas";   // valor del filtro de categoría que muestra solo los productos marcados como oferta
 const txtTramos =p => (p.tramos || []).map(t => `${t.min}+ ${t.pct}%`).join(" · ");
 
@@ -34,10 +36,10 @@ export function Catalogo() {
   const [cat, setCat] = useState("");
   const [abierto, setAbierto] = useState(null);
   const cats = [...new Set(db.productos.map(p => p.categoria))];
-  // Las ofertas (marcadas a mano en Artículos) salen primero; el filtro "Ofertas" muestra solo esas.
+  // Las ofertas (marcadas a mano en Artículos o con descuento por cantidad) salen primero; el filtro "Ofertas" muestra solo esas.
   const list = db.productos
-    .filter(p => p.activo && (!cat || (cat === OFERTAS ? p.oferta : p.categoria === cat)) && p.nombre.toLowerCase().includes(q.toLowerCase()))
-    .sort((a, b) => (b.oferta ? 1 : 0) - (a.oferta ? 1 : 0));
+    .filter(p => p.activo && (!cat || (cat === OFERTAS ? esOferta(p) : p.categoria === cat)) && p.nombre.toLowerCase().includes(q.toLowerCase()))
+    .sort((a, b) => (esOferta(b) ? 1 : 0) - (esOferta(a) ? 1 : 0));
   // aplicar: tildó el descuento por cantidad (si no, la cantidad se cobra a precio normal).
   const setQty = (id, n, aplicar = false) => {
     const p = db.productos.find(x => x.id === id);
@@ -59,10 +61,10 @@ export function Catalogo() {
       </div>
       <div className="grid g3">
         {list.map(p => (
-          <div key={p.id} className="pcard" style={p.oferta ? { borderColor: "var(--accent)" } : null} onClick={() => setAbierto(p.id)}>
+          <div key={p.id} className="pcard" style={esOferta(p) ? { borderColor: "var(--accent)" } : null} onClick={() => setAbierto(p.id)}>
             <div style={{ position: "relative" }}>
               <ProdImg p={p} full />
-              {p.oferta && <span className="chip promo" style={{ position: "absolute", top: 8, left: 8 }}><Icon n="oferta" s={13} /> OFERTA</span>}
+              {esOferta(p) && <span className="chip promo" style={{ position: "absolute", top: 8, left: 8 }}><Icon n="oferta" s={13} /> OFERTA</span>}
               {cart.items[p.id] && <span className="chip st-entregado" style={{ position: "absolute", top: 8, right: 8 }}>✓ {cart.items[p.id]}</span>}
             </div>
             <div className="body">
