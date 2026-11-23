@@ -132,6 +132,27 @@ export const api = {
     return ped;
   },
 
+  // Editar un pedido por autorizar: mismas reglas que al crearlo (se arma uno nuevo y se le pasan las líneas).
+  editarPedido(user, pedidoId, { items, obs, descTotal, confirmar = false }) {
+    const p = db.pedidos.find(x => x.id === pedidoId);
+    if (!p || p.estado !== "porAutorizar") throw new Error("El pedido ya fue autorizado: no se puede editar.");
+    if (user.rol === "vendedor" && p.vendedorId !== user.id) throw new Error("El pedido no es tuyo.");
+    if (!items.length) throw new Error("El pedido está vacío.");
+    const copia = JSON.stringify(db);
+    p.lineas.forEach(l => { const prod = db.productos.find(x => x.id === l.productoId); if (prod) prod.stock += l.cant; });
+    let n;
+    try { n = api.crearPedido(user, { clienteId: p.clienteId, items, obs, descTotal, fecha: confirmar ? hoyISO() : p.fecha }); }
+    catch (e) { db = JSON.parse(copia); throw e; }
+    db.pedidos = db.pedidos.filter(x => x.id !== n.id);
+    const q = db.pedidos.find(x => x.id === pedidoId);
+    Object.assign(q, { lineas: n.lineas, total: n.total, obs: n.obs, descuentoTotal: n.descuentoTotal, descTotalEstado: n.descTotalEstado,
+      descTotalPor: n.descTotalPor, descTotalEn: n.descTotalEn, logTotal: n.logTotal, fecha: n.fecha, ...(confirmar ? { fechaEntrega: n.fechaEntrega } : {}) });
+    q.historial.push({ fecha: new Date().toISOString(), usuario: user.nombre, txt: confirmar ? "Confirmado en la visita" : "Pedido editado" });
+    audit(user, confirmar ? "Confirmó pedido en la visita" : "Editó pedido", "#" + q.id);
+    save();
+    return q;
+  },
+
   cambiarEstado(user, pedidoId, estado, txt) {
     const p = db.pedidos.find(x => x.id === pedidoId);
     if (p.estado === "porAutorizar" && estado === "pendiente" && cambioPendiente(p)) {

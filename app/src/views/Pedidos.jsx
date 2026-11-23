@@ -5,6 +5,7 @@ import { api } from "../api";
 import { ESTADOS, bajoCosto, camionesDeSemana, diaSemana, fechaCorta, feriadoDe, fmt, hoyISO, lineasConCambio, lunesDe, nombreCamion, cambioPendiente, puede, sumarDias } from "../lib/reglas";
 import { ChipCuenta, ChipEstado, fechaHora } from "./ui.jsx";
 import { PedidoRow } from "./Inicio.jsx";
+import { carritoDePedido, puedeEditarPedido } from "../lib/editarPedido";
 import logo from "../assets/logo.jpg";
 import { descartar, useConexion } from "../lib/offline";
 import { useRestaurarScroll, useVista } from "../lib/vista";
@@ -422,7 +423,7 @@ function Devolucion({ p, onClose }) {
 }
 
 export function PedidoDetalle() {
-  const { db, user, go, params, toast } = useApp();
+  const { db, user, go, params, toast, setCart } = useApp();
   const [confirmar, setConfirmar] = useState(null);
   const [nuevaFecha, setNuevaFecha] = useState(null); // camión: fecha elegida mientras se cambia
   const [devolviendo, setDevolviendo] = useState(false); // panel de devolución abierto
@@ -452,6 +453,7 @@ export function PedidoDetalle() {
                 <span className="chip st-preparado"><Icon n="camion" s={14} /> {nombreCamion(p.fechaEntrega)} {fechaCorta(p.fechaEntrega)}</span>
                 {feriadoDe(db.feriados, p.fechaEntrega) && <span className="chip warn">⚠ Feriado: {feriadoDe(db.feriados, p.fechaEntrega).nombre}</span>}
                 {puede.cambiarCamion(user, p) && nuevaFecha === null && <button className="btn sec sm" onClick={() => setNuevaFecha(p.fechaEntrega)}>Cambiar camión</button>}
+                {puedeEditarPedido(user, p) && <button className="btn sm" onClick={() => { setCart(carritoDePedido(p)); go("catalogo"); }}><Icon n="lapiz" s={14} /> Editar pedido</button>}
               </div>
             )}
             {nuevaFecha !== null && (

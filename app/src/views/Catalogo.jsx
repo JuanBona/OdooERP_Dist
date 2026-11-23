@@ -1,4 +1,5 @@
 import { Icon, Avatar } from "./icons.jsx";
+import { api } from "../api";
 import React, { useState } from "react";
 import { useApp } from "../App.jsx";
 import { enviarPedido } from "../lib/offline";
@@ -19,7 +20,7 @@ function SelectorCliente() {
       <div className="row between" style={{ flexWrap: "wrap" }}>
         <div style={{ flex: 1, minWidth: 200 }}>
           <label className="eyebrow" htmlFor="sel-cli">Pedido para</label>
-          <select id="sel-cli" value={cart.clienteId ?? ""} onChange={e => setCart({ ...cart, clienteId: e.target.value ? +e.target.value : null })}>
+          <select id="sel-cli" disabled={!!cart.editId} value={cart.clienteId ?? ""} onChange={e => setCart({ ...cart, clienteId: e.target.value ? +e.target.value : null })}>
             <option value="">Elegí un cliente…</option>
             {misClientes(db, user).map(x => <option key={x.id} value={x.id}>{x.nombre}</option>)}
           </select>
@@ -175,6 +176,14 @@ export function Confirmar() {
     try {
       setEnviando(true);
       const desdeHoja = cart.origen === "hoja"; // la venta se empezó en la hoja de ruta: al terminar se vuelve ahí
+      if (cart.editId) { // editando un pedido por autorizar (o confirmándolo el día de la visita)
+        if (!navigator.onLine) throw new Error("Para editar un pedido hace falta señal.");
+        const p = await api.editarPedido(user, cart.editId, { items, obs: cart.obs, descTotal, confirmar: !!cart.confirmar });
+        setCart({ clienteId: null, items: {}, manual: {}, obs: "" });
+        toast(cart.confirmar ? `Pedido #${p.id} confirmado y enviado a Administración.` : `Pedido #${p.id} actualizado.`);
+        if (desdeHoja) go("hoja", { volver: true }); else go("pedido", { id: p.id });
+        return;
+      }
       const r = await enviarPedido(user, { clienteId: c.id, items, obs: cart.obs, descTotal });
       setCart({ clienteId: null, items: {}, manual: {}, obs: "" });
       if (r.enCola) { toast("Sin señal: el pedido quedó guardado y se envía solo cuando vuelva la conexión."); desdeHoja ? go("hoja", { volver: true }) : go("pedidos"); return; }
@@ -187,7 +196,10 @@ export function Confirmar() {
   return (
     <>
       <button className="btn sm sec" onClick={() => go("catalogo")}><Icon n="atras" s={16} /> Seguir agregando</button>
-      <h1 style={{ margin: "12px 0" }}>Revisar pedido</h1>
+      <h1 style={{ margin: "12px 0" }}>{cart.editId ? (cart.confirmar ? `Confirmar pedido #${cart.editId}` : `Editar pedido #${cart.editId}`) : "Revisar pedido"}</h1>
+      {cart.editId && <p className="chip st-preparado" style={{ display: "block", borderRadius: 9, padding: 10, marginBottom: 10 }}>
+        {cart.confirmar ? "Revisá que esté todo: al confirmar se manda a Administración como levantado hoy." : "Estás cambiando un pedido que todavía está por autorizar."}
+        {" "}<a href="#cancelar" onClick={e => { e.preventDefault(); setCart({ clienteId: null, items: {}, manual: {}, obs: "" }); go("pedidos"); }}>Cancelar</a></p>}
       <SelectorCliente />
       <div className="card">
         {lineas.length === 0 && <div className="empty">No agregaste productos.</div>}
@@ -235,7 +247,7 @@ export function Confirmar() {
         <div className="row between" style={{ fontSize: 20, fontWeight: 850, marginTop: 6 }}><span>Total</span><span>{fmt(total)}</span></div>
         {c && <AvisoCamion c={c} />}
         {c && nuevoEstadoPedido(user) === "porAutorizar" && <p className="chip st-porAutorizar" style={{ display: "block", borderRadius: 9, padding: 10, marginTop: 10 }}>{c.saldo < 0 ? "El cliente tiene deuda. " : ""}El pedido queda por autorizar: Administración lo aprueba y recién ahí pasa a depósito.</p>}
-        <button className="btn blk" style={{ marginTop: 14 }} onClick={enviar} disabled={enviando}>{enviando ? "Enviando…" : "Enviar pedido"}</button>
+        <button className="btn blk" style={{ marginTop: 14 }} onClick={enviar} disabled={enviando}>{enviando ? "Enviando…" : cart.editId ? (cart.confirmar ? "Confirmar y enviar" : "Guardar cambios") : "Enviar pedido"}</button>
       </div>
       {editLinea && <EditarLinea l={editLinea} onClose={() => setEditLinea(null)} onOk={m => { setCart({ ...cart, manual: { ...cart.manual, [editLinea.productoId]: m } }); setEditLinea(null); }} />}
     </>

@@ -4,6 +4,7 @@ import { useApp } from "../App.jsx";
 import { api } from "../api";
 import { useGanancia } from "../lib/useGanancia";
 import { calcProfit, fechaCorta, fmt, hoyISO, nombreCamion, cambioPendiente, puede, textoCambio, tieneAlerta } from "../lib/reglas";
+import { carritoDePedido, puedeEditarPedido } from "../lib/editarPedido";
 import { mesActual, mesPorCerrar, nombreMes } from "../lib/mes";
 import { ChipCuenta, ChipEstado, ProdImg } from "./ui.jsx";
 
@@ -95,14 +96,19 @@ export default function Inicio() {
 }
 
 export function PedidoRow({ p }) {
-  const { db, go, user } = useApp();
+  const { db, go, user, setCart } = useApp();
+  // Lápiz para editar: solo el vendedor, en sus pedidos que siguen por autorizar.
+  const editar = user.rol === "vendedor" && puedeEditarPedido(user, p);
   const c = db.clientes.find(x => x.id === p.clienteId);
   const v = db.usuarios.find(x => x.id === p.vendedorId);
   return (
     <div className="list-item" onClick={() => go("pedido", { id: p.id })}>
       <Avatar txt={"#" + p.id} />
       <div style={{ flex: 1, minWidth: 0 }}><b>{c?.nombre}</b><div className="muted">{p.fecha}{v ? " · " + v.nombre : ""}{p.fechaEntrega ? " · " + nombreCamion(p.fechaEntrega) + " " + fechaCorta(p.fechaEntrega) : ""}{p.estado === "porAutorizar" && puede.autorizar(user) && c?.saldo < 0 ? " · Debe " + fmt(-c.saldo) : ""}</div></div>
-      <div style={{ textAlign: "right" }}><div style={{ fontWeight: 800 }}>{fmt(p.total)}</div>{p.estado === "porAutorizar" && cambioPendiente(p) && <div><span className="chip warn" style={{ fontWeight: 800 }}>⚠ {textoCambio(p)}</span></div>}<ChipEstado e={p.estado} /></div>
+      <div style={{ textAlign: "right" }}><div className="row" style={{ justifyContent: "flex-end", gap: 8 }}>
+        {editar && <button className="iconbtn" title="Editar pedido" aria-label={"Editar pedido #" + p.id} style={{ width: 34, height: 34, background: "var(--brand)", color: "#fff" }}
+          onClick={e => { e.stopPropagation(); setCart(carritoDePedido(p)); go("catalogo"); }}><Icon n="lapiz" s={16} /></button>}
+        <div style={{ fontWeight: 800 }}>{fmt(p.total)}</div></div>{p.estado === "porAutorizar" && cambioPendiente(p) && <div><span className="chip warn" style={{ fontWeight: 800 }}>⚠ {textoCambio(p)}</span></div>}<ChipEstado e={p.estado} /></div>
     </div>
   );
 }

@@ -173,6 +173,13 @@ export const api = {
     await recargar("pedidos", "productos");
     return db.pedidos.find(p => p.id === id);
   },
+  // Editar un pedido por autorizar (confirmar = lo confirma el día de la visita: queda con fecha de hoy).
+  async editarPedido(user, pedidoId, { items, obs, descTotal, confirmar = false }) {
+    const p_items = items.map(i => ({ producto_id: i.productoId, cant: i.cant, precio_manual: i.precioManual ?? null, desc_manual: i.descManual ?? null, aplicar_desc: !!i.aplicarDesc }));
+    const { error } = await sb.rpc("editar_pedido", { p_pedido: pedidoId, p_items, p_obs: obs || "", p_desc_total: descTotal || 0, p_confirmar: confirmar }); err(error);
+    await recargar("pedidos", "productos");
+    return db.pedidos.find(p => p.id === pedidoId);
+  },
   async cambiarEstado(user, pedidoId, estado, txt) {
     const { error } = await sb.rpc("cambiar_estado", { p_pedido: pedidoId, p_estado: estado, p_txt: txt }); err(error);
     await recargar("pedidos", "productos", "clientes");
