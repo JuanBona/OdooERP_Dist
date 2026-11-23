@@ -6,7 +6,8 @@ import { DIAS_VISITA, calcLinea, cambioDeRuta, diaSemana, fechaCorta, fechaEntre
 import { ChipCuenta, ProdImg } from "./ui.jsx";
 import { misClientes } from "./Inicio.jsx";
 
-const txtTramos = p => (p.tramos || []).map(t => `${t.min}+ ${t.pct}%`).join(" · ");
+const OFERTAS = "__ofertas";   // valor del filtro de categoría que muestra solo los productos marcados como oferta
+const txtTramos =p => (p.tramos || []).map(t => `${t.min}+ ${t.pct}%`).join(" · ");
 
 function SelectorCliente() {
   const { db, user, cart, setCart } = useApp();
@@ -33,9 +34,10 @@ export function Catalogo() {
   const [cat, setCat] = useState("");
   const [abierto, setAbierto] = useState(null);
   const cats = [...new Set(db.productos.map(p => p.categoria))];
+  // Las ofertas (marcadas a mano en Artículos) salen primero; el filtro "Ofertas" muestra solo esas.
   const list = db.productos
-    .filter(p => p.activo && (!cat || p.categoria === cat) && p.nombre.toLowerCase().includes(q.toLowerCase()))
-    .sort((a, b) => (b.tramos.length ? 1 : 0) - (a.tramos.length ? 1 : 0));
+    .filter(p => p.activo && (!cat || (cat === OFERTAS ? p.oferta : p.categoria === cat)) && p.nombre.toLowerCase().includes(q.toLowerCase()))
+    .sort((a, b) => (b.oferta ? 1 : 0) - (a.oferta ? 1 : 0));
   // aplicar: tildó el descuento por cantidad (si no, la cantidad se cobra a precio normal).
   const setQty = (id, n, aplicar = false) => {
     const p = db.productos.find(x => x.id === id);
@@ -53,20 +55,20 @@ export function Catalogo() {
       <SelectorCliente />
       <div className="filters">
         <input type="search" placeholder="Buscar por nombre…" value={q} onChange={e => setQ(e.target.value)} />
-        <select value={cat} onChange={e => setCat(e.target.value)}><option value="">Todas las categorías</option>{cats.map(c => <option key={c}>{c}</option>)}</select>
+        <select value={cat} onChange={e => setCat(e.target.value)}><option value="">Todas las categorías</option><option value={OFERTAS}>Ofertas</option>{cats.map(c => <option key={c}>{c}</option>)}</select>
       </div>
       <div className="grid g3">
         {list.map(p => (
-          <div key={p.id} className="pcard" style={p.tramos.length ? { borderColor: "var(--accent)" } : null} onClick={() => setAbierto(p.id)}>
+          <div key={p.id} className="pcard" style={p.oferta ? { borderColor: "var(--accent)" } : null} onClick={() => setAbierto(p.id)}>
             <div style={{ position: "relative" }}>
               <ProdImg p={p} full />
-              {p.tramos.length > 0 && <span className="chip promo" style={{ position: "absolute", top: 8, left: 8 }}><Icon n="oferta" s={13} /> OFERTA</span>}
+              {p.oferta && <span className="chip promo" style={{ position: "absolute", top: 8, left: 8 }}><Icon n="oferta" s={13} /> OFERTA</span>}
               {cart.items[p.id] && <span className="chip st-entregado" style={{ position: "absolute", top: 8, right: 8 }}>✓ {cart.items[p.id]}</span>}
             </div>
             <div className="body">
               <div className="muted" style={{ fontSize: 11.5 }}>{p.categoria}</div>
               <div className="nm">{p.nombre}</div>
-              {p.tramos.length > 0 && <span className="chip promo" style={{ alignSelf: "flex-start", fontSize: 11 }}>{txtTramos(p)}</span>}
+              {p.tramos.length > 0 && <span className="chip st-autorizado" style={{ alignSelf: "flex-start", fontSize: 11 }}>{txtTramos(p)}</span>}
               <div className="row between" style={{ marginTop: "auto", paddingTop: 6 }}>
                 <span className="pr">{fmt(p.precio)}</span>
                 {sinContar(p) ? <span className="chip st-autorizado">Sin contar</span> : <span className={"chip " + (p.stock <= p.stockMin ? "warn" : "st-entregado")}>{p.stock <= 0 ? "Sin stock" : p.stock + " u."}</span>}

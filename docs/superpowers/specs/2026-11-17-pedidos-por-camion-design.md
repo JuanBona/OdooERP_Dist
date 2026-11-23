@@ -148,3 +148,10 @@ El camión depende del **día de visita del cliente**, no del día en que se car
 - **Qué restaura:** el **stock** (vuelve lo devuelto); la **deuda del cliente** (si el pedido ya estaba entregado, baja lo devuelto; si ya había pagado, queda **saldo a favor**); y lo **vendido**: el pedido y sus líneas quedan con lo que realmente se entregó (el descuento sobre el total baja en la misma proporción), así que la **ganancia**, los resúmenes y el cierre de reparto se ajustan solos.
 - Si vuelve **todo**, el pedido pasa a **anulado** con total $0. Cada devolución queda registrada (quién, cuándo, qué, monto, motivo) y en el historial del pedido; se ve en el bloque "Devoluciones".
 - **Plata devuelta al cliente:** no se registra una salida de caja. Si el cliente ya había pagado, el monto queda como saldo a favor; devolverle el efectivo se carga aparte en Caja.
+
+## 19. Ofertas marcadas a mano en el catálogo (implementado)
+
+- "Oferta" ya no sale sola en todo producto con descuento por cantidad: es un casillero del artículo (**Marcar como oferta**, en Artículos).
+- En el catálogo, los productos marcados llevan el cartel OFERTA y salen **primero**. El filtro de categorías tiene la opción **Ofertas**, que muestra solo esos.
+- El descuento por cantidad sigue mostrándose como texto (10+ 4%, …) en la tarjeta, pero sin estilo de oferta.
+- Al desplegar, ningún producto queda marcado: hay que marcar a mano los que se quieran destacar.

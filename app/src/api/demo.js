@@ -23,6 +23,7 @@ function inicial() {
   }));
   // Ejemplo de tramos en dos productos para que se vea la función
   productos[0].tramos = [{ min: 5, pct: 4 }, { min: 10, pct: 8 }];
+  productos[0].oferta = true;
   const clientes = seed.clientes.map((c, i) => ({
     id: i + 1, codigo: c.codigo, nombre: c.nombre, dir: c.dir, cuit: c.cuit, tel: String(c.tel || ""),
     localidad: "", dia: "", vendedorId: null, saldo: 0, ultimoPago: null, obs: "",
