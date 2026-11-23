@@ -1,5 +1,5 @@
--- Cierre de mes: el último día, desde las 18 h, Gerencia arregla las comisiones con los vendedores
--- y cierra el mes. Queda guardado el resumen (facturación, profit, gastos, % de ganancia,
+-- Cierre de mes: el último día, desde las 20 h, Gerencia arregla las comisiones con los vendedores
+-- y cierra el mes. A las 12 de la noche el Resumen arranca de 0 con el mes nuevo. Queda guardado el resumen (facturación, profit, gastos, % de ganancia,
 -- 10 productos y 10 clientes que más compraron, comisión de cada vendedor) tal como estaba.
 -- No se borra nada: comisiones, facturación, profit y gastos se cuentan por mes, así que el mes
 -- nuevo arranca de 0 solo. Ofertas, descuentos por cantidad y configuración no se tocan.

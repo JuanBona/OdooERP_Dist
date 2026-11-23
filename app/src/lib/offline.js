@@ -3,6 +3,7 @@
 // y se envía solo cuando vuelve la señal. El vendedor no tiene que hacer nada.
 import { useSyncExternalStore } from "react";
 import { api } from "../api";
+import { hoyISO } from "./reglas";
 
 const KEY = "rds-outbox-v1";
 const listeners = new Set();
@@ -32,11 +33,12 @@ const encolar = (tipo, user, data) => {
 // El identificador viaja con el envío: si se reintenta, el servidor no lo duplica.
 const ENVIAR = {
   pedido: (user, d) => api.crearPedido(user, d),
-  cobro: (user, d) => api.registrarCobro(user, d.clienteId, d.monto, d.medio, d.uid),
+  cobro: (user, d) => api.registrarCobro(user, d.clienteId, d.monto, d.medio, d.uid, d.cheque),
 };
 
 async function enviar(tipo, user, data) {
   data = { ...data, uid: data.uid || nuevoUid() };
+  if (tipo === "pedido") data.fecha ||= hoyISO(); // el camión depende del día en que se cargó, no de cuándo llegue
   if (!navigator.onLine) return encolar(tipo, user, data);
   try {
     return { resultado: await ENVIAR[tipo](user, data) };

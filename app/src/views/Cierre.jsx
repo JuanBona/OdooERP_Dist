@@ -1,8 +1,9 @@
 import React, { useState } from "react";
 import { useApp } from "../App.jsx";
 import { api } from "../api";
-import { fmt } from "../lib/reglas";
-import { calcularMes, detallePagoComision, mesActual, mesPorCerrar, nombreMes, puedeCerrarHoy, HORA_CIERRE } from "../lib/mes";
+import { calcProfit, fmt } from "../lib/reglas";
+import { useGanancia } from "../lib/useGanancia";
+import { calcularMes, detallePagoComision, mesActual, mesPorCerrar, nombreMes, puedeCerrarHoy, textoCierre } from "../lib/mes";
 
 // Lo que muestra el resumen de un mes (en vivo o el que quedó guardado al cerrarlo).
 export function ResumenMes({ r }) {
@@ -16,7 +17,7 @@ export function ResumenMes({ r }) {
         <div className="card kpi"><div className="num" style={{ color: "var(--entr)" }}>{fmt(r.cobrado)}</div><div className="lbl">Cobrado</div></div>
         <div className="card kpi"><div className="num" style={{ color: "var(--danger)" }}>{fmt(r.gastado)}</div><div className="lbl">Gastos del mes</div></div>
         <div className="card kpi"><div className="num">{fmt(r.comisiones)}</div><div className="lbl">Comisiones de vendedores</div></div>
-        <div className="card kpi" style={{ borderColor: "var(--brand)" }}><div className="num">{fmt(r.profit)}</div><div className="lbl">Profit (cobrado − gastos − comisiones)</div></div>
+        <div className="card kpi" style={{ borderColor: "var(--brand)" }}><div className="num">{fmt(r.profit)}</div><div className="lbl">Profit (ganancia {fmt(r.ganancia)} − gastos − comisiones)</div></div>
         <div className="card kpi" style={{ borderColor: "var(--brand)" }}><div className="num">{r.pctGanancia}%</div><div className="lbl">% de ganancia (profit sobre lo cobrado)</div></div>
       </div>
       <div className="grid g2" style={{ marginTop: 16 }}>
@@ -35,6 +36,7 @@ export default function Cierre() {
   const guardado = (db.cierres || []).find(c => c.mes === mes);
   const [porFuera, setPorFuera] = useState({}); // vendedores arreglados sin pasar por la caja
   const [ocupado, setOcupado] = useState(false);
+  const g = useGanancia(db, mes, !guardado);
 
   if (guardado) return (
     <>
@@ -49,20 +51,21 @@ export default function Cierre() {
     </>
   );
 
-  const r = calcularMes(db, mes);
+  if (!g) return <div className="empty">Calculando el resumen del mes…</div>;
+  const r = calcularMes(db, mes, calcProfit(db, mes, g));
   const pendientes = r.vendedores.filter(v => v.falta > 0 && !porFuera[v.id]);
   const habilitado = mes < mesActual() || puedeCerrarHoy();
   const accion = async f => { if (ocupado) return; setOcupado(true); try { await f(); } catch (e) { toast(e.message); } finally { setOcupado(false); } };
 
-  const pagar = v => accion(async () => {
-    await api.movCaja(user, { tipo: "egreso", concepto: "Pago de comisiones", monto: v.falta, persona: v.nombre, detalle: detallePagoComision(mes), vendedorId: v.id });
-    toast(`Comisión de ${v.nombre} pagada de la caja.`);
+  const pagar = (v, caja) => accion(async () => {
+    await api.movCaja(user, { tipo: "egreso", concepto: "Pago de comisiones", monto: v.falta, persona: v.nombre, detalle: detallePagoComision(mes), vendedorId: v.id, caja });
+    toast(`Comisión de ${v.nombre} pagada (${caja === "efectivo" ? "efectivo" : "transferencia"}).`);
   });
   const cerrar = () => accion(async () => {
-    if (!confirm(`¿Cerrar ${nombreMes(mes)}? Comisiones, facturación, profit y gastos arrancan de 0. Ofertas, descuentos y configuración no cambian.`)) return;
-    const resumen = { ...r, vendedores: r.vendedores.map(v => ({ ...v, como: v.comision === 0 ? "Sin comisión" : porFuera[v.id] && v.falta > 0 ? "Por otro medio" : "De la caja" })) };
+    if (!confirm(`¿Cerrar ${nombreMes(mes)}? A las 12 de la noche comisiones, facturación, profit y gastos arrancan de 0. Ofertas, descuentos y configuración no cambian.`)) return;
+    const resumen = { ...r, vendedores: r.vendedores.map(v => ({ ...v, como: v.comision === 0 ? "Sin comisión" : porFuera[v.id] && v.falta > 0 ? "Por otro medio" : "Desde las cajas" })) };
     await api.cerrarMes(user, mes, resumen);
-    toast(`${nombreMes(mes)} cerrado. Arranca un mes nuevo.`);
+    toast(`${nombreMes(mes)} cerrado. A las 12 de la noche arranca el mes nuevo desde 0.`);
   });
 
   return (
@@ -71,7 +74,7 @@ export default function Cierre() {
         <div><h1>Cierre de {nombreMes(mes)}</h1><p className="muted">1) Arreglar con los vendedores · 2) Revisar el resumen · 3) Cerrar el mes.</p></div>
         <button className="btn sec sm" onClick={() => go("resumen")}>Volver</button>
       </div>
-      {!habilitado && <div className="card" style={{ marginBottom: 12 }}>El mes se cierra el último día, desde las {HORA_CIERRE} h. Mientras tanto podés ir viendo cómo viene.</div>}
+      {!habilitado && <div className="card" style={{ marginBottom: 12 }}>{textoCierre(mes)}. Mientras tanto podés ir viendo cómo viene.</div>}
 
       <div className="sec-h"><h2>1. Arreglar con los vendedores</h2></div>
       <div className="card" style={{ overflowX: "auto" }}>
@@ -81,7 +84,8 @@ export default function Cierre() {
               <td>{v.nombre} <span className="muted">({v.pct}%)</span></td><td>{fmt(v.cobrado)}</td><td><b>{fmt(v.comision)}</b></td><td>{fmt(v.pagado)}</td>
               <td style={{ whiteSpace: "nowrap" }}>{v.falta === 0 ? <span className="chip st-entregado">Listo</span>
                 : porFuera[v.id] ? <><span className="chip st-entregado">Por otro medio</span> <button className="btn sec sm" onClick={() => setPorFuera({ ...porFuera, [v.id]: false })}>Deshacer</button></>
-                : <><button className="btn sm" disabled={ocupado || !habilitado} onClick={() => pagar(v)}>Pagar {fmt(v.falta)} de la caja</button>{" "}
+                : <><button className="btn sm" disabled={ocupado || !habilitado} onClick={() => pagar(v, "efectivo")}>Pagar {fmt(v.falta)} en efectivo</button>{" "}
+                  <button className="btn sec sm" disabled={ocupado || !habilitado} onClick={() => pagar(v, "transferencia")}>Por transferencia</button>{" "}
                   <button className="btn sec sm" disabled={!habilitado} onClick={() => setPorFuera({ ...porFuera, [v.id]: true })}>Lo arreglé por otro medio</button></>}</td>
             </tr>))}</tbody>
         </table>
@@ -92,7 +96,7 @@ export default function Cierre() {
 
       <div className="sec-h"><h2>3. Cerrar el mes</h2></div>
       <div className="card">
-        <p className="muted" style={{ marginBottom: 10 }}>Vuelven a 0 la comisión de los vendedores, la facturación, el profit y los gastos. Se mantienen las ofertas, los descuentos por cantidad, los clientes con sus saldos y toda la configuración.</p>
+        <p className="muted" style={{ marginBottom: 10 }}>A las 12 de la noche vuelven a 0 la comisión de los vendedores, la facturación, el profit y los gastos. Se mantienen las ofertas, los descuentos por cantidad, los clientes con sus saldos y toda la configuración.</p>
         {pendientes.length > 0 && <p style={{ marginBottom: 10 }}>Falta arreglar con: <b>{pendientes.map(v => v.nombre).join(", ")}</b>.</p>}
         <button className="btn brand" disabled={ocupado || !habilitado || pendientes.length > 0} onClick={cerrar}>Cerrar {nombreMes(mes)}</button>
       </div>

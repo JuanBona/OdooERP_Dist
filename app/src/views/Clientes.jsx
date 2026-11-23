@@ -3,8 +3,8 @@ import React, { useMemo, useState } from "react";
 import { useApp } from "../App.jsx";
 import { api } from "../api";
 import { enviarCobro } from "../lib/offline";
-import { DIAS, fmt, puede, tieneAlerta, sinContar, tope } from "../lib/reglas";
-import { ChipCuenta } from "./ui.jsx";
+import { DIAS_VISITA, faltanDatosCheque, fmt, puede, tieneAlerta, sinContar, tope } from "../lib/reglas";
+import { ChipCuenta, ChequeCampos, chequeVacio } from "./ui.jsx";
 import { misClientes, PedidoRow } from "./Inicio.jsx";
 
 export function Clientes() {
@@ -28,7 +28,7 @@ export function Clientes() {
       </div>
       <div className="filters">
         <input type="search" placeholder="Buscar por nombre, dirección o código…" value={q} onChange={e => setQ(e.target.value)} />
-        <select value={dia} onChange={e => setDia(e.target.value)}><option value="">Ruta: todos los días</option>{DIAS.map(d => <option key={d}>{d}</option>)}</select>
+        <select value={dia} onChange={e => setDia(e.target.value)}><option value="">Ruta: todos los días</option>{DIAS_VISITA.map(d => <option key={d}>{d}</option>)}</select>
         <select value={loc} onChange={e => setLoc(e.target.value)}><option value="">Todas las localidades</option>{localidades.map(l => <option key={l}>{l}</option>)}</select>
         <button className={"btn sm " + (soloAlerta ? "" : "sec")} onClick={() => setSoloAlerta(!soloAlerta)}><Icon n="alerta" s={15} /> Con alerta de pago</button>
       </div>
@@ -69,8 +69,8 @@ export function EditarCliente({ c, onClose }) {
         <div className="grid g2">
           <div className="field"><label htmlFor="ec-loc">Localidad</label><input id="ec-loc" list="locs" value={f.localidad} onChange={e => set("localidad", e.target.value)} />
             <datalist id="locs">{[...new Set(db.clientes.map(x => x.localidad).filter(Boolean))].map(l => <option key={l} value={l} />)}</datalist></div>
-          <div className="field"><label htmlFor="ec-dia">Día de visita</label><select id="ec-dia" value={f.dia} onChange={e => set("dia", e.target.value)}><option value="">—</option>{DIAS.map(d => <option key={d}>{d}</option>)}</select></div>
-          {user.rol !== "vendedor" && <div className="field"><label htmlFor="ec-ven">Vendedor</label><select id="ec-ven" value={f.vendedorId ?? ""} onChange={e => set("vendedorId", e.target.value ? +e.target.value : null)}><option value="">Sin asignar</option>{vendedores.map(v => <option key={v.id} value={v.id}>{v.nombre}</option>)}</select></div>}
+          <div className="field"><label htmlFor="ec-dia">Día de visita</label><select id="ec-dia" value={f.dia} onChange={e => set("dia", e.target.value)}><option value="">—</option>{DIAS_VISITA.map(d => <option key={d}>{d}</option>)}</select></div>
+          {user.rol !== "vendedor" && <div className="field"><label htmlFor="ec-ven">Vendedor</label><select id="ec-ven" value={f.vendedorId ?? ""} onChange={e => set("vendedorId", vendedores.find(v => String(v.id) === e.target.value)?.id ?? null)}><option value="">Sin asignar</option>{vendedores.map(v => <option key={v.id} value={v.id}>{v.nombre}</option>)}</select></div>}
           <div className="field"><label htmlFor="ec-tel">Teléfono</label><input id="ec-tel" value={f.tel} onChange={e => set("tel", e.target.value)} /></div>
         </div>
         <div className="field"><label htmlFor="ec-obs">Observaciones para el reparto</label><textarea id="ec-obs" rows="2" value={f.obs} onChange={e => set("obs", e.target.value)} /></div>
@@ -91,14 +91,14 @@ export function ClienteDetalle() {
 
   // RF-PV-08: lo que compra siempre, con la última cantidad
   const habitual = {};
-  [...peds].reverse().forEach(p => p.estado !== "anulado" && p.lineas.forEach(l => { habitual[l.productoId] = l.cant; }));
+  [...peds].reverse().forEach(p => p.estado !== "anulado" && p.lineas.forEach(l => { if (l.cant > 0) habitual[l.productoId] = l.cant; }));
   const habList = Object.entries(habitual).map(([id, cant]) => ({ p: db.productos.find(x => x.id === +id), cant })).filter(x => x.p);
 
-  const tomarPedido = (items = {}) => { setCart({ clienteId: c.id, items, manual: {}, obs: "" }); go(Object.keys(items).length ? "confirmar" : "catalogo"); };
+  const tomarPedido = (items = {}) => { setCart({ clienteId: c.id, items, manual: {}, obs: "", origen: params.desde === "hoja" ? "hoja" : undefined }); go(Object.keys(items).length ? "confirmar" : "catalogo"); };
 
   return (
     <>
-      <button className="btn sm sec" onClick={() => go("clientes")}><Icon n="atras" s={16} /> Clientes</button>
+      <button className="btn sm sec" onClick={() => (params.desde === "hoja" ? go("hoja", { volver: true }) : go("clientes"))}><Icon n="atras" s={16} /> {params.desde === "hoja" ? "Hoja de ruta" : "Clientes"}</button>
       <div className="card" style={{ marginTop: 12 }}>
         <div className="row between" style={{ flexWrap: "wrap", alignItems: "flex-start" }}>
           <div style={{ minWidth: 0 }}>
@@ -106,6 +106,7 @@ export function ClienteDetalle() {
             <h1>{c.nombre}</h1>
             <p className="muted">{c.dir}{c.localidad ? " · " + c.localidad : ""}{c.tel ? " · Tel " + c.tel : ""}</p>
             <p className="muted">Ruta: {c.dia || "sin día"} · Vendedor: {vend?.nombre || "sin asignar"}</p>
+            {!DIAS_VISITA.includes(c.dia) && <p className="chip alerta" style={{ marginTop: 6 }}>Falta asignarle un día de visita: sus pedidos salen en el camión según el día en que se cargan.</p>}
             {c.obs && <p className="muted" style={{ marginTop: 6 }}><Icon n="nota" s={15} style={{ verticalAlign: "-2px" }} /> {c.obs}</p>}
           </div>
           <div style={{ textAlign: "right" }}>
@@ -144,12 +145,16 @@ function Cobro({ c, onClose, onOk }) {
   const { user } = useApp();
   const [monto, setMonto] = useState(c.saldo < 0 ? -c.saldo : "");
   const [medio, setMedio] = useState("Efectivo");
+  const [ch, setCh] = useState(chequeVacio());
   const { toast } = useApp();
   const ok = async () => {
     const m = Math.round(+monto); if (!(m > 0)) return;
-    try { const r = await enviarCobro(user, { clienteId: c.id, monto: m, medio }); if (r.enCola) { toast("Sin señal: el cobro quedó guardado y se envía solo cuando vuelva la conexión."); onClose(); } else onOk(m); } catch (e) { toast(e.message); }
+    if (medio === "Cheque" && faltanDatosCheque(ch)) return toast("Poné el número, el banco y la fecha de cobro del cheque");
+    try { const r = await enviarCobro(user, { clienteId: c.id, monto: m, medio, cheque: medio === "Cheque" ? ch : null }); if (r.enCola) { toast("Sin señal: el cobro quedó guardado y se envía solo cuando vuelva la conexión."); onClose(); } else onOk(m); } catch (e) { toast(e.message); }
   };
-  const nota = medio !== "Efectivo" ? "" : user.rol === "vendedor" ? "Lo vas a tener que entregar en el depósito." : "Entra directo a la caja del depósito.";
+  const nota = medio === "Transferencia" ? "Entra sola a la caja de transferencia."
+    : medio === "Cheque" ? "Entra solo a la caja de cheques, con su número, banco y fecha de cobro."
+    : user.rol === "vendedor" ? "Lo vas a tener que entregar en el depósito." : "Entra directo a la caja de efectivo del depósito.";
   return (
     <div className="modal-back" onClick={onClose}>
       <div className="modal" onClick={e => e.stopPropagation()}>
@@ -157,6 +162,7 @@ function Cobro({ c, onClose, onOk }) {
         <p className="muted" style={{ marginBottom: 12 }}>{c.nombre} · {c.saldo < 0 ? "debe " + fmt(-c.saldo) : "sin deuda"}. Cualquier pago, aunque sea parcial, reinicia la alerta de 15 días.</p>
         <div className="field"><label htmlFor="co-m">Monto</label><input id="co-m" type="number" inputMode="numeric" value={monto} onChange={e => setMonto(e.target.value)} /></div>
         <div className="field"><label htmlFor="co-med">Medio</label><select id="co-med" value={medio} onChange={e => setMedio(e.target.value)}>{["Efectivo", "Transferencia", "Cheque"].map(x => <option key={x}>{x}</option>)}</select></div>
+        {medio === "Cheque" && <ChequeCampos ch={ch} setCh={setCh} />}
         {nota && <p className="muted" style={{ marginBottom: 10 }}>{nota}</p>}
         <div className="row"><button className="btn sec" onClick={onClose}>Cancelar</button><button className="btn" style={{ flex: 1 }} onClick={ok}>Registrar {monto ? fmt(monto) : ""}</button></div>
       </div>

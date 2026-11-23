@@ -36,14 +36,14 @@ set role authenticated;
 select chequear((select count(*) from clientes) = 2, 'vendedor 1 ve solo sus 2 clientes (no el de V2)');
 select chequear(crear_pedido(2, '[{"producto_id":1,"cant":6}]') is not null, 'vendedor carga pedido a cliente con deuda');
 select chequear((select estado from pedidos order by id desc limit 1) = 'porAutorizar', 'pedido de cliente con deuda queda por autorizar');
-select chequear((select total from pedidos order by id desc limit 1) = 345600, 'tramo 5+ aplica 4%: 6 x 60000 x 0.96 = 345600');
+select chequear((select total from pedidos order by id desc limit 1) = 360000, 'sin tildar el descuento por cantidad se cobra precio normal: 6 x 60000 = 360000');
 select chequear((select stock from productos where id = 1) = 44, 'stock se descontó al confirmar (50 -> 44)');
 select chequear(crear_pedido(1, '[{"producto_id":2,"cant":1}]') is not null, 'pedido a cliente al día');
-select chequear((select estado from pedidos order by id desc limit 1) = 'pendiente', 'cliente al día va directo a depósito');
+select chequear((select estado from pedidos order by id desc limit 1) = 'porAutorizar', 'todo pedido de vendedor espera autorización, aunque el cliente esté al día');
 do $$ begin perform crear_pedido(1, '[{"producto_id":2,"cant":10}]'); raise exception 'debió fallar';
 exception when others then perform chequear(sqlerrm like 'No hay stock suficiente%', 'no deja vender más que el stock'); end $$;
-do $$ begin perform crear_pedido(1, '[{"producto_id":1,"cant":1,"precio_manual":1}]'); raise exception 'debió fallar';
-exception when others then perform chequear(sqlerrm like 'Solo Administración%', 'vendedor no puede cambiar precios'); end $$;
+do $$ begin perform crear_pedido(1, '[{"producto_id":1,"cant":1,"desc_manual":50}]'); raise exception 'debió fallar';
+exception when others then perform chequear(sqlerrm like 'Solo Administración%', 'vendedor no puede cambiar descuentos'); end $$;
 do $$ begin perform cambiar_estado(1, 'pendiente', 'x'); raise exception 'debió fallar';
 exception when others then perform chequear(sqlerrm like 'No tenés permiso%', 'vendedor no puede autorizar'); end $$;
 select chequear(crear_pedido(1, '[{"producto_id":3,"cant":12}]') is not null, 'producto sin contar se vende aunque el stock esté en 0');
@@ -77,6 +77,100 @@ do $$ begin insert into clientes(nombre, vendedor_id) values ('Para V2', '000000
 exception when others then perform chequear(true, 'vendedor no puede crear clientes para otro vendedor'); end $$;
 reset role;
 
+-- ===== Camión de entrega =====
+-- Regla pura: Lun→Mié, Mar→Jue, Mié→Vie, Jue→Sáb, Vie→Mar siguiente (semana del lun 16/11/2026).
+select chequear(fecha_entrega_de('Lunes', date '2026-11-16') = date '2026-11-18', 'camión: lunes → miércoles');
+select chequear(fecha_entrega_de('Martes', date '2026-11-17') = date '2026-11-19', 'camión: martes → jueves');
+select chequear(fecha_entrega_de('Miércoles', date '2026-11-18') = date '2026-11-20', 'camión: miércoles → viernes');
+select chequear(fecha_entrega_de('Jueves', date '2026-11-19') = date '2026-11-21', 'camión: jueves → sábado');
+select chequear(fecha_entrega_de('Viernes', date '2026-11-20') = date '2026-11-24', 'camión: viernes → martes de la semana siguiente');
+select chequear(fecha_entrega_de('Lunes', date '2026-11-17') = date '2026-11-18', 'camión: cliente del lunes cargado el martes igual va al miércoles');
+select chequear(fecha_entrega_de('Lunes', date '2026-11-18') = date '2026-11-25', 'camión: si el camión sale hoy, pasa a la semana siguiente');
+select chequear(fecha_entrega_de('', date '2026-11-21') = date '2026-11-24', 'camión: sin día, cargado el sábado → martes');
+select chequear(fecha_entrega_de('', date '2026-11-22') = date '2026-11-24', 'camión: sin día, cargado el domingo → martes');
+select chequear(fecha_entrega_de('', date '2026-11-16') = date '2026-11-18', 'camión: sin día cuenta el día en que se carga');
+
+select como('00000000-0000-0000-0000-000000000001'); set role authenticated;
+update clientes set dia = 'Martes' where codigo = 1;
+select crear_pedido(1, '[{"producto_id":2,"cant":1}]', '', 'cam-1');
+select chequear((select fecha_entrega from pedidos where uid = 'cam-1') = fecha_entrega_de('Martes', hoy_ar()), 'pedido nuevo guarda el camión según el día del cliente');
+select chequear((select fecha_entrega from pedidos where uid = 'cam-1') > hoy_ar(), 'el camión siempre sale después de hoy');
+select crear_pedido(1, '[{"producto_id":2,"cant":1}]', '', 'cam-2', hoy_ar() + 30);
+select chequear((select fecha from pedidos where uid = 'cam-2') = hoy_ar(), 'un pedido no puede tener fecha de carga futura');
+select cambiar_fecha_entrega((select id from pedidos where uid = 'cam-1'), date_trunc('week', hoy_ar())::date + 10);
+select chequear((select fecha_entrega from pedidos where uid = 'cam-1') = date_trunc('week', hoy_ar())::date + 10, 'vendedor cambia el camión de su pedido');
+select chequear((select historial->-1->>'txt' from pedidos where uid = 'cam-1') like 'Cambió el camión al jueves%', 'el cambio de camión queda en el historial');
+do $$ begin perform cambiar_fecha_entrega((select id from pedidos where uid = 'cam-1'), date_trunc('week', hoy_ar())::date + 7); raise exception 'debió fallar';
+exception when others then perform chequear(sqlerrm like 'Los camiones salen%', 'no se puede mover un camión a lunes (solo martes a sábado)'); end $$;
+reset role;
+select set_config('t.cam1', (select id::text from pedidos where uid = 'cam-1'), false); -- el vendedor 2 no ve este pedido
+select como('00000000-0000-0000-0000-000000000002'); set role authenticated;
+do $$ begin perform cambiar_fecha_entrega(current_setting('t.cam1')::bigint, date_trunc('week', hoy_ar())::date + 11); raise exception 'debió fallar';
+exception when others then perform chequear(sqlerrm like 'El pedido no es tuyo%', 'vendedor no cambia el camión del pedido de otro'); end $$;
+reset role;
+select como('00000000-0000-0000-0000-000000000003'); set role authenticated;
+do $$ begin perform cambiar_fecha_entrega(current_setting('t.cam1')::bigint, date_trunc('week', hoy_ar())::date + 11); raise exception 'debió fallar';
+exception when others then perform chequear(sqlerrm like 'No tenés permiso%', 'depósito no cambia el camión'); end $$;
+reset role;
+select como('00000000-0000-0000-0000-000000000004'); set role authenticated;
+select cambiar_fecha_entrega((select id from pedidos where uid = 'cam-1'), date_trunc('week', hoy_ar())::date + 11);
+select chequear((select fecha_entrega from pedidos where uid = 'cam-1') = date_trunc('week', hoy_ar())::date + 11, 'administración cambia el camión de cualquier pedido');
+reset role;
+
+-- ===== Feriados y cambios de ruta =====
+-- El lunes 23/11/2026 es feriado: sus visitas pasan al martes 24/11 (para todos).
+insert into excepciones_visita(vendedor_id, fecha_original, fecha_nueva, motivo) values (null, date '2026-11-23', date '2026-11-24', 'Feriado');
+select chequear(fecha_entrega_de('Lunes', date '2026-11-24') = date '2026-11-26', 'feriado: el cliente del lunes, visitado el martes, sale en el camión del jueves');
+select chequear(fecha_entrega_de('Martes', date '2026-11-24') = date '2026-11-26', 'feriado: los clientes del martes no cambian');
+select chequear(fecha_entrega_de('Lunes', date '2026-11-30') = date '2026-12-02', 'la semana siguiente vuelve a la normalidad solo');
+-- Cambio solo para un vendedor: gana sobre el general.
+insert into excepciones_visita(vendedor_id, fecha_original, fecha_nueva) values ('00000000-0000-0000-0000-000000000001', date '2026-11-23', date '2026-11-25');
+select chequear(fecha_entrega_de('Lunes', date '2026-11-25', '00000000-0000-0000-0000-000000000001') = date '2026-11-27', 'cambio de un vendedor: el suyo gana sobre el general');
+select chequear(fecha_entrega_de('Lunes', date '2026-11-25', '00000000-0000-0000-0000-000000000002') = date '2026-11-26', 'cambio de un vendedor: el otro sigue con el general');
+delete from excepciones_visita;
+select chequear(fecha_entrega_de('Lunes', date '2026-11-24') = date '2026-11-25', 'sin cambios de ruta vale la regla normal');
+
+select como('00000000-0000-0000-0000-000000000001'); set role authenticated;
+select chequear((select count(*) from feriados) >= 4, 'el vendedor ve los feriados');
+do $$ begin insert into feriados(fecha, nombre) values (date '2026-12-31', 'trucho'); raise exception 'debió fallar';
+exception when insufficient_privilege then perform chequear(true, 'vendedor no puede cargar feriados'); end $$;
+do $$ begin insert into excepciones_visita(fecha_original, fecha_nueva) values (date '2026-11-23', date '2026-11-24'); raise exception 'debió fallar';
+exception when insufficient_privilege then perform chequear(true, 'vendedor no puede cambiar la ruta'); end $$;
+reset role;
+select como('00000000-0000-0000-0000-000000000004'); set role authenticated;
+insert into feriados(fecha, nombre) values (date '2027-01-01', 'Año Nuevo');
+insert into excepciones_visita(fecha_original, fecha_nueva, motivo) values (date '2026-11-23', date '2026-11-24', 'Feriado');
+select chequear((select count(*) from excepciones_visita) = 1, 'administración carga un cambio de ruta');
+do $$ begin insert into excepciones_visita(fecha_original, fecha_nueva) values (date '2026-11-21', date '2026-11-24'); raise exception 'debió fallar';
+exception when check_violation then perform chequear(true, 'no se puede mover una visita desde o hacia un sábado'); end $$;
+delete from excepciones_visita;
+select chequear((select count(*) from excepciones_visita) = 0, 'administración cancela el cambio de ruta');
+reset role;
+
+-- ===== Autorización antes de depósito =====
+select chequear((select estado from pedidos where uid = 'cam-1') = 'porAutorizar', 'el pedido del vendedor queda por autorizar');
+select set_config('t.ids', (select array_to_string(array_agg(id), ',') from pedidos where uid in ('cam-1', 'cam-2')), false);
+select como('00000000-0000-0000-0000-000000000003'); set role authenticated;
+select chequear((select count(*) from pedidos where estado = 'porAutorizar') = 0, 'depósito no ve los pedidos por autorizar');
+do $$ begin perform autorizar_pedidos(string_to_array(current_setting('t.ids'), ',')::bigint[]); raise exception 'debió fallar';
+exception when others then perform chequear(sqlerrm like 'Solo Administración%', 'depósito no puede autorizar'); end $$;
+reset role;
+select como('00000000-0000-0000-0000-000000000001'); set role authenticated;
+do $$ begin perform autorizar_pedidos(string_to_array(current_setting('t.ids'), ',')::bigint[]); raise exception 'debió fallar';
+exception when others then perform chequear(sqlerrm like 'Solo Administración%', 'vendedor no puede autorizar'); end $$;
+reset role;
+select como('00000000-0000-0000-0000-000000000004'); set role authenticated;
+select crear_pedido(1, '[{"producto_id":1,"cant":1}]', '', 'adm-1');
+select chequear((select estado from pedidos where uid = 'adm-1') = 'pendiente', 'lo que carga administración entra ya autorizado');
+select chequear(autorizar_pedidos(string_to_array(current_setting('t.ids'), ',')::bigint[]) = 2, 'administración autoriza varios pedidos juntos');
+select chequear(autorizar_pedidos(string_to_array(current_setting('t.ids'), ',')::bigint[]) = 0, 'autorizar de nuevo no repite nada');
+select chequear((select estado from pedidos where uid = 'cam-1') = 'pendiente', 'el pedido autorizado pasa a depósito');
+select chequear((select historial->-1->>'txt' from pedidos where uid = 'cam-1') = 'Autorizado y enviado a depósito', 'la autorización queda en el historial');
+reset role;
+select como('00000000-0000-0000-0000-000000000003'); set role authenticated;
+select chequear((select count(*) from pedidos where uid = 'cam-1') = 1, 'depósito ve el pedido una vez autorizado');
+reset role;
+
 -- ===== Vendedor 2 no ve pedidos de V1 =====
 select como('00000000-0000-0000-0000-000000000002'); set role authenticated;
 select chequear((select count(*) from pedidos) = 0, 'vendedor 2 no ve pedidos de vendedor 1');
@@ -104,6 +198,127 @@ select chequear((select count(*) from caja_pendientes) = 0, 'vendedor no ve los 
 select chequear(mi_a_rendir() = 5000, 'vendedor ve lo suyo para entregar (5000)');
 reset role;
 
+-- ===== Costo de los productos =====
+insert into producto_costos(producto_id, costo) values (1, 40000);
+select como('00000000-0000-0000-0000-000000000001'); set role authenticated;
+select crear_pedido(1, '[{"producto_id":1,"cant":1}]', '', 'costo-1');
+select chequear((select count(*) from producto_costos) = 0, 'el vendedor no ve el costo de los productos');
+select chequear((select count(*) from linea_costos) = 0, 'el vendedor no ve el costo de las líneas');
+do $$ begin insert into producto_costos(producto_id, costo) values (2, 1); raise exception 'debió fallar';
+exception when insufficient_privilege then perform chequear(true, 'el vendedor no puede cargar costos'); end $$;
+reset role;
+select chequear((select costo from linea_costos where linea_id = (select max(id) from pedido_lineas)) = 40000, 'la línea del pedido guarda el costo al venderse');
+select como('00000000-0000-0000-0000-000000000004'); set role authenticated;
+update producto_costos set costo = 50000 where producto_id = 1;
+select chequear((select costo from producto_costos where producto_id = 1) = 50000, 'administración cambia el costo');
+select chequear((select costo from linea_costos where linea_id = (select max(id) from pedido_lineas)) = 40000, 'cambiar el costo no reescribe lo ya vendido');
+reset role;
+
+-- ===== Tres cajas: cobros por medio, salidas, pases y conteos =====
+select como('00000000-0000-0000-0000-000000000001'); set role authenticated;
+select registrar_cobro(1, 5000, 'Transferencia', 'tr-1');
+do $$ begin perform registrar_cobro(1, 7000, 'Cheque', 'ch-0'); raise exception 'debió fallar';
+exception when others then perform chequear(sqlerrm like 'Poné el número%', 'un cobro con cheque sin sus datos no se acepta'); end $$;
+select registrar_cobro(1, 7000, 'Cheque', 'ch-1', '{"numero":"0001234","banco":"Banco Nación","cobro":"2026-12-15"}');
+select chequear(mi_a_rendir() = 5000, 'transferencias y cheques no suman efectivo que el vendedor tenga que entregar');
+do $$ begin perform pasar_entre_cajas('efectivo', 'transferencia', 100); raise exception 'debió fallar';
+exception when others then perform chequear(sqlerrm like 'Solo Administración%', 'el vendedor no pasa plata entre cajas'); end $$;
+reset role;
+select como('00000000-0000-0000-0000-000000000004'); set role authenticated;
+select chequear(saldo_caja('transferencia') = 5000, 'la transferencia entra sola a su caja');
+select chequear(saldo_caja('cheques') = 7000, 'el cheque entra solo a su caja');
+select chequear((select cheque_numero || '/' || cheque_banco || '/' || cheque_cobro from caja_movimientos where caja = 'cheques') = '0001234/Banco Nación/2026-12-15', 'el cheque queda con número, banco y fecha de cobro');
+select chequear(saldo_caja() = 16500, 'el saldo de efectivo no cambia con transferencias ni cheques');
+do $$ begin insert into caja_movimientos(tipo, concepto, monto, caja) values ('ingreso', 'Otro ingreso', 100, 'cheques'); raise exception 'debió fallar';
+exception when check_violation then perform chequear(true, 'un movimiento a mano en cheques sin datos no se acepta'); end $$;
+insert into caja_movimientos(tipo, concepto, monto, persona, caja) values ('egreso', 'Gasto varios', -2000, 'Kiosco', 'transferencia');
+select chequear(saldo_caja('transferencia') = 3000, 'una salida resta de la caja que se eligió');
+select pasar_entre_cajas('efectivo', 'transferencia', 1500, 'depósito en el banco');
+select chequear(saldo_caja() = 15000 and saldo_caja('transferencia') = 4500, 'el pase entre cajas mueve la plata');
+do $$ begin perform pasar_entre_cajas('efectivo', 'cheques', 100); raise exception 'debió fallar';
+exception when others then perform chequear(sqlerrm like 'Poné el número%', 'un pase hacia cheques pide los datos del cheque'); end $$;
+do $$ begin perform pasar_entre_cajas('efectivo', 'efectivo', 100); raise exception 'debió fallar';
+exception when others then perform chequear(sqlerrm like 'Elegí dos cajas%', 'el pase pide dos cajas distintas'); end $$;
+select pasar_entre_cajas('cheques', 'efectivo', 7000, 'cheque cobrado', '{"numero":"0001234","banco":"Banco Nación","cobro":"2026-12-15"}');
+select chequear(saldo_caja('cheques') = 0 and saldo_caja() = 22000, 'cobrar un cheque lo pasa a la caja de efectivo');
+select chequear((select count(*) from caja_movimientos where concepto = 'Pase entre cajas' and tipo = 'ajuste') = 4, 'los pases son ajustes: no cuentan como gasto ni como ingreso');
+select chequear(contar_caja(4500, '', 'transferencia') = 0, 'contar la caja de transferencia cuadra');
+select chequear((select caja from caja_arqueos order by id desc limit 1) = 'transferencia', 'el conteo queda en la caja que se contó');
+insert into caja_devoluciones(movimiento_id, monto, como) values ((select id from caja_movimientos where concepto = 'Préstamo'), 1000, 'Transferencia');
+select chequear(saldo_caja('transferencia') = 5500 and saldo_caja() = 22000, 'lo que vuelve por transferencia entra a la caja de transferencia');
+reset role;
+
+-- ===== La ganancia de un cobro usa el precio y el costo de la venta original =====
+-- Una Coca se vende a 100 (costo 60); después sube a 120 (costo 80) y recién ahí se cobra la venta vieja.
+insert into productos(nombre, categoria, precio, stock, tramos, stock_contado) values ('COCA 1.5L', 'Bebidas', 100, 100, '[]', true);
+insert into producto_costos(producto_id, costo) values ((select id from productos where nombre = 'COCA 1.5L'), 60);
+insert into clientes(codigo, nombre, vendedor_id, saldo) values (90, 'Cliente Coca', '00000000-0000-0000-0000-000000000001', 0), (91, 'Cliente sin costo', '00000000-0000-0000-0000-000000000001', 0);
+select set_config('t.coca', (select id::text from productos where nombre = 'COCA 1.5L'), false);
+select set_config('t.c90', (select id::text from clientes where codigo = 90), false);
+select set_config('t.c91', (select id::text from clientes where codigo = 91), false);
+select como('00000000-0000-0000-0000-000000000001'); set role authenticated;
+select crear_pedido(current_setting('t.c90')::bigint, ('[{"producto_id":' || current_setting('t.coca') || ',"cant":10}]')::jsonb, '', 'coca-1');   -- 10 × 100 = 1000, costo 600
+select crear_pedido(current_setting('t.c91')::bigint, '[{"producto_id":3,"cant":1}]', '', 'sc-1');                                                  -- producto sin costo: 9000
+reset role;
+select como('00000000-0000-0000-0000-000000000004'); set role authenticated;
+update productos set precio = 120 where nombre = 'COCA 1.5L';
+update producto_costos set costo = 80 where producto_id = current_setting('t.coca')::bigint;
+select registrar_cobro(current_setting('t.c90')::bigint, 1000, 'Efectivo');    -- cobra la venta vieja, ya con el precio nuevo
+select registrar_cobro(current_setting('t.c91')::bigint, 9000, 'Efectivo');
+do $$ begin perform ganancia_cobrada(date '2000-01-01', date '2100-01-01'); raise exception 'debió fallar';
+exception when others then perform chequear(sqlerrm like 'Solo Gerencia%', 'administración no ve la ganancia'); end $$;
+reset role;
+select como('00000000-0000-0000-0000-000000000005'); set role authenticated;
+select chequear((select ganancia from ganancia_cobrada(date '2000-01-01', date '2100-01-01', current_setting('t.c90')::bigint)) = 400,
+  'cobrar una venta hecha a 100 gana 400 con el precio de entonces (con el precio nuevo serían 333)');
+select chequear((select cobrado from ganancia_cobrada(date '2000-01-01', date '2100-01-01', current_setting('t.c90')::bigint)) = 1000, 'lo cobrado de esa venta es 1000');
+select chequear((select cobrado_sin_costo from ganancia_cobrada(date '2000-01-01', date '2100-01-01', current_setting('t.c91')::bigint)) = 9000
+  and (select ganancia from ganancia_cobrada(date '2000-01-01', date '2100-01-01', current_setting('t.c91')::bigint)) = 0, 'cobrar una venta sin costo no suma ganancia y se informa aparte');
+reset role;
+select como('00000000-0000-0000-0000-000000000001'); set role authenticated;
+select crear_pedido(current_setting('t.c90')::bigint, ('[{"producto_id":' || current_setting('t.coca') || ',"cant":10}]')::jsonb, '', 'coca-2');   -- 10 × 120 = 1200, costo 800
+reset role;
+select como('00000000-0000-0000-0000-000000000004'); set role authenticated;
+select registrar_cobro(current_setting('t.c90')::bigint, 600, 'Transferencia');   -- paga la mitad de la segunda venta
+reset role;
+select como('00000000-0000-0000-0000-000000000005'); set role authenticated;
+select chequear((select ganancia from ganancia_cobrada(date '2000-01-01', date '2100-01-01', current_setting('t.c90')::bigint)) = 600,
+  'los cobros pagan primero las ventas más viejas: 1000 de la primera (400) + 600 de la segunda (la mitad de 400) = 600');
+select chequear((select ganancia from ganancia_cobrada(date '2000-01-01', date '2000-01-02', current_setting('t.c90')::bigint)) = 0, 'fuera del período no suma');
+reset role;
+
+-- Deuda anterior al sistema: se paga primero y no tiene costo conocido.
+insert into productos(nombre, categoria, precio, stock, tramos, stock_contado) values ('AGUA X', 'Bebidas', 100, 100, '[]', true);
+insert into producto_costos(producto_id, costo) values ((select id from productos where nombre = 'AGUA X'), 60);
+insert into clientes(codigo, nombre, vendedor_id, saldo) values (92, 'Deuda vieja sola', '00000000-0000-0000-0000-000000000001', -5000), (93, 'Deuda vieja y venta', '00000000-0000-0000-0000-000000000001', -1000);
+select set_config('t.c92', (select id::text from clientes where codigo = 92), false);
+select set_config('t.c93', (select id::text from clientes where codigo = 93), false);
+select set_config('t.agua', (select id::text from productos where nombre = 'AGUA X'), false);
+select como('00000000-0000-0000-0000-000000000001'); set role authenticated;
+select crear_pedido(current_setting('t.c93')::bigint, ('[{"producto_id":' || current_setting('t.agua') || ',"cant":10}]')::jsonb, '', 'agua-1');  -- 1000, costo 600
+reset role;
+select como('00000000-0000-0000-0000-000000000004'); set role authenticated;
+select registrar_cobro(current_setting('t.c92')::bigint, 3000, 'Efectivo');
+select registrar_cobro(current_setting('t.c93')::bigint, 1500, 'Efectivo');
+reset role;
+select como('00000000-0000-0000-0000-000000000005'); set role authenticated;
+select chequear((select ganancia from ganancia_cobrada(date '2000-01-01', date '2100-01-01', current_setting('t.c92')::bigint)) = 0
+  and (select cobrado_sin_costo from ganancia_cobrada(date '2000-01-01', date '2100-01-01', current_setting('t.c92')::bigint)) = 3000, 'cobrar una deuda anterior al sistema no suma ganancia');
+select chequear((select ganancia from ganancia_cobrada(date '2000-01-01', date '2100-01-01', current_setting('t.c93')::bigint)) = 200
+  and (select cobrado_sin_costo from ganancia_cobrada(date '2000-01-01', date '2100-01-01', current_setting('t.c93')::bigint)) = 1000, 'la deuda vieja se paga primero: 1500 = 1000 viejos (sin costo) + 500 de la venta (gana 200)');
+reset role;
+
+-- ===== Depósito ve el nombre de los vendedores, pero no sus comisiones =====
+select como('00000000-0000-0000-0000-000000000003'); set role authenticated;
+select chequear((select count(*) from perfiles) = 1, 'depósito solo lee su propio perfil');
+select chequear((select count(*) from lista_vendedores) = 2, 'depósito ve la lista de los 2 vendedores (para agrupar los pedidos)');
+select chequear((select string_agg(nombre, ',' order by nombre) from lista_vendedores) = 'Vendedor 1,Vendedor 2', 'la lista trae los nombres');
+reset role;
+select chequear((select count(*) from information_schema.columns where table_name = 'lista_vendedores' and column_name = 'comision_pct') = 0, 'la lista de vendedores no incluye las comisiones');
+select como('00000000-0000-0000-0000-000000000001'); set role authenticated;
+select chequear((select count(*) from perfiles) = 1, 'un vendedor tampoco lee los perfiles de los demás');
+reset role;
+
 -- ===== Depósito =====
 select como('00000000-0000-0000-0000-000000000003'); set role authenticated;
 select tildar(1, 0);
@@ -121,6 +336,220 @@ select chequear(cerrar_reparto() = 0, 'el mismo día no se cierra el reparto');
 update pedidos set salio = current_date - 1 where id = 1;
 select chequear(cerrar_reparto() = 1, 'al día siguiente pasa a entregado solo');
 select chequear(jsonb_array_length((select historial from pedidos where id = 1)) >= 4, 'el pedido tiene su historial');
-select chequear((select saldo from clientes where id = 2) = -25200 - 345600, 'entregado suma a la cuenta corriente');
+select chequear((select saldo from clientes where id = 2) = -25200 - 360000, 'entregado suma a la cuenta corriente');
 select chequear((select count(*) from auditoria) > 5, 'queda historial en auditoría');
+-- ===== Precio manual del vendedor con aprobación =====
+select como('00000000-0000-0000-0000-000000000001'); set role authenticated;
+select crear_pedido(1, '[{"producto_id":1,"cant":1,"precio_manual":50000}]', '', 'pm-1');
+select crear_pedido(1, '[{"producto_id":1,"cant":1,"precio_manual":60000}]', '', 'pm-2');
+select crear_pedido(1, '[{"producto_id":1,"cant":1,"precio_manual":45000}]', '', 'pm-3');
+select crear_pedido(1, '[{"producto_id":1,"cant":1,"precio_manual":40000}]', '', 'pm-4');
+select chequear((select precio from pedido_lineas where pedido_id = (select id from pedidos where uid = 'pm-1')) = 50000, 'el vendedor puede poner su precio');
+select chequear((select precio_lista from pedido_lineas where pedido_id = (select id from pedidos where uid = 'pm-1')) = 60000, 'la línea guarda el precio de lista');
+select chequear((select precio_estado from pedido_lineas where pedido_id = (select id from pedidos where uid = 'pm-1')) = 'pendiente', 'el cambio queda pendiente');
+select chequear((select precio_cambiado_por from pedido_lineas where pedido_id = (select id from pedidos where uid = 'pm-1')) = '00000000-0000-0000-0000-000000000001', 'queda registrado quién cambió el precio');
+select chequear((select total from pedidos where uid = 'pm-1') = 50000, 'el total del pedido usa el precio del vendedor');
+select chequear((select precio_estado from pedido_lineas where pedido_id = (select id from pedidos where uid = 'pm-2')) is null, 'poner el mismo precio de lista no es un cambio');
+select chequear((select manual from pedido_lineas where pedido_id = (select id from pedidos where uid = 'pm-2')) = false, 'poner el mismo precio de lista no marca la línea como manual');
+do $$ begin perform crear_pedido(1, '[{"producto_id":1,"cant":1,"precio_manual":-5}]'); raise exception 'debió fallar';
+exception when others then perform chequear(sqlerrm like 'El precio no puede ser negativo%', 'no se acepta un precio negativo'); end $$;
+do $$ begin perform resolver_precio_linea((select id from pedido_lineas where pedido_id = (select id from pedidos where uid = 'pm-1')), 'aprobado'); raise exception 'debió fallar';
+exception when others then perform chequear(sqlerrm like 'Solo Administración%', 'vendedor no puede resolver precios'); end $$;
+select chequear((select count(*) from pedido_linea_precio_log) = 0, 'vendedor no lee el historial de precios');
+update pedido_lineas set precio = 1 where pedido_id = (select id from pedidos where uid = 'pm-1');
+select chequear((select precio from pedido_lineas where pedido_id = (select id from pedidos where uid = 'pm-1')) = 50000, 'vendedor no puede tocar el precio de una línea directo');
+reset role;
+
+select como('00000000-0000-0000-0000-000000000003'); set role authenticated;
+select chequear((select count(*) from pedido_lineas where precio_estado = 'pendiente') = 0, 'depósito no ve líneas con precio pendiente');
+reset role;
+
+select como('00000000-0000-0000-0000-000000000004'); set role authenticated;
+select set_config('t.pm1', (select id::text from pedidos where uid = 'pm-1'), false);
+select set_config('t.pm2', (select id::text from pedidos where uid = 'pm-2'), false);
+select set_config('t.pm3', (select id::text from pedidos where uid = 'pm-3'), false);
+select set_config('t.pm4', (select id::text from pedidos where uid = 'pm-4'), false);
+select chequear((select count(*) from pedido_linea_precio_log where accion = 'propuesto') = 3, 'administración ve el historial: 3 cambios propuestos');
+do $$ begin perform cambiar_estado(current_setting('t.pm1')::bigint, 'pendiente', 'Autorizado'); raise exception 'debió fallar';
+exception when others then perform chequear(sqlerrm like 'Resolvé los cambios de precio%', 'no se autoriza un pedido con precio pendiente'); end $$;
+select chequear(autorizar_pedidos(array[current_setting('t.pm1')::bigint, current_setting('t.pm2')::bigint]) = 1, 'autorizar varios salta el pedido con precio pendiente');
+select chequear((select estado from pedidos where id = current_setting('t.pm1')::bigint) = 'porAutorizar', 'el pedido con precio pendiente sigue por autorizar');
+select chequear((select estado from pedidos where id = current_setting('t.pm2')::bigint) = 'pendiente', 'el pedido sin cambios sí se autorizó');
+-- corregir a un tercer precio
+select resolver_precio_linea((select id from pedido_lineas where pedido_id = current_setting('t.pm1')::bigint), 'corregido', 55000);
+select chequear((select precio from pedido_lineas where pedido_id = current_setting('t.pm1')::bigint) = 55000, 'corregir deja el precio nuevo');
+select chequear((select precio_estado from pedido_lineas where pedido_id = current_setting('t.pm1')::bigint) = 'corregido', 'la línea queda corregida');
+select chequear((select total from pedidos where id = current_setting('t.pm1')::bigint) = 55000, 'corregir recalcula el total del pedido');
+select chequear((select count(*) from pedido_linea_precio_log where pedido_id = current_setting('t.pm1')::bigint) = 2, 'el historial tiene propuesto y corregido');
+do $$ begin perform resolver_precio_linea((select id from pedido_lineas where pedido_id = current_setting('t.pm1')::bigint), 'aprobado'); raise exception 'debió fallar';
+exception when others then perform chequear(sqlerrm like '%ya fue resuelto%', 'un precio ya resuelto no se resuelve dos veces'); end $$;
+select cambiar_estado(current_setting('t.pm1')::bigint, 'pendiente', 'Autorizado y enviado a depósito');
+select chequear((select estado from pedidos where id = current_setting('t.pm1')::bigint) = 'pendiente', 'resuelto el precio, el pedido se autoriza');
+-- volver a lista
+select resolver_precio_linea((select id from pedido_lineas where pedido_id = current_setting('t.pm3')::bigint), 'repuesto');
+select chequear((select precio from pedido_lineas where pedido_id = current_setting('t.pm3')::bigint) = 60000, 'reponer vuelve al precio de lista');
+select chequear((select manual from pedido_lineas where pedido_id = current_setting('t.pm3')::bigint) = false, 'reponer saca la marca de manual');
+select chequear((select total from pedidos where id = current_setting('t.pm3')::bigint) = 60000, 'reponer recalcula el total');
+-- aprobar
+select resolver_precio_linea((select id from pedido_lineas where pedido_id = current_setting('t.pm4')::bigint), 'aprobado');
+select chequear((select precio from pedido_lineas where pedido_id = current_setting('t.pm4')::bigint) = 40000, 'aprobar deja el precio del vendedor');
+select chequear((select precio_estado from pedido_lineas where pedido_id = current_setting('t.pm4')::bigint) = 'aprobado', 'la línea queda aprobada');
+-- lo que carga administración no pasa por aprobación
+select crear_pedido(1, '[{"producto_id":1,"cant":1,"precio_manual":1000}]', '', 'pm-adm');
+select chequear((select precio_estado from pedido_lineas where pedido_id = (select id from pedidos where uid = 'pm-adm')) is null, 'el precio manual de administración no necesita aprobación');
+select chequear((select estado from pedidos where uid = 'pm-adm') = 'pendiente', 'el pedido de administración entra autorizado');
+reset role;
+
+select como('00000000-0000-0000-0000-000000000005'); set role authenticated;
+select chequear((select count(*) from pedido_linea_precio_log) >= 6, 'gerencia también ve el historial de precios');
+reset role;
+
+-- ===== Descuento por cantidad: solo si se tilda =====
+select como('00000000-0000-0000-0000-000000000001'); set role authenticated;
+select crear_pedido(1, '[{"producto_id":1,"cant":6,"aplicar_desc":true}]', '', 'dsc-1');
+select crear_pedido(1, '[{"producto_id":1,"cant":6}]', '', 'dsc-2');
+select crear_pedido(1, '[{"producto_id":1,"cant":2,"aplicar_desc":true}]', '', 'dsc-3');
+select crear_pedido(1, '[{"producto_id":1,"cant":6,"aplicar_desc":true}]', '', 'dsc-4');
+select chequear((select pct from pedido_lineas where pedido_id = (select id from pedidos where uid = 'dsc-1')) = 4, 'tildado: aplica el tramo que corresponde (6 unidades = 4%)');
+select chequear((select total from pedidos where uid = 'dsc-1') = 345600, 'tildado: 6 x 60000 x 0.96 = 345600');
+select chequear((select desc_estado from pedido_lineas where pedido_id = (select id from pedidos where uid = 'dsc-1')) = 'pendiente', 'el descuento del vendedor queda pendiente de aprobación');
+select chequear((select pct from pedido_lineas where pedido_id = (select id from pedidos where uid = 'dsc-2')) = 0, 'sin tildar no hay descuento aunque llegue al tramo');
+select chequear((select desc_estado from pedido_lineas where pedido_id = (select id from pedidos where uid = 'dsc-2')) is null, 'sin tildar no queda nada pendiente');
+select chequear((select pct from pedido_lineas where pedido_id = (select id from pedidos where uid = 'dsc-3')) = 0 and (select desc_estado from pedido_lineas where pedido_id = (select id from pedidos where uid = 'dsc-3')) is null, 'tildar sin llegar a ningún tramo no aplica nada');
+do $$ begin perform resolver_descuento_linea((select id from pedido_lineas where pedido_id = (select id from pedidos where uid = 'dsc-1')), 'aprobado'); raise exception 'debió fallar';
+exception when others then perform chequear(sqlerrm like 'Solo Administración%', 'vendedor no puede resolver descuentos'); end $$;
+reset role;
+
+select como('00000000-0000-0000-0000-000000000004'); set role authenticated;
+select set_config('t.d1', (select id::text from pedidos where uid = 'dsc-1'), false);
+select set_config('t.d2', (select id::text from pedidos where uid = 'dsc-2'), false);
+select set_config('t.d4', (select id::text from pedidos where uid = 'dsc-4'), false);
+do $$ begin perform cambiar_estado(current_setting('t.d1')::bigint, 'pendiente', 'Autorizado'); raise exception 'debió fallar';
+exception when others then perform chequear(sqlerrm like 'Resolvé los cambios de precio%', 'no se autoriza un pedido con descuento pendiente'); end $$;
+select chequear(autorizar_pedidos(array[current_setting('t.d1')::bigint, current_setting('t.d2')::bigint]) = 1, 'autorizar varios salta el pedido con descuento pendiente');
+select resolver_descuento_linea((select id from pedido_lineas where pedido_id = current_setting('t.d1')::bigint), 'quitado');
+select chequear((select pct from pedido_lineas where pedido_id = current_setting('t.d1')::bigint) = 0, 'quitar el descuento deja la línea a precio normal');
+select chequear((select total from pedidos where id = current_setting('t.d1')::bigint) = 360000, 'quitar el descuento recalcula el total');
+select chequear((select desc_estado from pedido_lineas where pedido_id = current_setting('t.d1')::bigint) = 'quitado', 'la línea queda con el descuento quitado');
+do $$ begin perform resolver_descuento_linea((select id from pedido_lineas where pedido_id = current_setting('t.d1')::bigint), 'aprobado'); raise exception 'debió fallar';
+exception when others then perform chequear(sqlerrm like '%ya fue resuelto%', 'un descuento ya resuelto no se resuelve dos veces'); end $$;
+select cambiar_estado(current_setting('t.d1')::bigint, 'pendiente', 'Autorizado y enviado a depósito');
+select chequear((select estado from pedidos where id = current_setting('t.d1')::bigint) = 'pendiente', 'resuelto el descuento, el pedido se autoriza');
+select resolver_descuento_linea((select id from pedido_lineas where pedido_id = current_setting('t.d4')::bigint), 'aprobado');
+select chequear((select pct from pedido_lineas where pedido_id = current_setting('t.d4')::bigint) = 4 and (select total from pedidos where id = current_setting('t.d4')::bigint) = 345600, 'aprobar deja el descuento aplicado');
+select crear_pedido(1, '[{"producto_id":1,"cant":6,"aplicar_desc":true}]', '', 'dsc-adm');
+select chequear((select pct from pedido_lineas where pedido_id = (select id from pedidos where uid = 'dsc-adm')) = 4 and (select desc_estado from pedido_lineas where pedido_id = (select id from pedidos where uid = 'dsc-adm')) is null, 'el descuento tildado por administración no necesita aprobación');
+select chequear((select count(*) from pedido_linea_precio_log where campo = 'descuento') = 4, 'el historial guarda los pasos del descuento');
+reset role;
+
+-- ===== Descuento sobre el total del pedido =====
+select como('00000000-0000-0000-0000-000000000001'); set role authenticated;
+select crear_pedido(1, '[{"producto_id":1,"cant":1}]', '', 'dt-1', null, 10000);
+select crear_pedido(1, '[{"producto_id":1,"cant":1}]', '', 'dt-2');
+select crear_pedido(1, '[{"producto_id":1,"cant":1}]', '', 'dt-4', null, 10000);
+select crear_pedido(1, '[{"producto_id":1,"cant":1}]', '', 'dt-5', null, 10000);
+select crear_pedido(1, '[{"producto_id":1,"cant":1,"precio_manual":50000}]', '', 'dt-6', null, 5000);
+select chequear((select total from pedidos where uid = 'dt-1') = 50000 and (select descuento_total from pedidos where uid = 'dt-1') = 10000, 'el descuento sobre el total se resta de la suma: 60000 - 10000 = 50000');
+select chequear((select desc_total_estado from pedidos where uid = 'dt-1') = 'pendiente', 'el descuento sobre el total de un vendedor queda pendiente');
+select chequear((select total from pedidos where uid = 'dt-2') = 60000 and (select desc_total_estado from pedidos where uid = 'dt-2') is null, 'sin descuento sobre el total no queda nada pendiente');
+do $$ begin perform crear_pedido(1, '[{"producto_id":1,"cant":1}]', '', null, null, 60000); raise exception 'debió fallar';
+exception when others then perform chequear(sqlerrm like 'El descuento no puede ser igual%', 'el descuento no puede igualar o superar el total'); end $$;
+do $$ begin perform crear_pedido(1, '[{"producto_id":1,"cant":1}]', '', null, null, -5); raise exception 'debió fallar';
+exception when others then perform chequear(sqlerrm like 'El descuento no puede ser negativo%', 'el descuento no puede ser negativo'); end $$;
+do $$ begin perform resolver_descuento_total((select id from pedidos where uid = 'dt-1'), 'aprobado'); raise exception 'debió fallar';
+exception when others then perform chequear(sqlerrm like 'Solo Administración%', 'vendedor no puede resolver el descuento sobre el total'); end $$;
+reset role;
+
+select como('00000000-0000-0000-0000-000000000004'); set role authenticated;
+select set_config('t.dt1', (select id::text from pedidos where uid = 'dt-1'), false);
+select set_config('t.dt2', (select id::text from pedidos where uid = 'dt-2'), false);
+select set_config('t.dt4', (select id::text from pedidos where uid = 'dt-4'), false);
+select set_config('t.dt5', (select id::text from pedidos where uid = 'dt-5'), false);
+select set_config('t.dt6', (select id::text from pedidos where uid = 'dt-6'), false);
+do $$ begin perform cambiar_estado(current_setting('t.dt1')::bigint, 'pendiente', 'Autorizado'); raise exception 'debió fallar';
+exception when others then perform chequear(sqlerrm like 'Resolvé los cambios de precio%', 'no se autoriza con el descuento sobre el total pendiente'); end $$;
+select chequear(autorizar_pedidos(array[current_setting('t.dt1')::bigint, current_setting('t.dt2')::bigint]) = 1, 'autorizar varios salta el pedido con descuento sobre el total pendiente');
+select resolver_descuento_total(current_setting('t.dt1')::bigint, 'corregido', 8000);
+select chequear((select total from pedidos where id = current_setting('t.dt1')::bigint) = 52000 and (select descuento_total from pedidos where id = current_setting('t.dt1')::bigint) = 8000, 'corregir el descuento recalcula el total: 60000 - 8000');
+select chequear((select desc_total_estado from pedidos where id = current_setting('t.dt1')::bigint) = 'corregido', 'el descuento queda corregido');
+do $$ begin perform resolver_descuento_total(current_setting('t.dt1')::bigint, 'aprobado'); raise exception 'debió fallar';
+exception when others then perform chequear(sqlerrm like '%ya fue resuelto%', 'el descuento sobre el total no se resuelve dos veces'); end $$;
+select cambiar_estado(current_setting('t.dt1')::bigint, 'pendiente', 'Autorizado y enviado a depósito');
+select chequear((select estado from pedidos where id = current_setting('t.dt1')::bigint) = 'pendiente', 'resuelto el descuento sobre el total, el pedido se autoriza');
+select resolver_descuento_total(current_setting('t.dt4')::bigint, 'aprobado');
+select chequear((select total from pedidos where id = current_setting('t.dt4')::bigint) = 50000, 'aprobar deja el descuento sobre el total');
+select resolver_descuento_total(current_setting('t.dt5')::bigint, 'quitado');
+select chequear((select total from pedidos where id = current_setting('t.dt5')::bigint) = 60000 and (select descuento_total from pedidos where id = current_setting('t.dt5')::bigint) = 0, 'quitar el descuento sobre el total deja el pedido a su suma');
+-- si cambia un precio, el descuento sobre el total se mantiene
+select resolver_precio_linea((select id from pedido_lineas where pedido_id = current_setting('t.dt6')::bigint), 'repuesto');
+select chequear((select total from pedidos where id = current_setting('t.dt6')::bigint) = 55000, 'al reponer el precio, el total sigue restando el descuento: 60000 - 5000');
+select crear_pedido(1, '[{"producto_id":1,"cant":1}]', '', 'dt-adm', null, 5000);
+select chequear((select total from pedidos where uid = 'dt-adm') = 55000 and (select desc_total_estado from pedidos where uid = 'dt-adm') is null, 'el descuento sobre el total de administración no necesita aprobación');
+select chequear((select count(*) from pedido_linea_precio_log where campo = 'total') = 7, 'el historial guarda los pasos del descuento sobre el total');
+reset role;
+
+-- la ganancia descuenta el descuento sobre el total: 10 x 100 (costo 60) con 100 de descuento = 900 cobrados, gana 300 (no 400)
+insert into clientes(codigo, nombre, vendedor_id, saldo) values (94, 'Cliente descuento total', '00000000-0000-0000-0000-000000000001', 0);
+select set_config('t.c94', (select id::text from clientes where codigo = 94), false);
+select como('00000000-0000-0000-0000-000000000004'); set role authenticated;
+select crear_pedido(current_setting('t.c94')::bigint, ('[{"producto_id":' || current_setting('t.agua') || ',"cant":10}]')::jsonb, '', 'dtg-1', null, 100);
+select registrar_cobro(current_setting('t.c94')::bigint, 900, 'Efectivo');
+reset role;
+select como('00000000-0000-0000-0000-000000000005'); set role authenticated;
+select chequear((select ganancia from ganancia_cobrada(date '2000-01-01', date '2100-01-01', current_setting('t.c94')::bigint)) = 300, 'el descuento sobre el total baja la ganancia: 900 cobrados - 600 de costo = 300');
+reset role;
+
+-- ===== Devoluciones =====
+-- Pedido: 10 Coca (120) + 5 Agua (100) = 1700, con 100 de descuento sobre el total = 1600. Entregado: la deuda es 1600.
+insert into clientes(codigo, nombre, vendedor_id, saldo) values (95, 'Cliente devolución', '00000000-0000-0000-0000-000000000001', 0);
+select set_config('t.c95', (select id::text from clientes where codigo = 95), false);
+select set_config('t.coca0', (select stock::text from productos where id = current_setting('t.coca')::bigint), false);
+select set_config('t.agua0', (select stock::text from productos where id = current_setting('t.agua')::bigint), false);
+select como('00000000-0000-0000-0000-000000000004'); set role authenticated;
+select crear_pedido(current_setting('t.c95')::bigint, ('[{"producto_id":' || current_setting('t.coca') || ',"cant":10},{"producto_id":' || current_setting('t.agua') || ',"cant":5}]')::jsonb, '', 'dev-1', null, 100);
+select set_config('t.dev1', (select id::text from pedidos where uid = 'dev-1'), false);
+select set_config('t.dev_coca', (select id::text from pedido_lineas where pedido_id = current_setting('t.dev1')::bigint and producto_id = current_setting('t.coca')::bigint), false);
+select set_config('t.dev_agua', (select id::text from pedido_lineas where pedido_id = current_setting('t.dev1')::bigint and producto_id = current_setting('t.agua')::bigint), false);
+do $$ begin perform devolver_pedido(current_setting('t.dev1')::bigint, ('[{"linea_id":' || current_setting('t.dev_coca') || ',"cant":1}]')::jsonb); raise exception 'debió fallar';
+exception when others then perform chequear(sqlerrm like 'Solo se pueden devolver pedidos que ya salieron%', 'no se devuelve un pedido que todavía no salió'); end $$;
+select cambiar_estado(current_setting('t.dev1')::bigint, 'enReparto', 'Salió en reparto');
+select cambiar_estado(current_setting('t.dev1')::bigint, 'entregado', 'Entregado');
+select chequear((select saldo from clientes where id = current_setting('t.c95')::bigint) = -1600, 'entregado: el cliente debe 1600');
+do $$ begin perform devolver_pedido(current_setting('t.dev1')::bigint, ('[{"linea_id":' || current_setting('t.dev_coca') || ',"cant":11}]')::jsonb); raise exception 'debió fallar';
+exception when others then perform chequear(sqlerrm like 'No se puede devolver más%', 'no se devuelve más de lo entregado'); end $$;
+do $$ begin perform devolver_pedido(current_setting('t.dev1')::bigint, '[]'::jsonb); raise exception 'debió fallar';
+exception when others then perform chequear(sqlerrm like 'Elegí qué se devolvió%', 'hay que elegir qué se devolvió'); end $$;
+-- devolución parcial: vuelven 4 Coca = 480; lo vendido baja a 1220 y el descuento a 72 => total 1148
+select devolver_pedido(current_setting('t.dev1')::bigint, ('[{"linea_id":' || current_setting('t.dev_coca') || ',"cant":4}]')::jsonb, 'Cerrado el local');
+select chequear((select total from pedidos where id = current_setting('t.dev1')::bigint) = 1148 and (select descuento_total from pedidos where id = current_setting('t.dev1')::bigint) = 72, 'devolución parcial: el total baja a 1148 (descuento sobre el total proporcional)');
+select chequear((select cant from pedido_lineas where id = current_setting('t.dev_coca')::bigint) = 6 and (select total from pedido_lineas where id = current_setting('t.dev_coca')::bigint) = 720, 'la línea queda con lo que se vendió: 6 Coca = 720');
+select chequear((select stock from productos where id = current_setting('t.coca')::bigint) = current_setting('t.coca0')::int - 6, 'vuelven 4 Coca al stock (se habían descontado 10, quedan 6 vendidas)');
+select chequear((select saldo from clientes where id = current_setting('t.c95')::bigint) = -1148, 'la deuda del cliente baja de 1600 a 1148');
+select chequear((select estado from pedidos where id = current_setting('t.dev1')::bigint) = 'entregado', 'el pedido sigue entregado');
+select chequear((select monto from pedido_devoluciones where pedido_id = current_setting('t.dev1')::bigint) = 452, 'queda registrado el monto devuelto: 452');
+select chequear((select historial->-1->>'txt' from pedidos where id = current_setting('t.dev1')::bigint) = 'Devolución parcial: 4 x COCA 1.5L', 'la devolución queda en el historial');
+-- el cliente paga lo que debe y vuelve el resto: la ganancia de lo cobrado usa lo realmente vendido
+select registrar_cobro(current_setting('t.c95')::bigint, 1148, 'Efectivo');
+reset role;
+select como('00000000-0000-0000-0000-000000000005'); set role authenticated;
+select chequear((select ganancia from ganancia_cobrada(date '2000-01-01', date '2100-01-01', current_setting('t.c95')::bigint)) = 368, 'ganancia tras la devolución parcial: 1148 cobrados - 780 de costo = 368');
+select chequear((select count(*) from pedido_devoluciones) = 1, 'gerencia ve las devoluciones');
+reset role;
+select como('00000000-0000-0000-0000-000000000004'); set role authenticated;
+-- devolución completa del resto: el pedido se anula, vuelve todo el stock y como ya había pagado queda saldo a favor
+select devolver_pedido(current_setting('t.dev1')::bigint, ('[{"linea_id":' || current_setting('t.dev_coca') || ',"cant":6},{"linea_id":' || current_setting('t.dev_agua') || ',"cant":5}]')::jsonb);
+select chequear((select estado from pedidos where id = current_setting('t.dev1')::bigint) = 'anulado' and (select total from pedidos where id = current_setting('t.dev1')::bigint) = 0, 'devolución completa: el pedido queda anulado y en 0');
+select chequear((select stock from productos where id = current_setting('t.coca')::bigint) = current_setting('t.coca0')::int and (select stock from productos where id = current_setting('t.agua')::bigint) = current_setting('t.agua0')::int, 'devolución completa: todo el stock vuelve');
+select chequear((select saldo from clientes where id = current_setting('t.c95')::bigint) = 1148, 'como ya había pagado, queda 1148 a favor del cliente');
+reset role;
+select como('00000000-0000-0000-0000-000000000001'); set role authenticated;
+do $$ begin perform devolver_pedido(current_setting('t.dev1')::bigint, '[{"linea_id":1,"cant":1}]'::jsonb); raise exception 'debió fallar';
+exception when others then perform chequear(sqlerrm like 'Solo Administración%', 'vendedor no puede registrar devoluciones'); end $$;
+select chequear((select count(*) from pedido_devoluciones) = 0, 'vendedor no ve las devoluciones');
+reset role;
+select como('00000000-0000-0000-0000-000000000003'); set role authenticated;
+do $$ begin perform devolver_pedido(current_setting('t.dev1')::bigint, '[{"linea_id":1,"cant":1}]'::jsonb); raise exception 'debió fallar';
+exception when others then perform chequear(sqlerrm like 'Solo Administración%', 'depósito no puede registrar devoluciones'); end $$;
+reset role;
+
 select 'TODAS LAS PRUEBAS PASARON' as resultado;

@@ -52,3 +52,15 @@ export function ChipCuenta({ c }) {
 export const ChipEstado = ({ e }) => <span className={"chip " + ESTADO_CLASE[e]}>{ESTADOS[e]}</span>;
 
 export const fechaHora = iso => new Date(iso).toLocaleString("es-AR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
+
+// Datos de un cheque: número, banco y fecha de cobro (se piden siempre que un cheque entra o sale de la caja).
+export function ChequeCampos({ ch, setCh }) {
+  return (
+    <div className="grid g2" style={{ marginBottom: 4 }}>
+      <div className="field"><label htmlFor="ch-n">Número de cheque</label><input id="ch-n" value={ch.numero} onChange={e => setCh({ ...ch, numero: e.target.value })} /></div>
+      <div className="field"><label htmlFor="ch-b">Banco</label><input id="ch-b" value={ch.banco} onChange={e => setCh({ ...ch, banco: e.target.value })} /></div>
+      <div className="field"><label htmlFor="ch-f">Fecha de cobro</label><input id="ch-f" type="date" value={ch.cobro} onChange={e => setCh({ ...ch, cobro: e.target.value })} /></div>
+    </div>
+  );
+}
+export const chequeVacio = () => ({ numero: "", banco: "", cobro: "" });

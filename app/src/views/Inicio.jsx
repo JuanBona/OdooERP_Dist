@@ -2,7 +2,8 @@ import { Icon, Avatar } from "./icons.jsx";
 import React from "react";
 import { useApp } from "../App.jsx";
 import { api } from "../api";
-import { fmt, hoyISO, tieneAlerta } from "../lib/reglas";
+import { useGanancia } from "../lib/useGanancia";
+import { calcProfit, fechaCorta, fmt, hoyISO, nombreCamion, cambioPendiente, puede, textoCambio, tieneAlerta } from "../lib/reglas";
 import { mesActual, mesPorCerrar, nombreMes } from "../lib/mes";
 import { ChipCuenta, ChipEstado, ProdImg } from "./ui.jsx";
 
@@ -17,9 +18,11 @@ export default function Inicio() {
   const alertas = misClientes(db, user).filter(tieneAlerta);
   const cuenta = e => db.pedidos.filter(p => p.estado === e).length;
   const bajos = db.productos.filter(p => p.activo && p.stockContado !== false && p.stock <= p.stockMin);
+  const g = useGanancia(db, hoy.slice(0, 7), puede.verFinanzas(user));
+  const pr = puede.verFinanzas(user) && g ? calcProfit(db, hoy.slice(0, 7), g) : null; // profit del mes en curso (solo Gerencia)
 
   const porCerrar = user.rol === "gerencia" ? mesPorCerrar(db) : null;
-  // Comisión que el vendedor lleva acumulada en el mes (vuelve a 0 con el cierre de mes).
+  // Comisión que el vendedor lleva acumulada en el mes (vuelve a 0 con el mes nuevo).
   const miComision = db.cobros.filter(c => c.vendedorId === user.id && c.fecha?.startsWith(mesActual())).reduce((s, c) => s + (c.comision || 0), 0);
 
   return (
@@ -33,15 +36,22 @@ export default function Inicio() {
       </div>
 
       <div className="grid g3" style={{ marginBottom: 16 }}>
+        {pr && (
+          <div className="card kpi" style={{ cursor: "pointer", borderColor: "var(--brand)" }} onClick={() => go("resumen")}>
+            <div className="num" style={{ color: pr.profit >= 0 ? "var(--entr)" : "var(--danger)" }}>{fmt(pr.profit)}</div>
+            <div className="lbl">Profit del mes</div>
+            <div className="muted" style={{ fontSize: 12, marginTop: 4 }}>{pr.conCostos ? `Ganancia ${fmt(pr.ganancia)} − gastos ${fmt(pr.gastos)} − comisiones ${fmt(pr.comisiones)}` : "Sin cobros de ventas con costo todavía: cargá los costos en Artículos"}</div>
+          </div>
+        )}
         <div className="card kpi"><div className="num">{deHoy.length}</div><div className="lbl">Pedidos de hoy</div></div>
-        {user.rol === "vendedor" && <div className="card kpi"><div className="num" style={{ color: "var(--listo)" }}>{fmt(api.aRendir(user.id))}</div><div className="lbl">Efectivo cobrado para entregar en el depósito</div></div>}
-        {["admin", "gerencia"].includes(user.rol) && <div className="card kpi" style={{ cursor: "pointer" }} onClick={() => go("caja")}><div className="num">{fmt(api.saldoCaja())}</div><div className="lbl">En la caja del depósito</div></div>}
         {user.rol === "vendedor" && <div className="card kpi"><div className="num">{fmt(miComision)}</div><div className="lbl">Mi comisión del mes</div></div>}
+        {user.rol === "vendedor" && <div className="card kpi"><div className="num" style={{ color: "var(--listo)" }}>{fmt(api.aRendir(user.id))}</div><div className="lbl">Efectivo cobrado para entregar en el depósito</div></div>}
+        {["admin", "gerencia"].includes(user.rol) && <div className="card kpi" style={{ cursor: "pointer" }} onClick={() => go("caja")}><div className="num">{fmt(api.saldoCaja())}</div><div className="lbl">En la caja de efectivo del depósito</div></div>}
         <div className="card kpi"><div className="num">{fmt(deHoy.reduce((s, p) => s + p.total, 0))}</div><div className="lbl">Vendido hoy</div></div>
         {user.rol !== "vendedor" && <>
           <div className="card kpi" style={{ cursor: "pointer" }} onClick={() => go("pedidos", { estado: "porAutorizar" })}>
             <div className="num" style={{ color: "var(--aut)" }}>{cuenta("porAutorizar")}</div><div className="lbl">Por autorizar</div></div>
-          <div className="card kpi" style={{ cursor: "pointer" }} onClick={() => go("deposito")}>
+          <div className="card kpi" style={{ cursor: "pointer" }} onClick={() => go(user.rol === "admin" ? "pedidos" : "deposito")}>
             <div className="num" style={{ color: "var(--pend)" }}>{cuenta("pendiente") + cuenta("preparando")}</div><div className="lbl">En depósito</div></div>
           <div className="card kpi"><div className="num" style={{ color: "var(--listo)" }}>{cuenta("preparado")}</div><div className="lbl">Listos para salir</div></div>
         </>}
@@ -85,14 +95,14 @@ export default function Inicio() {
 }
 
 export function PedidoRow({ p }) {
-  const { db, go } = useApp();
+  const { db, go, user } = useApp();
   const c = db.clientes.find(x => x.id === p.clienteId);
   const v = db.usuarios.find(x => x.id === p.vendedorId);
   return (
     <div className="list-item" onClick={() => go("pedido", { id: p.id })}>
       <Avatar txt={"#" + p.id} />
-      <div style={{ flex: 1, minWidth: 0 }}><b>{c?.nombre}</b><div className="muted">{p.fecha}{v ? " · " + v.nombre : ""}</div></div>
-      <div style={{ textAlign: "right" }}><div style={{ fontWeight: 800 }}>{fmt(p.total)}</div><ChipEstado e={p.estado} /></div>
+      <div style={{ flex: 1, minWidth: 0 }}><b>{c?.nombre}</b><div className="muted">{p.fecha}{v ? " · " + v.nombre : ""}{p.fechaEntrega ? " · " + nombreCamion(p.fechaEntrega) + " " + fechaCorta(p.fechaEntrega) : ""}{p.estado === "porAutorizar" && puede.autorizar(user) && c?.saldo < 0 ? " · Debe " + fmt(-c.saldo) : ""}</div></div>
+      <div style={{ textAlign: "right" }}><div style={{ fontWeight: 800 }}>{fmt(p.total)}</div>{p.estado === "porAutorizar" && cambioPendiente(p) && <div><span className="chip warn" style={{ fontWeight: 800 }}>⚠ {textoCambio(p)}</span></div>}<ChipEstado e={p.estado} /></div>
     </div>
   );
 }

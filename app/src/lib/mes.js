@@ -1,3 +1,5 @@
+import { NO_ES_GASTO } from "./reglas";
+
 // Cuentas del mes (facturación, gastos, comisiones, lo que quedó) y reglas del cierre de mes.
 // Las usan el Resumen del mes y la pantalla de Cierre, así los números son siempre los mismos.
 
@@ -8,12 +10,12 @@ export const mesActual = () => mesDe(new Date());
 export const mover = (m, d) => { const x = new Date(m + "-15T12:00"); x.setMonth(x.getMonth() + d); return mesDe(x); };
 export const nombreMes = m => { const s = new Date(m + "-15T12:00").toLocaleDateString("es-AR", { month: "long", year: "numeric" }); return s[0].toUpperCase() + s.slice(1); };
 
-// El mes en curso para las cuentas: si el mes del calendario ya se cerró (último día después de las 18 h),
-// ya cuenta el mes siguiente, que arranca de 0.
-export const mesEnCurso = db => { const m = mesActual(); return (db.cierres || []).some(c => c.mes === m) ? mover(m, 1) : m; };
-
-export const HORA_CIERRE = 18;
-// El cierre se habilita el último día del mes desde las 18 h.
+export const HORA_CIERRE = 20;
+// Último día del mes ("AAAA-MM") y el texto "Cierra el 30 de noviembre a las 20:00 hs".
+export const ultimoDia = m => new Date(+m.slice(0, 4), +m.slice(5, 7), 0).getDate();
+export const textoCierre = m => `Cierra el ${ultimoDia(m)} de ${new Date(m + "-15T12:00").toLocaleDateString("es-AR", { month: "long" })} a las ${HORA_CIERRE}:00 hs`;
+// El cierre se habilita el último día del mes desde las 20 h. Los números del mes se siguen viendo
+// hasta las 12 de la noche; el día 1 el Resumen arranca de 0 con el mes nuevo.
 export const puedeCerrarHoy = (ahora = new Date()) => {
   const manana = new Date(ahora); manana.setDate(ahora.getDate() + 1);
   return manana.getMonth() !== ahora.getMonth() && ahora.getHours() >= HORA_CIERRE;
@@ -28,25 +30,24 @@ export function mesPorCerrar(db, ahora = new Date()) {
   return null;
 }
 
-// Salidas de caja que no son gasto: el retiro del dueño y el pago de comisiones
-// (las comisiones ya se restan aparte, calculadas sobre lo cobrado: así no se restan dos veces).
-export const NO_SON_GASTO = ["Retiro del dueño", "Pago de comisiones"];
 export const detallePagoComision = mes => `Comisiones ${nombreMes(mes)}`;
 
 const sum = (a, f) => a.reduce((s, x) => s + f(x), 0);
 const top = (obj, n) => Object.values(obj).sort((a, b) => b.valor - a.valor).slice(0, n);
 
-export function calcularMes(db, mes) {
+// pr: el resultado de calcProfit (ganancia con el costo de cada venta − gastos − comisiones).
+export function calcularMes(db, mes, pr) {
   const enMes = f => f && f.startsWith(mes);
   const peds = db.pedidos.filter(p => enMes(p.fecha) && !["anulado", "rechazado"].includes(p.estado));
   const cobros = db.cobros.filter(c => enMes(c.fecha));
-  const gastos = db.caja.filter(m => enMes(m.fecha) && m.tipo === "egreso" && !m.vuelve && !NO_SON_GASTO.includes(m.concepto))
+  const gastos = db.caja.filter(m => enMes(m.fecha) && m.tipo === "egreso" && !m.vuelve && !NO_ES_GASTO.includes(m.concepto))
     .map(m => ({ categoria: m.concepto, monto: -m.monto }));
   const facturacion = sum(peds, p => p.total);
   const cobrado = sum(cobros, c => c.monto);
-  const gastado = sum(gastos, g => g.monto);
+  const gastado = pr ? pr.gastos : sum(gastos, g => g.monto);
   const comisiones = sum(cobros, c => c.comision || 0);
-  const profit = cobrado - gastado - comisiones;
+  const ganancia = pr ? pr.ganancia : 0;
+  const profit = pr ? pr.profit : 0;
   const pctGanancia = cobrado > 0 ? Math.round(profit / cobrado * 1000) / 10 : 0;
 
   const pagosComision = db.caja.filter(m => m.concepto === "Pago de comisiones" && m.detalle === detallePagoComision(mes));
@@ -78,7 +79,7 @@ export function calcularMes(db, mes) {
 
   return {
     mes, pedidos: peds.length, entregados: peds.filter(p => p.estado === "entregado").length,
-    facturacion, cobrado, gastado, comisiones, profit, pctGanancia,
+    facturacion, cobrado, gastado, comisiones, ganancia, profit, pctGanancia,
     vendedores, topProductos: top(prod, 10), topClientes: top(cli, 10),
     gastosPorTipo: Object.entries(porTipo).sort((a, b) => b[1] - a[1]),
   };
