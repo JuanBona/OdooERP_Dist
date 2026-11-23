@@ -54,6 +54,8 @@ const mapLinea = l => ({
   log: (l.pedido_linea_precio_log || []).sort((a, b) => a.id - b.id).map(h => ({ campo: h.campo, accion: h.accion, usuarioId: h.usuario_id, antes: num(h.precio_antes), despues: num(h.precio_despues), fecha: h.creado_en })),
 });
 const mapPedido = p => ({ id: p.id, clienteId: p.cliente_id, vendedorId: p.vendedor_id, fecha: p.fecha, fechaEntrega: p.fecha_entrega, creado: p.creado, estado: p.estado, total: num(p.total), obs: p.obs, hechos: p.hechos || [], historial: p.historial || [], salio: p.salio,
+  // Devoluciones del pedido: solo las devuelve la base a Administración y Gerencia.
+  devoluciones: (p.pedido_devoluciones || []).sort((a, b) => a.id - b.id).map(d => ({ id: d.id, fecha: d.creado_en, usuarioId: d.usuario_id, monto: num(d.monto), completa: d.completa, motivo: d.motivo, lineas: (d.pedido_devolucion_lineas || []).map(x => ({ nombre: x.nombre, cant: x.cant, monto: num(x.monto) })) })),
   descuentoTotal: num(p.descuento_total) || 0, descTotalEstado: p.desc_total_estado, descTotalPor: p.desc_total_por, descTotalEn: p.desc_total_en,
   // Historial del descuento sobre el total: solo lo devuelve la base a Administración y Gerencia.
   logTotal: (p.log_total || []).filter(h => h.campo === "total").sort((a, b) => a.id - b.id).map(h => ({ accion: h.accion, usuarioId: h.usuario_id, antes: num(h.precio_antes), despues: num(h.precio_despues), fecha: h.creado_en })), lineas: (p.pedido_lineas || []).sort((a, b) => a.id - b.id).map(mapLinea) });
@@ -85,7 +87,7 @@ const cargas = {
   // Solo lo reciente (para que entrar sea rápido y no se descargue todo el historial):
   // pedidos de los últimos 60 días + los que siguen abiertos, y cobros de los últimos 60 días.
   pedidos: async () => {
-    db.pedidos = (await todo(() => sb.from("pedidos").select("*, log_total:pedido_linea_precio_log(*), pedido_lineas(*, linea_costos(costo), pedido_linea_precio_log(*))")
+    db.pedidos = (await todo(() => sb.from("pedidos").select("*, log_total:pedido_linea_precio_log(*), pedido_devoluciones(*, pedido_devolucion_lineas(*)), pedido_lineas(*, linea_costos(costo), pedido_linea_precio_log(*))")
       .or(`fecha.gte.${desde()},fecha_entrega.gte.${desde()},estado.in.(porAutorizar,pendiente,preparando,preparado,enReparto)`)
       .order("id", { ascending: false }))).map(mapPedido);
   },
@@ -107,7 +109,7 @@ const recargar = async (...qué) => { await Promise.all(qué.map(k => cargas[k](
 const recargarTodo = () => recargar(...Object.keys(cargas));
 
 // Tiempo real: si otro usuario cambia algo, se recarga esa parte.
-const TABLA = { productos: "productos", clientes: "clientes", pedidos: "pedidos", pedido_lineas: "pedidos", pedido_linea_precio_log: "pedidos", cobros: "cobros", caja_movimientos: "caja", caja_devoluciones: "caja", perfiles: "usuarios", feriados: "feriados", excepciones_visita: "excepciones" };
+const TABLA = { productos: "productos", clientes: "clientes", pedidos: "pedidos", pedido_lineas: "pedidos", pedido_linea_precio_log: "pedidos", pedido_devoluciones: "pedidos", pedido_devolucion_lineas: "pedidos", cobros: "cobros", caja_movimientos: "caja", caja_devoluciones: "caja", perfiles: "usuarios", feriados: "feriados", excepciones_visita: "excepciones" };
 let canal = null; const pendientes = new Set(); let timer = null;
 let reloj = null;
 function escuchar() {
@@ -214,6 +216,13 @@ export const api = {
   async resolverDescuentoTotal(user, pedidoId, accion, monto = null) {
     const { error } = await sb.rpc("resolver_descuento_total", { p_pedido: pedidoId, p_accion: accion, p_monto: monto }); err(error);
     await recargar("pedidos");
+  },
+  // Devolución completa o parcial de un pedido que ya salió en reparto (Administración y Gerencia).
+  // items: [{ lineaId, cant }]. Restaura stock, deuda del cliente y lo vendido.
+  async devolverPedido(user, pedidoId, items, motivo = "") {
+    const p_items = items.map(i => ({ linea_id: i.lineaId, cant: i.cant }));
+    const { error } = await sb.rpc("devolver_pedido", { p_pedido: pedidoId, p_items, p_motivo: motivo || null }); err(error);
+    await recargar("pedidos", "productos", "clientes");
   },
   async cambiarFechaEntrega(user, pedidoId, fecha) {
     const { error } = await sb.rpc("cambiar_fecha_entrega", { p_pedido: pedidoId, p_fecha: fecha }); err(error);

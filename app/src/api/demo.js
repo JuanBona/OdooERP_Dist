@@ -216,6 +216,45 @@ export const api = {
     save();
   },
 
+  // Devolución completa o parcial de un pedido que ya salió en reparto (Administración y Gerencia).
+  // items: [{ lineaId, cant }]. Restaura stock, deuda del cliente y lo vendido.
+  devolverPedido(user, pedidoId, items, motivo = "") {
+    if (!["admin", "gerencia"].includes(user.rol)) throw new Error("Solo Administración o Gerencia pueden registrar devoluciones.");
+    const p = db.pedidos.find(x => x.id === pedidoId);
+    if (!p) throw new Error("Pedido no encontrado.");
+    if (!["enReparto", "entregado"].includes(p.estado)) throw new Error("Solo se pueden devolver pedidos que ya salieron en reparto.");
+    if (!items?.length) throw new Error("Elegí qué se devolvió.");
+    const sumaOld = p.lineas.reduce((s, x) => s + x.total, 0);
+    // Se valida todo antes de tocar nada.
+    const cantRestante = Object.fromEntries(p.lineas.map(l => [l.id, l.cant]));
+    items.forEach(it => {
+      const l = p.lineas.find(x => x.id === it.lineaId);
+      if (!l) throw new Error("Línea no encontrada.");
+      if (!(it.cant > 0)) throw new Error("Cantidad inválida.");
+      if (it.cant > cantRestante[l.id]) throw new Error(`No se puede devolver más de lo entregado de ${l.nombre}.`);
+      cantRestante[l.id] -= it.cant;
+    });
+    const devLineas = items.map(it => {
+      const l = p.lineas.find(x => x.id === it.lineaId);
+      const monto = it.cant === l.cant ? l.total : Math.round(l.total * it.cant / l.cant);
+      l.cant -= it.cant; l.total -= monto;
+      db.productos.find(x => x.id === l.productoId).stock += it.cant;
+      return { nombre: l.nombre, cant: it.cant, monto };
+    });
+    const sumaNew = p.lineas.reduce((s, x) => s + x.total, 0);
+    const dNew = sumaNew === 0 || sumaOld === 0 ? 0 : Math.round((p.descuentoTotal || 0) * sumaNew / sumaOld);
+    const totalNew = sumaNew - dNew, monto = p.total - totalNew;
+    p.total = totalNew; p.descuentoTotal = dNew;
+    if (p.estado === "entregado") db.clientes.find(c => c.id === p.clienteId).saldo += monto; // baja la deuda (o queda a favor)
+    const completa = sumaNew === 0;
+    (p.devoluciones ||= []).push({ id: db.seq++, fecha: new Date().toISOString(), usuarioId: user.id, monto, completa, motivo: motivo || null, lineas: devLineas });
+    if (completa) p.estado = "anulado";
+    const txt = (completa ? "Devolución completa: " : "Devolución parcial: ") + devLineas.map(d => `${d.cant} x ${d.nombre}`).join(", ");
+    p.historial.push({ fecha: new Date().toISOString(), usuario: user.nombre, txt });
+    audit(user, txt, "#" + p.id);
+    save();
+  },
+
   cambiarFechaEntrega(user, pedidoId, fecha) {
     const p = db.pedidos.find(x => x.id === pedidoId);
     if (user.rol === "vendedor" && p.vendedorId !== user.id) throw new Error("El pedido no es tuyo.");

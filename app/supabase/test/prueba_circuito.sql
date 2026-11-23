@@ -499,4 +499,57 @@ select como('00000000-0000-0000-0000-000000000005'); set role authenticated;
 select chequear((select ganancia from ganancia_cobrada(date '2000-01-01', date '2100-01-01', current_setting('t.c94')::bigint)) = 300, 'el descuento sobre el total baja la ganancia: 900 cobrados - 600 de costo = 300');
 reset role;
 
+-- ===== Devoluciones =====
+-- Pedido: 10 Coca (120) + 5 Agua (100) = 1700, con 100 de descuento sobre el total = 1600. Entregado: la deuda es 1600.
+insert into clientes(codigo, nombre, vendedor_id, saldo) values (95, 'Cliente devolución', '00000000-0000-0000-0000-000000000001', 0);
+select set_config('t.c95', (select id::text from clientes where codigo = 95), false);
+select set_config('t.coca0', (select stock::text from productos where id = current_setting('t.coca')::bigint), false);
+select set_config('t.agua0', (select stock::text from productos where id = current_setting('t.agua')::bigint), false);
+select como('00000000-0000-0000-0000-000000000004'); set role authenticated;
+select crear_pedido(current_setting('t.c95')::bigint, ('[{"producto_id":' || current_setting('t.coca') || ',"cant":10},{"producto_id":' || current_setting('t.agua') || ',"cant":5}]')::jsonb, '', 'dev-1', null, 100);
+select set_config('t.dev1', (select id::text from pedidos where uid = 'dev-1'), false);
+select set_config('t.dev_coca', (select id::text from pedido_lineas where pedido_id = current_setting('t.dev1')::bigint and producto_id = current_setting('t.coca')::bigint), false);
+select set_config('t.dev_agua', (select id::text from pedido_lineas where pedido_id = current_setting('t.dev1')::bigint and producto_id = current_setting('t.agua')::bigint), false);
+do $$ begin perform devolver_pedido(current_setting('t.dev1')::bigint, ('[{"linea_id":' || current_setting('t.dev_coca') || ',"cant":1}]')::jsonb); raise exception 'debió fallar';
+exception when others then perform chequear(sqlerrm like 'Solo se pueden devolver pedidos que ya salieron%', 'no se devuelve un pedido que todavía no salió'); end $$;
+select cambiar_estado(current_setting('t.dev1')::bigint, 'enReparto', 'Salió en reparto');
+select cambiar_estado(current_setting('t.dev1')::bigint, 'entregado', 'Entregado');
+select chequear((select saldo from clientes where id = current_setting('t.c95')::bigint) = -1600, 'entregado: el cliente debe 1600');
+do $$ begin perform devolver_pedido(current_setting('t.dev1')::bigint, ('[{"linea_id":' || current_setting('t.dev_coca') || ',"cant":11}]')::jsonb); raise exception 'debió fallar';
+exception when others then perform chequear(sqlerrm like 'No se puede devolver más%', 'no se devuelve más de lo entregado'); end $$;
+do $$ begin perform devolver_pedido(current_setting('t.dev1')::bigint, '[]'::jsonb); raise exception 'debió fallar';
+exception when others then perform chequear(sqlerrm like 'Elegí qué se devolvió%', 'hay que elegir qué se devolvió'); end $$;
+-- devolución parcial: vuelven 4 Coca = 480; lo vendido baja a 1220 y el descuento a 72 => total 1148
+select devolver_pedido(current_setting('t.dev1')::bigint, ('[{"linea_id":' || current_setting('t.dev_coca') || ',"cant":4}]')::jsonb, 'Cerrado el local');
+select chequear((select total from pedidos where id = current_setting('t.dev1')::bigint) = 1148 and (select descuento_total from pedidos where id = current_setting('t.dev1')::bigint) = 72, 'devolución parcial: el total baja a 1148 (descuento sobre el total proporcional)');
+select chequear((select cant from pedido_lineas where id = current_setting('t.dev_coca')::bigint) = 6 and (select total from pedido_lineas where id = current_setting('t.dev_coca')::bigint) = 720, 'la línea queda con lo que se vendió: 6 Coca = 720');
+select chequear((select stock from productos where id = current_setting('t.coca')::bigint) = current_setting('t.coca0')::int - 6, 'vuelven 4 Coca al stock (se habían descontado 10, quedan 6 vendidas)');
+select chequear((select saldo from clientes where id = current_setting('t.c95')::bigint) = -1148, 'la deuda del cliente baja de 1600 a 1148');
+select chequear((select estado from pedidos where id = current_setting('t.dev1')::bigint) = 'entregado', 'el pedido sigue entregado');
+select chequear((select monto from pedido_devoluciones where pedido_id = current_setting('t.dev1')::bigint) = 452, 'queda registrado el monto devuelto: 452');
+select chequear((select historial->-1->>'txt' from pedidos where id = current_setting('t.dev1')::bigint) = 'Devolución parcial: 4 x COCA 1.5L', 'la devolución queda en el historial');
+-- el cliente paga lo que debe y vuelve el resto: la ganancia de lo cobrado usa lo realmente vendido
+select registrar_cobro(current_setting('t.c95')::bigint, 1148, 'Efectivo');
+reset role;
+select como('00000000-0000-0000-0000-000000000005'); set role authenticated;
+select chequear((select ganancia from ganancia_cobrada(date '2000-01-01', date '2100-01-01', current_setting('t.c95')::bigint)) = 368, 'ganancia tras la devolución parcial: 1148 cobrados - 780 de costo = 368');
+select chequear((select count(*) from pedido_devoluciones) = 1, 'gerencia ve las devoluciones');
+reset role;
+select como('00000000-0000-0000-0000-000000000004'); set role authenticated;
+-- devolución completa del resto: el pedido se anula, vuelve todo el stock y como ya había pagado queda saldo a favor
+select devolver_pedido(current_setting('t.dev1')::bigint, ('[{"linea_id":' || current_setting('t.dev_coca') || ',"cant":6},{"linea_id":' || current_setting('t.dev_agua') || ',"cant":5}]')::jsonb);
+select chequear((select estado from pedidos where id = current_setting('t.dev1')::bigint) = 'anulado' and (select total from pedidos where id = current_setting('t.dev1')::bigint) = 0, 'devolución completa: el pedido queda anulado y en 0');
+select chequear((select stock from productos where id = current_setting('t.coca')::bigint) = current_setting('t.coca0')::int and (select stock from productos where id = current_setting('t.agua')::bigint) = current_setting('t.agua0')::int, 'devolución completa: todo el stock vuelve');
+select chequear((select saldo from clientes where id = current_setting('t.c95')::bigint) = 1148, 'como ya había pagado, queda 1148 a favor del cliente');
+reset role;
+select como('00000000-0000-0000-0000-000000000001'); set role authenticated;
+do $$ begin perform devolver_pedido(current_setting('t.dev1')::bigint, '[{"linea_id":1,"cant":1}]'::jsonb); raise exception 'debió fallar';
+exception when others then perform chequear(sqlerrm like 'Solo Administración%', 'vendedor no puede registrar devoluciones'); end $$;
+select chequear((select count(*) from pedido_devoluciones) = 0, 'vendedor no ve las devoluciones');
+reset role;
+select como('00000000-0000-0000-0000-000000000003'); set role authenticated;
+do $$ begin perform devolver_pedido(current_setting('t.dev1')::bigint, '[{"linea_id":1,"cant":1}]'::jsonb); raise exception 'debió fallar';
+exception when others then perform chequear(sqlerrm like 'Solo Administración%', 'depósito no puede registrar devoluciones'); end $$;
+reset role;
+
 select 'TODAS LAS PRUEBAS PASARON' as resultado;
