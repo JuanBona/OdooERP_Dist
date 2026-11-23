@@ -85,13 +85,16 @@ function ClienteFila({ c, onPedido, anticipado, onRevisar, esHoy }) {
         <b>{c.nombre}</b>
         <div className="muted">{c.dir}{c.localidad ? " · " + c.localidad : ""}</div>
         <div style={{ marginTop: 4 }}><ChipCuenta c={c} /></div>
-        {anticipado && <div className="chip st-porAutorizar" style={{ display: "inline-block", borderRadius: 9, marginTop: 6, whiteSpace: "normal" }}>Pedido #{anticipado.id} del {anticipado.fecha.slice(8)}/{anticipado.fecha.slice(5, 7)} · {fmt(anticipado.total)}</div>}
+        {/* Pedido pasado antes: ocupa todo el ancho, con el detalle y un botón grande para revisarlo */}
+        {anticipado && <div style={{ marginTop: 10, padding: 10, borderRadius: 10, background: "var(--aut-bg, rgba(124,58,237,.10))" }}>
+          <div style={{ fontWeight: 700, marginBottom: 8 }}>Pedido #{anticipado.id} pasado el {anticipado.fecha.slice(8)}/{anticipado.fecha.slice(5, 7)} · <span style={{ whiteSpace: "nowrap" }}>{fmt(anticipado.total)}</span></div>
+          <button className="btn" style={{ width: "100%" }} onClick={e => { e.stopPropagation(); onRevisar(c, anticipado); }}>
+            <Icon n={esHoy ? "check" : "lapiz"} s={17} /> {esHoy ? "Revisar y confirmar" : "Editar pedido"}</button>
+        </div>}
       </div>
-      <div style={{ textAlign: "right" }}>
-        {anticipado
-          ? <button className="btn sm" onClick={e => { e.stopPropagation(); onRevisar(c, anticipado); }}><Icon n={esHoy ? "check" : "lapiz"} s={15} /> {esHoy ? "Revisar y confirmar" : "Editar"}</button>
-          : <button className="btn sm" onClick={e => { e.stopPropagation(); onPedido(c); }}><Icon n="mas" s={15} /> Pedido</button>}
-      </div>
+      {!anticipado && <div style={{ textAlign: "right" }}>
+        <button className="btn sm" onClick={e => { e.stopPropagation(); onPedido(c); }}><Icon n="mas" s={15} /> Pedido</button>
+      </div>}
     </div>
   );
 }

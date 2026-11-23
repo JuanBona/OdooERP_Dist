@@ -105,10 +105,10 @@ export function PedidoRow({ p }) {
     <div className="list-item" onClick={() => go("pedido", { id: p.id })}>
       <Avatar txt={"#" + p.id} />
       <div style={{ flex: 1, minWidth: 0 }}><b>{c?.nombre}</b><div className="muted">{p.fecha}{v ? " · " + v.nombre : ""}{p.fechaEntrega ? " · " + nombreCamion(p.fechaEntrega) + " " + fechaCorta(p.fechaEntrega) : ""}{p.estado === "porAutorizar" && puede.autorizar(user) && c?.saldo < 0 ? " · Debe " + fmt(-c.saldo) : ""}</div></div>
-      <div style={{ textAlign: "right" }}><div className="row" style={{ justifyContent: "flex-end", gap: 8 }}>
-        {editar && <button className="iconbtn" title="Editar pedido" aria-label={"Editar pedido #" + p.id} style={{ width: 34, height: 34, background: "var(--brand)", color: "#fff" }}
-          onClick={e => { e.stopPropagation(); setCart(carritoDePedido(p)); go("catalogo"); }}><Icon n="lapiz" s={16} /></button>}
-        <div style={{ fontWeight: 800 }}>{fmt(p.total)}</div></div>{p.estado === "porAutorizar" && cambioPendiente(p) && <div><span className="chip warn" style={{ fontWeight: 800 }}>⚠ {textoCambio(p)}</span></div>}<ChipEstado e={p.estado} /></div>
+      <div style={{ textAlign: "right", display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 6 }}>
+        <div style={{ fontWeight: 800 }}>{fmt(p.total)}</div>{p.estado === "porAutorizar" && cambioPendiente(p) && <div><span className="chip warn" style={{ fontWeight: 800 }}>⚠ {textoCambio(p)}</span></div>}<ChipEstado e={p.estado} />
+        {editar && <button className="btn sec sm" aria-label={"Editar pedido #" + p.id} style={{ marginTop: 4, padding: "8px 16px" }}
+          onClick={e => { e.stopPropagation(); setCart(carritoDePedido(p)); go("catalogo"); }}><Icon n="lapiz" s={15} /> Editar</button>}</div>
     </div>
   );
 }
