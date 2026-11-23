@@ -33,14 +33,14 @@ function inicial() {
   Object.assign(clientes[2], { saldo: -12800, ultimoPago: d(5), vendedorId: 1 });
   Object.assign(clientes[0], { vendedorId: 1 });
   Object.assign(clientes[3], { vendedorId: 2 });
-  return { usuarios, productos, clientes, pedidos: [], cobros: [], caja: [], arqueos: [], auditoria: [], seq: 1 };
+  return { usuarios, productos, clientes, pedidos: [], cobros: [], caja: [], arqueos: [], cierres: [], auditoria: [], seq: 1 };
 }
 
 function load() {
   let d = null;
   try { const raw = localStorage.getItem(KEY); if (raw) d = JSON.parse(raw); } catch {}
   d = d || inicial();
-  d.caja ||= []; d.arqueos ||= [];
+  d.caja ||= []; d.arqueos ||= []; d.cierres ||= [];
   return d;
 }
 function save() {
@@ -217,6 +217,16 @@ export const api = {
       db.clientes.push({ saldo: 0, ultimoPago: null, vendedorId: null, localidad: "", dia: "", obs: "", ...cli });
       audit(user, "Creó cliente", cli.nombre);
     }
+    save();
+  },
+
+  // Cierre de mes: guarda el resumen tal como quedó. Lo del mes nuevo arranca de 0 solo (se cuenta por mes).
+  cerrarMes(user, mes, resumen) {
+    if (user.rol !== "gerencia") throw new Error("El mes lo cierra Gerencia.");
+    if (db.cierres.some(c => c.mes === mes)) throw new Error("Ese mes ya está cerrado.");
+    db.cierres.unshift({ mes, hora: new Date().toISOString(), usuario: user.nombre, resumen });
+    db.cierres.sort((a, b) => b.mes.localeCompare(a.mes));
+    audit(user, `Cerró el mes ${mes}`, "Resumen");
     save();
   },
 

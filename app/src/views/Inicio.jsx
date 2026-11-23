@@ -3,6 +3,7 @@ import React from "react";
 import { useApp } from "../App.jsx";
 import { api } from "../api";
 import { fmt, hoyISO, tieneAlerta } from "../lib/reglas";
+import { mesActual, mesPorCerrar, nombreMes } from "../lib/mes";
 import { ChipCuenta, ChipEstado, ProdImg } from "./ui.jsx";
 
 export const misClientes = (db, user) =>
@@ -17,8 +18,15 @@ export default function Inicio() {
   const cuenta = e => db.pedidos.filter(p => p.estado === e).length;
   const bajos = db.productos.filter(p => p.activo && p.stockContado !== false && p.stock <= p.stockMin);
 
+  const porCerrar = user.rol === "gerencia" ? mesPorCerrar(db) : null;
+  // Comisión que el vendedor lleva acumulada en el mes (vuelve a 0 con el cierre de mes).
+  const miComision = db.cobros.filter(c => c.vendedorId === user.id && c.fecha?.startsWith(mesActual())).reduce((s, c) => s + (c.comision || 0), 0);
+
   return (
     <>
+      {porCerrar && <div className="card" style={{ marginBottom: 14, borderColor: "var(--brand)" }}>
+        <div className="row between" style={{ flexWrap: "wrap", gap: 8 }}><b>Es hora de cerrar {nombreMes(porCerrar)}: arreglar con los vendedores y ver el resumen del mes.</b>
+          <button className="btn brand" onClick={() => go("cierre", { mes: porCerrar })}>Cerrar el mes</button></div></div>}
       <div className="row between" style={{ marginBottom: 14, flexWrap: "wrap" }}>
         <div><h1>Hola, {user.nombre}</h1><p className="muted">{new Date().toLocaleDateString("es-AR", { weekday: "long", day: "numeric", month: "long" })}</p></div>
         {user.rol !== "deposito" && <button className="btn" onClick={() => go("clientes")}><Icon n="mas" s={18} /> Nuevo pedido</button>}
@@ -28,6 +36,7 @@ export default function Inicio() {
         <div className="card kpi"><div className="num">{deHoy.length}</div><div className="lbl">Pedidos de hoy</div></div>
         {user.rol === "vendedor" && <div className="card kpi"><div className="num" style={{ color: "var(--listo)" }}>{fmt(api.aRendir(user.id))}</div><div className="lbl">Efectivo cobrado para entregar en el depósito</div></div>}
         {["admin", "gerencia"].includes(user.rol) && <div className="card kpi" style={{ cursor: "pointer" }} onClick={() => go("caja")}><div className="num">{fmt(api.saldoCaja())}</div><div className="lbl">En la caja del depósito</div></div>}
+        {user.rol === "vendedor" && <div className="card kpi"><div className="num">{fmt(miComision)}</div><div className="lbl">Mi comisión del mes</div></div>}
         <div className="card kpi"><div className="num">{fmt(deHoy.reduce((s, p) => s + p.total, 0))}</div><div className="lbl">Vendido hoy</div></div>
         {user.rol !== "vendedor" && <>
           <div className="card kpi" style={{ cursor: "pointer" }} onClick={() => go("pedidos", { estado: "porAutorizar" })}>

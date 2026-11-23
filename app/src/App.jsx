@@ -12,6 +12,7 @@ import Articulos from "./views/Articulos.jsx";
 import Usuarios from "./views/Usuarios.jsx";
 import Caja from "./views/Caja.jsx";
 import Resumen from "./views/Resumen.jsx";
+import Cierre from "./views/Cierre.jsx";
 import { sincronizar, useConexion } from "./lib/offline";
 import { Icon, Avatar } from "./views/icons.jsx";
 
@@ -28,7 +29,7 @@ const TABS = {
 const VIEWS = {
   inicio: Inicio, clientes: Clientes, cliente: ClienteDetalle, catalogo: Catalogo, confirmar: Confirmar,
   pedidos: Pedidos, pedido: PedidoDetalle, deposito: Deposito, depoPedido: DepoPedido,
-  articulos: Articulos, usuarios: Usuarios, caja: Caja, resumen: Resumen,
+  articulos: Articulos, usuarios: Usuarios, caja: Caja, resumen: Resumen, cierre: Cierre,
 };
 
 export default function App() {
@@ -64,7 +65,7 @@ export default function App() {
 
   const View = VIEWS[nav.view] || Inicio;
   const tabs = TABS[user.rol];
-  const activo = { cliente: "clientes", confirmar: "catalogo", pedido: "pedidos", depoPedido: "deposito" }[nav.view] || nav.view;
+  const activo = { cliente: "clientes", confirmar: "catalogo", pedido: "pedidos", depoPedido: "deposito", cierre: "resumen" }[nav.view] || nav.view;
   const cartCount = Object.values(cart.items).reduce((a, b) => a + b, 0);
 
   return (

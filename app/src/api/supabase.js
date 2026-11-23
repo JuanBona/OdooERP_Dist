@@ -10,7 +10,7 @@ const DOMINIO = "rincondelsur.app"; // el login usa "usuario" → usuario@rincon
 // Solo se crea si hay Supabase configurado (sin URL la app corre en modo demo).
 export const sb = URL ? createClient(URL, KEY, { auth: { persistSession: true } }) : null;
 const listeners = new Set();
-let db = { usuarios: [], productos: [], clientes: [], pedidos: [], cobros: [], caja: [], arqueos: [], auditoria: [], miARendir: 0 };
+let db = { usuarios: [], productos: [], clientes: [], pedidos: [], cobros: [], caja: [], arqueos: [], cierres: [], auditoria: [], miARendir: 0 };
 let yo = null;
 
 // Copia local de los datos para abrir sin señal. La caja no se guarda en la tablet.
@@ -75,6 +75,11 @@ const cargas = {
     const { data, error } = await sb.from("caja_arqueos").select("*").order("id", { ascending: false }).limit(20); err(error);
     db.arqueos = data.map(a => ({ fecha: a.hora, contado: num(a.contado), esperado: num(a.esperado), dif: num(a.contado) - num(a.esperado), motivo: a.motivo, usuario: nombreDe(a.usuario) }));
   },
+  cierres: async () => {
+    if (yo?.rol !== "gerencia") { db.cierres = []; return; }
+    const { data, error } = await sb.from("cierres_mes").select("*").order("mes", { ascending: false }); err(error);
+    db.cierres = data.map(c => ({ mes: c.mes, hora: c.hora, usuario: nombreDe(c.usuario), resumen: c.resumen }));
+  },
   miARendir: async () => {
     if (yo?.rol !== "vendedor") return;
     const { data, error } = await sb.rpc("mi_a_rendir"); err(error); db.miARendir = num(data) || 0;
@@ -84,7 +89,7 @@ const recargar = async (...qué) => { await Promise.all(qué.map(k => cargas[k](
 const recargarTodo = () => recargar(...Object.keys(cargas));
 
 // Tiempo real: si otro usuario cambia algo, se recarga esa parte.
-const TABLA = { productos: "productos", clientes: "clientes", pedidos: "pedidos", pedido_lineas: "pedidos", cobros: "cobros", caja_movimientos: "caja", caja_devoluciones: "caja", perfiles: "usuarios" };
+const TABLA = { productos: "productos", clientes: "clientes", pedidos: "pedidos", pedido_lineas: "pedidos", cobros: "cobros", caja_movimientos: "caja", caja_devoluciones: "caja", perfiles: "usuarios", cierres_mes: "cierres" };
 let canal = null; const pendientes = new Set(); let timer = null;
 let reloj = null;
 function escuchar() {
@@ -207,6 +212,12 @@ export const api = {
     const { data, error } = await sb.rpc("contar_caja", { p_contado: Math.round(+contado), p_motivo: motivo || "" }); err(error);
     await recargar("caja");
     return num(data);
+  },
+  async cerrarMes(user, mes, resumen) {
+    const { error } = await sb.from("cierres_mes").insert({ mes, resumen, usuario: user.id });
+    if (error?.code === "23505") throw new Error("Ese mes ya está cerrado.");
+    err(error);
+    await recargar("cierres");
   },
   cerrarRepartos() { return 0; }, // en Supabase lo hace la tarea programada cerrar_reparto()
 };
