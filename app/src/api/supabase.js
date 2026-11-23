@@ -11,7 +11,7 @@ const DOMINIO = "rincondelsur.app"; // el login usa "usuario" → usuario@rincon
 // Solo se crea si hay Supabase configurado (sin URL la app corre en modo demo).
 export const sb = URL ? createClient(URL, KEY, { auth: { persistSession: true } }) : null;
 const listeners = new Set();
-let db = { usuarios: [], productos: [], clientes: [], pedidos: [], cobros: [], caja: [], arqueos: [], auditoria: [], miARendir: 0, feriados: [], excepciones: [] };
+let db = { usuarios: [], productos: [], clientes: [], pedidos: [], cobros: [], caja: [], arqueos: [], cierres: [], auditoria: [], miARendir: 0, feriados: [], excepciones: [] };
 let yo = null;
 
 // Copia local de los datos para abrir sin señal. La caja no se guarda en la tablet.
@@ -94,6 +94,11 @@ const cargas = {
   feriados: async () => { db.feriados = (await todo(() => sb.from("feriados").select("*").order("fecha"))).map(mapFeriado); },
   excepciones: async () => { db.excepciones = (await todo(() => sb.from("excepciones_visita").select("*").gte("fecha_nueva", desde()).order("id"))).map(mapCambioRuta); },
   cobros: async () => { db.cobros = (await todo(() => sb.from("cobros").select("*").gte("fecha", desde()).order("id", { ascending: false }))).map(mapCobro); },
+  cierres: async () => {
+    if (yo?.rol !== "gerencia") { db.cierres = []; return; }
+    const { data, error } = await sb.from("cierres_mes").select("*").order("mes", { ascending: false }); err(error);
+    db.cierres = data.map(c => ({ mes: c.mes, hora: c.hora, usuario: nombreDe(c.usuario), resumen: c.resumen }));
+  },
   caja: async () => {
     if (!["admin", "gerencia"].includes(yo?.rol)) { db.caja = []; db.arqueos = []; return; }
     db.caja = (await todo(() => sb.from("caja_movimientos").select("*, caja_devoluciones(*)").order("id", { ascending: false }))).map(mapMov);
@@ -109,7 +114,7 @@ const recargar = async (...qué) => { await Promise.all(qué.map(k => cargas[k](
 const recargarTodo = () => recargar(...Object.keys(cargas));
 
 // Tiempo real: si otro usuario cambia algo, se recarga esa parte.
-const TABLA = { productos: "productos", clientes: "clientes", pedidos: "pedidos", pedido_lineas: "pedidos", pedido_linea_precio_log: "pedidos", pedido_devoluciones: "pedidos", pedido_devolucion_lineas: "pedidos", cobros: "cobros", caja_movimientos: "caja", caja_devoluciones: "caja", perfiles: "usuarios", feriados: "feriados", excepciones_visita: "excepciones" };
+const TABLA = { productos: "productos", clientes: "clientes", pedidos: "pedidos", pedido_lineas: "pedidos", pedido_linea_precio_log: "pedidos", pedido_devoluciones: "pedidos", pedido_devolucion_lineas: "pedidos", cobros: "cobros", caja_movimientos: "caja", caja_devoluciones: "caja", perfiles: "usuarios", feriados: "feriados", excepciones_visita: "excepciones", cierres_mes: "cierres" };
 let canal = null; const pendientes = new Set(); let timer = null;
 let reloj = null;
 function escuchar() {
@@ -167,6 +172,13 @@ export const api = {
     const { data: id, error } = await sb.rpc("crear_pedido", { p_cliente: clienteId, p_items, p_obs: obs || "", p_uid: uid || null, p_fecha: fecha || null, p_desc_total: descTotal || 0 }); err(error);
     await recargar("pedidos", "productos");
     return db.pedidos.find(p => p.id === id);
+  },
+  // Editar un pedido por autorizar (confirmar = lo confirma el día de la visita: queda con fecha de hoy).
+  async editarPedido(user, pedidoId, { items, obs, descTotal, confirmar = false }) {
+    const p_items = items.map(i => ({ producto_id: i.productoId, cant: i.cant, precio_manual: i.precioManual ?? null, desc_manual: i.descManual ?? null, aplicar_desc: !!i.aplicarDesc }));
+    const { error } = await sb.rpc("editar_pedido", { p_pedido: pedidoId, p_items, p_obs: obs || "", p_desc_total: descTotal || 0, p_confirmar: confirmar }); err(error);
+    await recargar("pedidos", "productos");
+    return db.pedidos.find(p => p.id === pedidoId);
   },
   async cambiarEstado(user, pedidoId, estado, txt) {
     const { error } = await sb.rpc("cambiar_estado", { p_pedido: pedidoId, p_estado: estado, p_txt: txt }); err(error);
@@ -308,6 +320,12 @@ export const api = {
     const { data, error } = await sb.rpc("contar_caja", { p_contado: Math.round(+contado), p_motivo: motivo || "", p_caja: caja }); err(error);
     await recargar("caja");
     return num(data);
+  },
+  async cerrarMes(user, mes, resumen) {
+    const { error } = await sb.from("cierres_mes").insert({ mes, resumen, usuario: user.id });
+    if (error?.code === "23505") throw new Error("Ese mes ya está cerrado.");
+    err(error);
+    await recargar("cierres");
   },
   cerrarRepartos() { return 0; }, // en Supabase lo hace la tarea programada cerrar_reparto()
 };

@@ -34,7 +34,7 @@ function inicial() {
   Object.assign(clientes[2], { saldo: -12800, ultimoPago: d(5), vendedorId: 1 });
   Object.assign(clientes[0], { vendedorId: 1 });
   Object.assign(clientes[3], { vendedorId: 2 });
-  return { usuarios, productos, clientes, pedidos: [], cobros: [], caja: [], arqueos: [], auditoria: [], seq: 1, feriados: feriadosIniciales(), excepciones: [], seqRuta: 1 };
+  return { usuarios, productos, clientes, pedidos: [], cobros: [], caja: [], arqueos: [], cierres: [], auditoria: [], seq: 1, feriados: feriadosIniciales(), excepciones: [], seqRuta: 1 };
 }
 
 // Los mismos feriados que carga la migración de la base.
@@ -51,7 +51,7 @@ function load() {
   let d = null;
   try { const raw = localStorage.getItem(KEY); if (raw) d = JSON.parse(raw); } catch {}
   d = d || inicial();
-  d.caja ||= []; d.arqueos ||= [];
+  d.caja ||= []; d.arqueos ||= []; d.cierres ||= [];
   d.caja.forEach(m => { m.caja ||= "efectivo"; }); d.arqueos.forEach(a => { a.caja ||= "efectivo"; });
   d.feriados ||= feriadosIniciales(); d.excepciones ||= []; d.seqRuta ||= 1;
   // Pedidos guardados antes de que existieran los camiones: se les calcula con la misma regla.
@@ -130,6 +130,27 @@ export const api = {
     audit(user, "Creó pedido", "#" + ped.id);
     save();
     return ped;
+  },
+
+  // Editar un pedido por autorizar: mismas reglas que al crearlo (se arma uno nuevo y se le pasan las líneas).
+  editarPedido(user, pedidoId, { items, obs, descTotal, confirmar = false }) {
+    const p = db.pedidos.find(x => x.id === pedidoId);
+    if (!p || p.estado !== "porAutorizar") throw new Error("El pedido ya fue autorizado: no se puede editar.");
+    if (user.rol === "vendedor" && p.vendedorId !== user.id) throw new Error("El pedido no es tuyo.");
+    if (!items.length) throw new Error("El pedido está vacío.");
+    const copia = JSON.stringify(db);
+    p.lineas.forEach(l => { const prod = db.productos.find(x => x.id === l.productoId); if (prod) prod.stock += l.cant; });
+    let n;
+    try { n = api.crearPedido(user, { clienteId: p.clienteId, items, obs, descTotal, fecha: confirmar ? hoyISO() : p.fecha }); }
+    catch (e) { db = JSON.parse(copia); throw e; }
+    db.pedidos = db.pedidos.filter(x => x.id !== n.id);
+    const q = db.pedidos.find(x => x.id === pedidoId);
+    Object.assign(q, { lineas: n.lineas, total: n.total, obs: n.obs, descuentoTotal: n.descuentoTotal, descTotalEstado: n.descTotalEstado,
+      descTotalPor: n.descTotalPor, descTotalEn: n.descTotalEn, logTotal: n.logTotal, fecha: n.fecha, ...(confirmar ? { fechaEntrega: n.fechaEntrega } : {}) });
+    q.historial.push({ fecha: new Date().toISOString(), usuario: user.nombre, txt: confirmar ? "Confirmado en la visita" : "Pedido editado" });
+    audit(user, confirmar ? "Confirmó pedido en la visita" : "Editó pedido", "#" + q.id);
+    save();
+    return q;
   },
 
   cambiarEstado(user, pedidoId, estado, txt) {
@@ -447,6 +468,16 @@ export const api = {
       db.clientes.push({ saldo: 0, ultimoPago: null, vendedorId: null, localidad: "", dia: "", obs: "", ...cli });
       audit(user, "Creó cliente", cli.nombre);
     }
+    save();
+  },
+
+  // Cierre de mes: guarda el resumen tal como quedó. El mes nuevo arranca de 0 solo (todo se cuenta por mes).
+  cerrarMes(user, mes, resumen) {
+    if (user.rol !== "gerencia") throw new Error("El mes lo cierra Gerencia.");
+    if (db.cierres.some(c => c.mes === mes)) throw new Error("Ese mes ya está cerrado.");
+    db.cierres.unshift({ mes, hora: new Date().toISOString(), usuario: user.nombre, resumen });
+    db.cierres.sort((a, b) => b.mes.localeCompare(a.mes));
+    audit(user, `Cerró el mes ${mes}`, "Resumen");
     save();
   },
 

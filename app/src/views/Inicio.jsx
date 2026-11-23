@@ -4,6 +4,8 @@ import { useApp } from "../App.jsx";
 import { api } from "../api";
 import { useGanancia } from "../lib/useGanancia";
 import { calcProfit, fechaCorta, fmt, hoyISO, nombreCamion, cambioPendiente, puede, textoCambio, tieneAlerta } from "../lib/reglas";
+import { carritoDePedido, puedeEditarPedido } from "../lib/editarPedido";
+import { mesActual, mesPorCerrar, nombreMes } from "../lib/mes";
 import { ChipCuenta, ChipEstado, ProdImg } from "./ui.jsx";
 
 export const misClientes = (db, user) =>
@@ -20,8 +22,15 @@ export default function Inicio() {
   const g = useGanancia(db, hoy.slice(0, 7), puede.verFinanzas(user));
   const pr = puede.verFinanzas(user) && g ? calcProfit(db, hoy.slice(0, 7), g) : null; // profit del mes en curso (solo Gerencia)
 
+  const porCerrar = user.rol === "gerencia" ? mesPorCerrar(db) : null;
+  // Comisión que el vendedor lleva acumulada en el mes (vuelve a 0 con el mes nuevo).
+  const miComision = db.cobros.filter(c => c.vendedorId === user.id && c.fecha?.startsWith(mesActual())).reduce((s, c) => s + (c.comision || 0), 0);
+
   return (
     <>
+      {porCerrar && <div className="card" style={{ marginBottom: 14, borderColor: "var(--brand)" }}>
+        <div className="row between" style={{ flexWrap: "wrap", gap: 8 }}><b>Es hora de cerrar {nombreMes(porCerrar)}: arreglar con los vendedores y ver el resumen del mes.</b>
+          <button className="btn brand" onClick={() => go("cierre", { mes: porCerrar })}>Cerrar el mes</button></div></div>}
       <div className="row between" style={{ marginBottom: 14, flexWrap: "wrap" }}>
         <div><h1>Hola, {user.nombre}</h1><p className="muted">{new Date().toLocaleDateString("es-AR", { weekday: "long", day: "numeric", month: "long" })}</p></div>
         {user.rol !== "deposito" && <button className="btn" onClick={() => go("clientes")}><Icon n="mas" s={18} /> Nuevo pedido</button>}
@@ -36,6 +45,7 @@ export default function Inicio() {
           </div>
         )}
         <div className="card kpi"><div className="num">{deHoy.length}</div><div className="lbl">Pedidos de hoy</div></div>
+        {user.rol === "vendedor" && <div className="card kpi"><div className="num">{fmt(miComision)}</div><div className="lbl">Mi comisión del mes</div></div>}
         {user.rol === "vendedor" && <div className="card kpi"><div className="num" style={{ color: "var(--listo)" }}>{fmt(api.aRendir(user.id))}</div><div className="lbl">Efectivo cobrado para entregar en el depósito</div></div>}
         {["admin", "gerencia"].includes(user.rol) && <div className="card kpi" style={{ cursor: "pointer" }} onClick={() => go("caja")}><div className="num">{fmt(api.saldoCaja())}</div><div className="lbl">En la caja de efectivo del depósito</div></div>}
         <div className="card kpi"><div className="num">{fmt(deHoy.reduce((s, p) => s + p.total, 0))}</div><div className="lbl">Vendido hoy</div></div>
@@ -86,14 +96,19 @@ export default function Inicio() {
 }
 
 export function PedidoRow({ p }) {
-  const { db, go, user } = useApp();
+  const { db, go, user, setCart } = useApp();
+  // Lápiz para editar: solo el vendedor, en sus pedidos que siguen por autorizar.
+  const editar = user.rol === "vendedor" && puedeEditarPedido(user, p);
   const c = db.clientes.find(x => x.id === p.clienteId);
   const v = db.usuarios.find(x => x.id === p.vendedorId);
   return (
     <div className="list-item" onClick={() => go("pedido", { id: p.id })}>
       <Avatar txt={"#" + p.id} />
       <div style={{ flex: 1, minWidth: 0 }}><b>{c?.nombre}</b><div className="muted">{p.fecha}{v ? " · " + v.nombre : ""}{p.fechaEntrega ? " · " + nombreCamion(p.fechaEntrega) + " " + fechaCorta(p.fechaEntrega) : ""}{p.estado === "porAutorizar" && puede.autorizar(user) && c?.saldo < 0 ? " · Debe " + fmt(-c.saldo) : ""}</div></div>
-      <div style={{ textAlign: "right" }}><div style={{ fontWeight: 800 }}>{fmt(p.total)}</div>{p.estado === "porAutorizar" && cambioPendiente(p) && <div><span className="chip warn" style={{ fontWeight: 800 }}>⚠ {textoCambio(p)}</span></div>}<ChipEstado e={p.estado} /></div>
+      <div style={{ textAlign: "right", display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 6 }}>
+        <div style={{ fontWeight: 800 }}>{fmt(p.total)}</div>{p.estado === "porAutorizar" && cambioPendiente(p) && <div><span className="chip warn" style={{ fontWeight: 800 }}>⚠ {textoCambio(p)}</span></div>}<ChipEstado e={p.estado} />
+        {editar && <button className="btn sec sm" aria-label={"Editar pedido #" + p.id} style={{ marginTop: 4, padding: "8px 16px" }}
+          onClick={e => { e.stopPropagation(); setCart(carritoDePedido(p)); go("catalogo"); }}><Icon n="lapiz" s={15} /> Editar</button>}</div>
     </div>
   );
 }

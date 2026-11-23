@@ -1,13 +1,13 @@
 import React, { useState } from "react";
 import { useApp } from "../App.jsx";
-import { calcProfit, fmt } from "../lib/reglas";
+import { NO_ES_GASTO, calcProfit, fmt } from "../lib/reglas";
 import { useGanancia } from "../lib/useGanancia";
 import { api } from "../api";
 
 // Resumen del mes para Gerencia. No pide cargar nada nuevo: sale de pedidos, cobros y gastos.
-const mesActual = () => new Date().toISOString().slice(0, 7);
-const nombreMes = m => { const s = new Date(m + "-15").toLocaleDateString("es-AR", { month: "long", year: "numeric" }); return s[0].toUpperCase() + s.slice(1); };
-const mover = (m, d) => { const x = new Date(m + "-15"); x.setMonth(x.getMonth() + d); return x.toISOString().slice(0, 7); };
+// Todo se acumula durante el mes; el último día a las 20 h se cierra (ver Cierre.jsx) y a las 12 de la noche
+// el Resumen arranca de 0 con el mes nuevo. Meses en hora local (ver lib/mes.js).
+import { mesActual, mesPorCerrar, mover, nombreMes, textoCierre } from "../lib/mes";
 
 function Barras({ data }) {
   const max = Math.max(1, ...data.map(d => d[1]));
@@ -27,13 +27,15 @@ export default function Resumen() {
   const entregados = peds.filter(p => p.estado === "entregado");
   const cobros = db.cobros.filter(c => enMes(c.fecha));
   // Gastos = salidas de la caja que no vuelven (sin contar retiros del dueño).
-  const gastos = db.caja.filter(m => enMes(m.fecha) && m.tipo === "egreso" && !m.vuelve && m.concepto !== "Retiro del dueño" && m.concepto !== "Inversiones")
+  const gastos = db.caja.filter(m => enMes(m.fecha) && m.tipo === "egreso" && !m.vuelve && !NO_ES_GASTO.includes(m.concepto))
     .map(m => ({ categoria: m.concepto, monto: -m.monto }));
   const sum = (a, f) => a.reduce((s, x) => s + f(x), 0);
   const vendido = sum(peds, p => p.total);
   const cobrado = sum(cobros, c => c.monto);
   const gastado = sum(gastos, g => g.monto);
-  const inversiones = sum(db.caja.filter(m => enMes(m.fecha) && m.tipo === "egreso" && m.concepto === "Inversiones"), m => -m.monto);
+  const comisionesPagadas = sum(db.caja.filter(m => enMes(m.fecha) && m.tipo === "egreso" && m.concepto === "Pago de comisiones"), m => -m.monto);
+  const porCerrar = mesPorCerrar(db);
+  const cerrado = (db.cierres || []).find(c => c.mes === mes);
   const comisiones = sum(cobros, c => c.comision || 0);
   const g = useGanancia(db, mes);
   const pr = g ? calcProfit(db, mes, g) : null; // null mientras se calcula
@@ -56,16 +58,24 @@ export default function Resumen() {
     <>
       <div className="row between" style={{ marginBottom: 14, flexWrap: "wrap" }}>
         <div><h1>Resumen del mes</h1><p className="muted">Sale solo de lo que ya se carga: pedidos, cobros y gastos.</p></div>
+        <span className="chip st-preparado" style={{ fontSize: 14, padding: "6px 12px" }}>{cerrado ? `Cerrado el ${new Date(cerrado.hora).toLocaleString("es-AR", { day: "numeric", month: "long", hour: "2-digit", minute: "2-digit", hourCycle: "h23" })} hs` : textoCierre(mes)}</span>
         <div className="row"><button className="btn sec sm" aria-label="Mes anterior" disabled={api.modo === "supabase" && mes <= mover(mesActual(), -1)} title={api.modo === "supabase" && mes <= mover(mesActual(), -1) ? "La app guarda en la tablet los últimos 60 días" : ""} onClick={() => setMes(mover(mes, -1))}>‹</button>
           <b style={{ minWidth: 140, textAlign: "center" }}>{nombreMes(mes)}</b>
           <button className="btn sec sm" aria-label="Mes siguiente" disabled={mes >= mesActual()} onClick={() => setMes(mover(mes, 1))}>›</button></div>
       </div>
 
+      {porCerrar && <div className="card" style={{ marginBottom: 12, borderColor: "var(--brand)" }}>
+        <div className="row between" style={{ flexWrap: "wrap", gap: 8 }}><b>Hay que cerrar {nombreMes(porCerrar)}: arreglar con los vendedores y ver el resumen.</b>
+          <button className="btn brand" onClick={() => go("cierre", { mes: porCerrar })}>Cerrar el mes</button></div></div>}
+      {cerrado && <div className="card" style={{ marginBottom: 12 }}><div className="row between" style={{ flexWrap: "wrap", gap: 8 }}>
+        <span>Mes cerrado. Los números se siguen viendo hasta las 12 de la noche; después arranca el mes nuevo desde 0.</span>
+        <button className="btn sec sm" onClick={() => go("cierre", { mes })}>Ver el cierre</button></div></div>}
+
       <div className="grid g3" style={{ marginBottom: 8 }}>
         <div className="card kpi"><div className="num">{fmt(vendido)}</div><div className="lbl">Vendido · {peds.length} {peds.length === 1 ? "pedido" : "pedidos"} ({entregados.length} entregados)</div></div>
         <div className="card kpi"><div className="num" style={{ color: "var(--entr)" }}>{fmt(cobrado)}</div><div className="lbl">Cobrado</div></div>
         <div className="card kpi"><div className="num" style={{ color: "var(--danger)" }}>{fmt(gastado)}</div><div className="lbl">Gastos</div></div>
-        <div className="card kpi"><div className="num">{fmt(inversiones)}</div><div className="lbl">Inversiones (no son gasto ni afectan el profit)</div></div>
+        <div className="card kpi"><div className="num">{fmt(comisionesPagadas)}</div><div className="lbl">Comisiones ya pagadas (no son gasto: ya se restan abajo)</div></div>
         <div className="card kpi"><div className="num">{fmt(comisiones)}</div><div className="lbl">Comisiones a pagar</div></div>
         <div className="card kpi" style={{ borderColor: "var(--brand)" }}><div className="num">{fmt(cobrado - gastado - comisiones)}</div><div className="lbl">Lo que quedó (cobrado − gastos − comisiones)</div></div>
         <div className="card kpi" style={{ borderColor: "var(--brand)" }}><div className="num" style={{ color: !pr || pr.profit >= 0 ? "var(--entr)" : "var(--danger)" }}>{pr ? fmt(pr.profit) : "…"}</div><div className="lbl">Profit (ganancia − gastos − comisiones)</div></div>
@@ -74,7 +84,7 @@ export default function Resumen() {
       <p className="muted" style={{ marginBottom: 6 }}>
         {!pr ? "Calculando la ganancia…"
           : pr.conCostos
-            ? <>Ganancia {fmt(pr.ganancia)}: lo cobrado este mes ({fmt(pr.cobrado)}) con el precio y el costo de cada venta original, así un cambio de precio posterior no la altera (cada cobro paga primero las ventas más viejas del cliente). Se restan gastos {fmt(pr.gastos)} (sin pagos a proveedores, retiros del dueño ni inversiones, y sin pases entre cajas) y comisiones {fmt(pr.comisiones)}.</>
+            ? <>Ganancia {fmt(pr.ganancia)}: lo cobrado este mes ({fmt(pr.cobrado)}) con el precio y el costo de cada venta original, así un cambio de precio posterior no la altera (cada cobro paga primero las ventas más viejas del cliente). Se restan gastos {fmt(pr.gastos)} (sin pagos a proveedores, retiros del dueño ni pago de comisiones, y sin pases entre cajas) y comisiones {fmt(pr.comisiones)}.</>
             : "Todavía no hay cobros de ventas con costo cargado este mes, así que no se puede calcular la ganancia. Cargá los costos en Artículos."}
         {pr && pr.cobradoSinCosto > 0 && pr.conCostos && ` De lo cobrado, ${fmt(pr.cobradoSinCosto)} corresponde a deudas anteriores o a ventas sin costo cargado: no suma ganancia.`}
         {pr && pr.productosSinCosto > 0 && ` Faltan costos en ${pr.productosSinCosto} ${pr.productosSinCosto === 1 ? "producto" : "productos"}: lo que se vende sin costo no entra en el cálculo.`}
@@ -102,6 +112,15 @@ export default function Resumen() {
           </div>
         ))}
       </div>
+
+      {(db.cierres || []).length > 0 && <>
+        <div className="sec-h"><h2>Meses cerrados</h2></div>
+        <div className="card">{db.cierres.map(c => (
+          <div key={c.mes} className="list-item" onClick={() => go("cierre", { mes: c.mes })}>
+            <div style={{ flex: 1, minWidth: 0 }}><b>{nombreMes(c.mes)}</b><div className="muted">Facturación {fmt(c.resumen.facturacion)} · {c.resumen.pctGanancia}% de ganancia</div></div>
+            <span className="chip">{fmt(c.resumen.profit)}</span>
+          </div>))}</div>
+      </>}
     </>
   );
 }

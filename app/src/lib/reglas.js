@@ -179,8 +179,8 @@ export const gananciaPct = (costo, precio, decimales = 1) => (costo > 0 ? Math.r
 // Salidas de caja que no son un gasto del negocio y por lo tanto no restan en el profit:
 //  · Retiro del dueño.
 //  · Pago a proveedor: esa mercadería ya se descuenta con el costo de lo vendido; contarla otra vez la restaría dos veces.
-//  · Inversiones: plata que sale de cualquiera de las 3 cajas para invertir (no es un gasto de la operación).
-export const NO_ES_GASTO = ["Retiro del dueño", "Pago a proveedor", "Inversiones"];
+//  · Pago de comisiones: las comisiones ya se restan aparte (calculadas sobre lo cobrado); contarlas otra vez las restaría dos veces.
+export const NO_ES_GASTO = ["Retiro del dueño", "Pago a proveedor", "Pago de comisiones"];
 
 // Ganancia de lo cobrado en un mes ("AAAA-MM"), valuada con el PRECIO y el COSTO DE LA VENTA ORIGINAL.
 // Un cobro llega después de la venta y los precios pueden haber cambiado: si el cliente pagó una Coca que
