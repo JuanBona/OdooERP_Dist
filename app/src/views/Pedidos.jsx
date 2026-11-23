@@ -384,7 +384,8 @@ export function PedidoDetalle() {
 
         <div className="row" style={{ flexWrap: "wrap", marginTop: 16 }}>
           {p.estado === "porAutorizar" && puede.autorizar(user) && <button className="btn" disabled={cambioPendiente(p)} title={cambioPendiente(p) ? "Resolvé los cambios de precio o descuento primero" : ""} onClick={() => accion("pendiente", "Autorizado y enviado a depósito")}><Icon n="check" s={17} /> Autorizar</button>}
-          {["preparado", "enReparto", "entregado"].includes(p.estado) && <button className="btn sec" onClick={() => window.print()}><Icon n="imprimir" s={17} /> Imprimir remito</button>}
+          {/* Administración imprime el remito en cualquier momento (también antes de autorizar); los demás roles, una vez preparado. */}
+          {(admin ? !["anulado", "rechazado"].includes(p.estado) : ["preparado", "enReparto", "entregado"].includes(p.estado)) && <button className="btn sec" onClick={() => window.print()}><Icon n="imprimir" s={17} /> Imprimir remito</button>}
           {admin && p.estado === "preparado" && <button className="btn brand" onClick={() => accion("enReparto", "Salió en reparto")}><Icon n="camion" s={17} /> Salió en reparto</button>}
           {admin && p.estado === "enReparto" && <>
             <button className="btn" onClick={() => accion("entregado", "Entregado")}>Entregado</button>

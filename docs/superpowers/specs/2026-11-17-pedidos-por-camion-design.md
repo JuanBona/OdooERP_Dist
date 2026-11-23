@@ -137,3 +137,7 @@ El camión depende del **día de visita del cliente**, no del día en que se car
 
 - Un cliente con pedido cargado ese día (o guardado sin señal esperando enviarse) **desaparece de la hoja de ruta de ese día**, en vez de quedar apagado abajo. Ya no existe la sección "Ya con pedido".
 - Arriba queda "N clientes por visitar" y el avance "X de Y visitados". Cuando no queda ninguno: "Ya cargaste el pedido de todos". Si se anula el pedido, el cliente vuelve a aparecer.
+
+## 17. Remito antes de depósito (implementado)
+
+- **Imprimir remito** ya no espera a que el pedido esté preparado: Administración y Gerencia lo ven en cualquier estado salvo anulado o rechazado (también "por autorizar" y "en depósito"). Los demás roles siguen viéndolo desde "preparado".
