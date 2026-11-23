@@ -14,7 +14,7 @@ export default function Articulos() {
     <>
       <div className="row between" style={{ marginBottom: 12, flexWrap: "wrap" }}>
         <div><h1>Artículos</h1><p className="muted">Precios, costos, stock, descuentos por cantidad y fotos.</p></div>
-        <button className="btn" onClick={() => setEd({ nombre: "", categoria: "Bebidas", precio: 0, costo: null, stock: 0, stockMin: 0, tramos: [], foto: null, activo: true })}><Icon n="mas" s={18} /> Nuevo artículo</button>
+        <button className="btn" onClick={() => setEd({ nombre: "", categoria: "Bebidas", precio: 0, costo: null, stock: 0, stockMin: 0, tramos: [], foto: null, activo: true, oferta: false })}><Icon n="mas" s={18} /> Nuevo artículo</button>
       </div>
       <div className="filters"><input type="search" placeholder="Buscar…" value={q} onChange={e => setQ(e.target.value)} /></div>
       <div className="card">
@@ -22,7 +22,7 @@ export default function Articulos() {
           <div key={p.id} className="list-item" onClick={() => setEd(p)}>
             <ProdImg p={p} size={44} />
             <div style={{ flex: 1, minWidth: 0 }}><b>{p.nombre}</b>
-              <div className="muted">{p.categoria}{p.tramos.length ? " · 🏷 " + p.tramos.map(t => `${t.min}+ ${t.pct}%`).join(", ") : ""}{!p.activo ? " · inactivo" : ""}</div>
+              <div className="muted">{p.categoria}{p.oferta ? " · OFERTA" : ""}{p.tramos.length ? " · 🏷 " + p.tramos.map(t => `${t.min}+ ${t.pct}%`).join(", ") : ""}{!p.activo ? " · inactivo" : ""}</div>
               <div className="muted">{p.costo == null ? <span className="chip st-autorizado">Sin costo</span> : `Costo ${fmt(p.costo)} · ganás ${gananciaPct(p.costo, p.precio)}%`}</div></div>
             <div style={{ textAlign: "right" }}><b>{fmt(p.precio)}</b><div>{p.stockContado === false ? <span className="chip st-autorizado">Sin contar</span> : <span className={"chip " + (p.stock <= p.stockMin ? "warn" : "st-entregado")}>{p.stock} u.</span>}</div></div>
           </div>
@@ -107,6 +107,7 @@ function EditarArticulo({ p, onClose }) {
           ))}
         </div>
         <label className="row" style={{ marginBottom: 8, gap: 8 }}><input type="checkbox" style={{ width: "auto" }} checked={f.stockContado !== false} onChange={e => set("stockContado", e.target.checked)} /> Stock contado (si no, se vende sin límite y figura “Sin contar”)</label>
+        <label className="row" style={{ marginBottom: 8, gap: 8 }}><input type="checkbox" style={{ width: "auto" }} checked={!!f.oferta} onChange={e => set("oferta", e.target.checked)} /> Marcar como oferta (sale primero en el catálogo y aparece al filtrar “Ofertas”)</label>
         <label className="row" style={{ marginBottom: 14, gap: 8 }}><input type="checkbox" style={{ width: "auto" }} checked={f.activo} onChange={e => set("activo", e.target.checked)} /> Se muestra en el catálogo</label>
         {confirmar && (
           <div className="card" style={{ marginBottom: 10, background: "var(--danger-bg)" }}>

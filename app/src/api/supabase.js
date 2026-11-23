@@ -44,7 +44,7 @@ const mapUsuario = p => ({ id: p.id, nombre: p.nombre, rol: p.rol, usuario: p.us
 // El costo viene de tablas aparte que solo ven Administración y Gerencia (a los demás les llega vacío).
 const unoDe = x => (Array.isArray(x) ? x[0] : x) ?? null;
 const costoDe = x => num(unoDe(x)?.costo ?? null);
-const mapProducto = p => ({ id: p.id, costo: costoDe(p.producto_costos), nombre: p.nombre, categoria: p.categoria, precio: num(p.precio), stock: p.stock, stockMin: p.stock_min, stockContado: p.stock_contado, tramos: p.tramos || [], foto: p.foto_url, activo: p.activo });
+const mapProducto = p => ({ id: p.id, costo: costoDe(p.producto_costos), nombre: p.nombre, categoria: p.categoria, precio: num(p.precio), stock: p.stock, stockMin: p.stock_min, stockContado: p.stock_contado, tramos: p.tramos || [], foto: p.foto_url, activo: p.activo, oferta: !!p.oferta });
 const mapCliente = c => ({ id: c.id, codigo: c.codigo, nombre: c.nombre, dir: c.dir, cuit: c.cuit, tel: c.tel, localidad: c.localidad, dia: c.dia, vendedorId: c.vendedor_id, saldo: num(c.saldo), ultimoPago: c.ultimo_pago, obs: c.obs });
 const mapLinea = l => ({
   id: l.id, costo: costoDe(l.linea_costos), productoId: l.producto_id, nombre: l.nombre, cant: l.cant, precio: num(l.precio), pct: num(l.pct), manual: l.manual, total: num(l.total),
@@ -244,7 +244,7 @@ export const api = {
       const { error } = await sb.storage.from("productos").upload(path, blob, { contentType: "image/jpeg", upsert: true }); err(error);
       foto_url = sb.storage.from("productos").getPublicUrl(path).data.publicUrl;
     }
-    const fila = { nombre: p.nombre, categoria: p.categoria, precio: p.precio, stock: p.stock, stock_min: p.stockMin, stock_contado: !!p.stockContado, tramos: p.tramos, foto_url, activo: p.activo };
+    const fila = { nombre: p.nombre, categoria: p.categoria, precio: p.precio, stock: p.stock, stock_min: p.stockMin, stock_contado: !!p.stockContado, tramos: p.tramos, foto_url, activo: p.activo, oferta: !!p.oferta };
     let id = p.id;
     if (id) { const { error } = await sb.from("productos").update(fila).eq("id", id); err(error); }
     else { const { data, error } = await sb.from("productos").insert(fila).select("id").single(); err(error); id = data.id; }
