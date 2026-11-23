@@ -26,13 +26,14 @@ function resumenPedidos(ps) {
 }
 
 // Renglón desplegable: nombre, resumen a la derecha, y al tocarlo se abre su contenido.
-export function Fila({ icono, titulo, sub, arriba, abajo, abierto, onToggle, children }) {
+export function Fila({ icono, titulo, sub, arriba, abajo, abierto, onToggle, extra, children }) {
   return (
     <>
       <div className="list-item" role="button" tabIndex={0} aria-expanded={abierto} onClick={onToggle}
         onKeyDown={e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onToggle(); } }}>
         <div className="avatar" style={{ color: "var(--brand)", background: "var(--surface2)" }}><Icon n={icono} s={18} /></div>
         <div style={{ flex: 1, minWidth: 0 }}><b>{titulo}</b><div className="muted">{sub}</div></div>
+        {extra && <span onClick={e => e.stopPropagation()} onKeyDown={e => e.stopPropagation()}>{extra}</span>}
         <div style={{ textAlign: "right" }}>
           <div style={{ fontWeight: 800 }}>{arriba}</div>
           <div className="muted">{abajo}</div>
@@ -41,6 +42,46 @@ export function Fila({ icono, titulo, sub, arriba, abajo, abierto, onToggle, chi
       </div>
       {abierto && children}
     </>
+  );
+}
+
+// Pedidos que ya aprobó Administración y están en la carga del camión (no los por autorizar, anulados ni rechazados).
+const enCarga = p => ["pendiente", "preparando", "preparado", "enReparto", "entregado"].includes(p.estado);
+
+// Ícono de la hoja de carga del camión (Administración y Gerencia).
+function BotonHoja({ ps, onClick }) {
+  const n = ps.filter(enCarga).length;
+  return (
+    <button className="btn sec sm" disabled={!n} aria-label="Imprimir hoja de carga del camión"
+      title={n ? `Imprimir la hoja con la mercadería sumada de ${n} ${n === 1 ? "pedido enviado" : "pedidos enviados"} a depósito` : "Todavía no enviaste pedidos a depósito en este camión"}
+      onClick={onClick}><Icon n="imprimir" s={17} /></button>
+  );
+}
+
+// Hoja de carga: todos los artículos de los pedidos enviados a depósito, sumados y ordenados por nombre.
+function HojaCarga({ hoja }) {
+  const filas = new Map();
+  hoja.ps.forEach(p => p.lineas.filter(l => l.cant > 0).forEach(l => {
+    const k = l.productoId ?? l.nombre;
+    const f = filas.get(k) || { nombre: l.nombre, cant: 0, costo: 0, sinCosto: false, venta: 0 };
+    f.cant += l.cant; f.venta += l.total;
+    if (l.costo != null) f.costo += l.costo * l.cant; else f.sinCosto = true;
+    filas.set(k, f);
+  }));
+  const lista = [...filas.values()].sort((a, b) => a.nombre.localeCompare(b.nombre, "es"));
+  const tot = lista.reduce((t, f) => ({ cant: t.cant + f.cant, costo: t.costo + f.costo, venta: t.venta + f.venta, sinCosto: t.sinCosto || f.sinCosto }), { cant: 0, costo: 0, venta: 0, sinCosto: false });
+  return (
+    <div className="print-only">
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "6mm" }}>
+        <img src={logo} alt="" style={{ height: "18mm" }} />
+        <div style={{ textAlign: "right" }}><div style={{ fontSize: "16pt", fontWeight: 700 }}>HOJA DE CARGA</div><div>{hoja.titulo} · {fechaCorta(hoja.fecha)}</div><div>{hoja.ps.length} {hoja.ps.length === 1 ? "pedido" : "pedidos"} enviados a depósito</div></div>
+      </div>
+      <table><thead><tr><th>Artículo</th><th>Cant.</th><th>Costo unit.</th><th>Costo total</th><th>Venta total</th></tr></thead>
+        <tbody>{lista.map((f, i) => <tr key={i}><td>{f.nombre}</td><td>{f.cant}</td><td>{f.sinCosto ? "—" : fmt(f.costo / f.cant)}</td><td>{f.sinCosto ? "—" : fmt(f.costo)}</td><td>{fmt(f.venta)}</td></tr>)}
+          <tr><td><b>TOTAL</b></td><td><b>{tot.cant}</b></td><td></td><td><b>{fmt(tot.costo)}</b></td><td><b>{fmt(tot.venta)}</b></td></tr></tbody>
+      </table>
+      {tot.sinCosto && <p style={{ marginTop: "4mm", fontSize: "9pt" }}>— Artículos sin costo cargado: no suman al costo total.</p>}
+    </div>
   );
 }
 
@@ -70,7 +111,7 @@ function AutorizarTodos({ ps }) {
 
 // Los 5 camiones (martes a sábado) de un vendedor para la semana mostrada.
 //   resumen(ps) → { arriba, abajo }   renderItem(p) → pedido en la lista   acciones(ps) → botones del camión
-export function Camiones({ nombre, ps, dias, clave, abierto, toggle, anidado, resumen, renderItem, acciones, vacio = "No hay pedidos en este camión." }) {
+export function Camiones({ nombre, ps, dias, clave, abierto, toggle, anidado, resumen, renderItem, acciones, extra, vacio = "No hay pedidos en este camión." }) {
   const { db } = useApp();
   const hoy = hoyISO();
   return dias.map(f => {
@@ -78,7 +119,7 @@ export function Camiones({ nombre, ps, dias, clave, abierto, toggle, anidado, re
     return (
       <div key={f} style={anidado ? { paddingLeft: 14, borderLeft: "3px solid var(--line)", marginLeft: 6 } : null}>
         <Fila icono="camion" titulo={`${nombreCamion(f)} ${nombre}`} sub={<>{fechaCorta(f)}{f === hoy ? " · hoy" : ""}{feriadoDe(db.feriados, f) && <b style={{ color: "var(--danger)" }}> · ⚠ Feriado: {feriadoDe(db.feriados, f).nombre}</b>}</>}
-          {...resumen(delDia)} abierto={abierto(clave + "|" + f)} onToggle={() => toggle(clave + "|" + f)}>
+          {...resumen(delDia)} extra={extra?.(delDia, `${nombreCamion(f)} ${nombre}`, f)} abierto={abierto(clave + "|" + f)} onToggle={() => toggle(clave + "|" + f)}>
           {acciones?.(delDia)}
           {delDia.length ? delDia.map(renderItem) : <div className="empty">{vacio}</div>}
         </Fila>
@@ -145,7 +186,10 @@ export function Pedidos() {
   const dias = camionesDeSemana(semana);
   const enSemana = filtrados.filter(p => dias.includes(p.fechaEntrega));
   const fuera = filtrados.length - enSemana.length;
-  const comun = { dias, abierto, toggle, resumen: resumenPedidos, renderItem: p => <PedidoRow key={p.id} p={p} />, acciones: ps => <AutorizarTodos ps={ps} /> };
+  const [hoja, setHoja] = useState(null);
+  useEffect(() => { if (hoja) window.print(); }, [hoja]);
+  const extra = puede.administrar(user) ? (ps, titulo, f) => <BotonHoja ps={ps} onClick={() => setHoja({ titulo, fecha: f, ps: ps.filter(enCarga), n: Date.now() })} /> : undefined;
+  const comun = { dias, abierto, toggle, extra, resumen: resumenPedidos, renderItem: p => <PedidoRow key={p.id} p={p} />, acciones: ps => <AutorizarTodos ps={ps} /> };
 
   return (
     <>
@@ -160,6 +204,7 @@ export function Pedidos() {
         {!q && <button className="btn sec" onClick={() => setLista(!lista)}>{lista ? "Ver por camión" : "Ver como lista"}</button>}
       </div>
       <Bandeja />
+      {hoja && <HojaCarga hoja={hoja} />}
       {plana ? (
         <div className="card">{filtrados.length ? filtrados.map(p => <PedidoRow key={p.id} p={p} />) : <div className="empty">No hay pedidos con ese filtro.</div>}</div>
       ) : (
