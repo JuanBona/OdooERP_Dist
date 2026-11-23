@@ -3,8 +3,6 @@ import { Avatar, Icon } from "./icons.jsx";
 import { useApp } from "../App.jsx";
 import { ChipCuenta } from "./ui.jsx";
 import { useConexion } from "../lib/offline";
-import { carritoDePedido, pedidoAnticipado } from "../lib/editarPedido";
-import { fmt } from "../lib/reglas";
 import { useRestaurarScroll, useVista } from "../lib/vista";
 import { DIAS_VISITA, clientesDelDia, diaSemana, fechaCorta, feriadoDe, habilVecino, hoyISO, isoLocal, nombreDia, proximoHabil } from "../lib/reglas";
 
@@ -33,8 +31,6 @@ export default function HojaRuta() {
   const cargados = delDia.filter(conPedido).length;
   // Los que ya tienen pedido desaparecen de la hoja: solo quedan los que faltan visitar.
   const porVisitar = delDia.filter(c => !conPedido(c));
-  // Pedido pasado antes (sigue por autorizar): el cliente aparece igual para revisarlo y confirmarlo hoy.
-  const revisar = (c, p) => { setCart(carritoDePedido(p, { origen: "hoja", confirmar: fecha === hoy })); go("confirmar"); };
   const pedido = c => { setCart({ clienteId: c.id, items: {}, manual: {}, obs: "", origen: "hoja" }); go("catalogo"); }; // al terminar la venta vuelve acá
 
   return (
@@ -63,7 +59,7 @@ export default function HojaRuta() {
       <div className="card">
         {delDia.length === 0 && <div className="empty">No tenés clientes para visitar este día.</div>}
         {delDia.length > 0 && porVisitar.length === 0 && <div className="empty">Ya cargaste el pedido de todos. 🎉</div>}
-        {porVisitar.map(c => <ClienteFila key={c.id} c={c} onPedido={pedido} anticipado={pedidoAnticipado(db, c.id, fecha)} onRevisar={revisar} esHoy={fecha === hoy} />)}
+        {porVisitar.map(c => <ClienteFila key={c.id} c={c} onPedido={pedido} />)}
       </div>
 
       {sinDia > 0 && (
@@ -76,7 +72,7 @@ export default function HojaRuta() {
 }
 
 // Un cliente por visitar. Al tocarlo se abre su ficha; el botón Pedido va directo al catálogo.
-function ClienteFila({ c, onPedido, anticipado, onRevisar, esHoy }) {
+function ClienteFila({ c, onPedido }) {
   const { go } = useApp();
   return (
     <div className="list-item" onClick={() => go("cliente", { id: c.id, desde: "hoja" })}>
@@ -85,16 +81,10 @@ function ClienteFila({ c, onPedido, anticipado, onRevisar, esHoy }) {
         <b>{c.nombre}</b>
         <div className="muted">{c.dir}{c.localidad ? " · " + c.localidad : ""}</div>
         <div style={{ marginTop: 4 }}><ChipCuenta c={c} /></div>
-        {/* Pedido pasado antes: ocupa todo el ancho, con el detalle y un botón grande para revisarlo */}
-        {anticipado && <div style={{ marginTop: 10, padding: 10, borderRadius: 10, background: "var(--aut-bg, rgba(124,58,237,.10))" }}>
-          <div style={{ fontWeight: 700, marginBottom: 8 }}>Pedido #{anticipado.id} pasado el {anticipado.fecha.slice(8)}/{anticipado.fecha.slice(5, 7)} · <span style={{ whiteSpace: "nowrap" }}>{fmt(anticipado.total)}</span></div>
-          <button className="btn" style={{ width: "100%" }} onClick={e => { e.stopPropagation(); onRevisar(c, anticipado); }}>
-            <Icon n={esHoy ? "check" : "lapiz"} s={17} /> {esHoy ? "Revisar y confirmar" : "Editar pedido"}</button>
-        </div>}
       </div>
-      {!anticipado && <div style={{ textAlign: "right" }}>
+      <div style={{ textAlign: "right" }}>
         <button className="btn sm" onClick={e => { e.stopPropagation(); onPedido(c); }}><Icon n="mas" s={15} /> Pedido</button>
-      </div>}
+      </div>
     </div>
   );
 }

@@ -3,11 +3,6 @@
 export const puedeEditarPedido = (user, p) =>
   !!p && p.estado === "porAutorizar" && (user.rol === "vendedor" ? p.vendedorId === user.id : ["admin", "gerencia"].includes(user.rol));
 
-// Pedido anticipado: lo pasó antes del día de visita y sigue por autorizar. Ese día el cliente vuelve a
-// aparecer en la hoja de ruta para revisarlo y confirmarlo como si lo hubiera levantado ese día.
-export const pedidoAnticipado = (db, clienteId, fecha) =>
-  db.pedidos.find(p => p.clienteId === clienteId && p.estado === "porAutorizar" && p.fecha < fecha);
-
 // Carga el pedido en el carrito para editarlo con el mismo catálogo y la misma pantalla de revisión.
 export function carritoDePedido(p, extra = {}) {
   const items = {}, desc = {}, manual = {};
